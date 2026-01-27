@@ -208,11 +208,11 @@ This means:
 
 ## Contributing
 
-Contributions welcome! Please see our contributing guidelines (coming soon).
+Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-MIT License — see LICENSE file for details.
+GPL-3.0 License — see [LICENSE](LICENSE) file for details.
 
 ---
 
