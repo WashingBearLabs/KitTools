@@ -5,7 +5,7 @@ description: Orient yourself at the start of a development session
 
 # Start Development Session
 
-Let's get oriented before we start today's session.
+Hey Claude! Let's get oriented before we start today's session.
 
 ## Step 0: Check for orphaned scratchpad
 

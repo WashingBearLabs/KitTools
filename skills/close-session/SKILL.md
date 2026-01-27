@@ -5,7 +5,7 @@ description: Update documentation before ending a development session
 
 # Close Development Session
 
-Great work today! Before we close out, let's make sure documentation stays in sync.
+Great job today Claude! Before we close out, let's make sure documentation stays in sync.
 
 ## Step 0: Process scratchpad
 
