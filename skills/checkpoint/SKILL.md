@@ -1,4 +1,5 @@
 ---
+name: checkpoint
 description: Capture work mid-session before context refreshes
 ---
 

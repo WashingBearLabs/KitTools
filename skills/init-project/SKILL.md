@@ -1,4 +1,5 @@
 ---
+name: init-project
 description: Initialize kit_tools documentation framework in the current project
 ---
 
@@ -15,6 +16,7 @@ Setting up the kit_tools documentation framework in this project.
     2. **Merge** - Add missing templates only (preserve existing content)
     3. **Replace** - Start fresh (will lose existing customizations)
   - Wait for user response before proceeding
+  - **Note**: This choice only affects templates (Steps 4-5). Hooks (Step 6) and CLAUDE.md (Step 7) are always installed/updated regardless of this choice.
 
 ## Step 2: Select project type
 
@@ -121,7 +123,89 @@ Only create directories that will have files.
 
 Copy only the templates selected based on project type and pattern choices.
 
-## Step 6: Set up CLAUDE.md
+## Step 6: Install automation hooks
+
+Copy the hooks from this plugin to the target project and configure them.
+
+### 6a: Copy hook scripts
+
+Copy the entire `hooks/` directory from this plugin to the project root:
+
+```
+project/
+└── hooks/
+    ├── hooks.json
+    ├── create_scratchpad.py
+    ├── update_doc_timestamps.py
+    ├── remind_scratchpad_before_compact.py
+    ├── remind_close_session.py
+    └── validate_setup.py
+```
+
+### 6b: Configure hooks in project settings
+
+Create or update `.claude/settings.local.json` to register the hooks:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 hooks/create_scratchpad.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 hooks/update_doc_timestamps.py"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 hooks/remind_scratchpad_before_compact.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 hooks/remind_close_session.py"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+If `.claude/settings.local.json` already exists, merge the hooks configuration (preserving any existing settings).
+
+### 6c: Verify hook installation
+
+- Confirm all 5 Python scripts were copied
+- Confirm hooks.json was copied
+- Confirm .claude/settings.local.json has the hooks configured
+
+## Step 7: Set up CLAUDE.md
 
 If `CLAUDE.md` doesn't exist in the project root, create it with scratchpad instructions:
 
@@ -145,7 +229,7 @@ Keep notes terse — one line plus optional details. This file survives context 
 
 If `CLAUDE.md` already exists, append the scratchpad section if it's not already present.
 
-## Step 7: Validate setup
+## Step 8: Validate setup
 
 Run a quick validation to ensure everything is in place:
 
@@ -154,10 +238,12 @@ Run a quick validation to ensure everything is in place:
 - [ ] CLAUDE.md exists and has scratchpad instructions
 - [ ] Directory structure is correct
 - [ ] No obvious errors in template copying
+- [ ] hooks/ directory exists with all 5 Python scripts
+- [ ] .claude/settings.local.json exists with hooks configured
 
 **Report any issues** — if validation finds problems, list them clearly.
 
-## Step 8: Summary
+## Step 9: Summary
 
 Report to the user:
 
@@ -165,20 +251,21 @@ Report to the user:
 - Templates copied (list them)
 - Templates NOT copied (mention they can be added later)
 - Whether patterns were included
+- Hooks installed (list the 4 automation hooks)
 - Whether CLAUDE.md was created/updated
 - Validation status (pass/issues found)
 
 **Remind the user:**
 - Run `/kit-tools:seed-project` next to populate templates with project-specific content
-- Run `/kit-tools:update-templates` later to add more templates as the project grows
+- Run `/kit-tools:update-kit-tools` later to update hooks, templates, or other components as the project grows
 
 ## Adding Templates Later
 
 If the project expands and needs templates that weren't initially selected:
 
-1. Run `/kit-tools:update-templates`
-2. It will show "Missing" templates available from the plugin
-3. Select "Add missing templates" to copy specific ones
+1. Run `/kit-tools:update-kit-tools`
+2. It will show missing hooks, templates, and other components
+3. Select which components to add or update
 
 This allows the documentation to grow with the project.
 

@@ -62,7 +62,7 @@ claude plugins install ./kit-tools
 | `/kit-tools:checkpoint` | Mid-session checkpoint without closing |
 | `/kit-tools:plan-feature` | Interactive feature brainstorming and planning |
 | `/kit-tools:sync-project` | Full sync between code and docs (`--quick` for audit) |
-| `/kit-tools:update-templates` | Update project templates from latest plugin versions |
+| `/kit-tools:update-kit-tools` | Update project components (hooks, templates) from latest plugin versions |
 
 ## Hooks
 
@@ -180,7 +180,7 @@ All templates include version comments:
 <!-- Template Version: 1.1.0 -->
 ```
 
-Use `/kit-tools:update-templates` to see if your project templates are behind the plugin versions and selectively update.
+Use `/kit-tools:update-kit-tools` to see if your project components (hooks, templates) are behind the plugin versions and selectively update.
 
 ## Philosophy
 

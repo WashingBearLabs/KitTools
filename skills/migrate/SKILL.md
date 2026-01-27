@@ -1,4 +1,5 @@
 ---
+name: migrate
 description: Migrate existing documentation to kit_tools structure
 ---
 

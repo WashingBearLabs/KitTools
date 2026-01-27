@@ -1,4 +1,5 @@
 ---
+name: close-session
 description: Update documentation before ending a development session
 ---
 

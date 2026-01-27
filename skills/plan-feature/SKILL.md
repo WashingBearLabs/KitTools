@@ -1,4 +1,5 @@
 ---
+name: plan-feature
 description: Brainstorm and plan a new feature with guided questions
 ---
 

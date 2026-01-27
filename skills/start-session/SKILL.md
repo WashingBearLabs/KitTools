@@ -1,4 +1,5 @@
 ---
+name: start-session
 description: Orient yourself at the start of a development session
 ---
 

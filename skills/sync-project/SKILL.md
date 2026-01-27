@@ -1,4 +1,5 @@
 ---
+name: sync-project
 description: Sync documentation with codebase (use --quick for lightweight audit)
 ---
 

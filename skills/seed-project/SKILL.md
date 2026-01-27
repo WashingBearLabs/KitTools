@@ -1,4 +1,5 @@
 ---
+name: seed-project
 description: Populate documentation templates for a new or existing project
 ---
 
