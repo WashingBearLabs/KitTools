@@ -42,6 +42,7 @@ Based on selection, include these templates:
 - AGENT_README.md
 - SYNOPSIS.md
 - SESSION_LOG.md
+- AUDIT_FINDINGS.md
 - arch/CODE_ARCH.md
 - arch/DECISIONS.md
 - docs/LOCAL_DEV.md
@@ -139,6 +140,7 @@ project/
     ├── update_doc_timestamps.py
     ├── remind_scratchpad_before_compact.py
     ├── remind_close_session.py
+    ├── detect_phase_completion.py
     └── validate_setup.py
 ```
 
@@ -167,6 +169,15 @@ Create or update `.claude/settings.local.json` to register the hooks:
           {
             "type": "command",
             "command": "python3 hooks/update_doc_timestamps.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 hooks/detect_phase_completion.py"
           }
         ]
       }
@@ -238,7 +249,7 @@ Run a quick validation to ensure everything is in place:
 - [ ] CLAUDE.md exists and has scratchpad instructions
 - [ ] Directory structure is correct
 - [ ] No obvious errors in template copying
-- [ ] hooks/ directory exists with all 5 Python scripts
+- [ ] hooks/ directory exists with all 6 Python scripts
 - [ ] .claude/settings.local.json exists with hooks configured
 
 **Report any issues** — if validation finds problems, list them clearly.
@@ -258,6 +269,7 @@ Report to the user:
 **Remind the user:**
 - Run `/kit-tools:seed-project` next to populate templates with project-specific content
 - Run `/kit-tools:update-kit-tools` later to update hooks, templates, or other components as the project grows
+- Run `/kit-tools:validate-phase` anytime to review code changes for quality, security, and intent alignment
 
 ## Adding Templates Later
 

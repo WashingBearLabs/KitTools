@@ -5,6 +5,34 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-01-28
+
+### Added
+- **New Skill: `/kit-tools:validate-phase`** — Code quality, security, and intent alignment validation
+  - Three-pass review: quality & conventions, security, intent alignment
+  - Findings written to persistent `AUDIT_FINDINGS.md` with unique IDs and severity tracking
+  - Can be run manually or is invoked automatically by checkpoint and close-session
+- **New Subagent: `code-quality-validator.md`** — Prompt template for the validation subagent
+  - Located in new `subagents/` directory
+  - Defines structured output format for findings
+  - Supports placeholder interpolation for project context
+- **New Template: `AUDIT_FINDINGS.md`** — Persistent audit findings log
+  - Status tracking (open / resolved / dismissed)
+  - Severity levels (critical / warning / info)
+  - Active and archived findings sections
+- **New Hook: `detect_phase_completion`** — Advisory hook for TODO task completions
+  - Detects `- [ ]` → `- [x]` transitions in roadmap TODO files
+  - Suggests running validate-phase when tasks are completed
+
+### Changed
+- **`checkpoint/SKILL.md`** — Added Step 4 (Run validator) for code changes; renumbered Step 4 → Step 5
+- **`close-session/SKILL.md`** — Added Step 3 (Run validator); renumbered Steps 3-5 → Steps 4-6
+- **`start-session/SKILL.md`** — Added Step 7 (Review open audit findings); summary includes findings count
+- **`init-project/SKILL.md`** — Added `AUDIT_FINDINGS.md` to core templates, `detect_phase_completion.py` to hooks, updated verification to 6 Python scripts
+- **`update-kit-tools/SKILL.md`** — Replaced subagent placeholder (Step 3) with actual subagent inventory and update options
+- **`templates/AGENT_README.md`** — Added `AUDIT_FINDINGS.md` to documentation structure tree and session start checklist
+- **`hooks/hooks.json`** — Added `detect_phase_completion.py` PostToolUse hook entry
+
 ## [1.0.0] - 2025-01-27
 
 ### Added

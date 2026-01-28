@@ -46,7 +46,14 @@ Using the checklist in `kit_tools/AGENT_README.md` and the scratchpad notes, rev
 - [ ] `kit_tools/docs/GOTCHAS.md` — Did we discover any landmines?
 - [ ] `kit_tools/testing/TESTING_GUIDE.md` — Did testing approach change?
 
-## Step 3: Update Session Log
+## Step 3: Run validator
+
+- Run `/kit-tools:validate-phase` to review the session's code changes
+- Critical findings should be noted in the session log's "Open Items" section
+- All findings are written to `kit_tools/AUDIT_FINDINGS.md`
+- Findings are advisory — they do not block the session from closing
+
+## Step 4: Update Session Log
 
 Add an entry to `kit_tools/SESSION_LOG.md` with:
 
@@ -56,16 +63,17 @@ Add an entry to `kit_tools/SESSION_LOG.md` with:
 - Which docs were updated
 - Open items for next session
 
-## Step 4: Delete scratchpad
+## Step 5: Delete scratchpad
 
 - Delete `kit_tools/SESSION_SCRATCH.md` entirely
 - This signals the session closed cleanly
 
-## Step 5: Summary
+## Step 6: Summary
 
 Provide a brief summary of:
 
 - What was accomplished today
 - **Which TODO file(s) were updated**
 - What documentation was updated
+- Audit findings summary (N critical, N warning, N info) — if validator was run
 - Any open items or recommended next steps

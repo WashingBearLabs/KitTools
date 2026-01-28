@@ -36,6 +36,7 @@ Before starting any work session:
 - [ ] Check `roadmap/*_TODO.md` for active work items
 - [ ] Review `arch/CODE_ARCH.md` for structure and patterns
 - [ ] Scan `docs/GOTCHAS.md` for relevant landmines
+- [ ] Check `AUDIT_FINDINGS.md` for open findings
 - [ ] Check `arch/SERVICE_MAP.md` if working with integrations
 
 **For troubleshooting tasks, also read:**
@@ -152,6 +153,7 @@ kit_tools/
 ├── AGENT_README.md          # This file - AI assistant guide
 ├── SYNOPSIS.md              # Project overview and current state
 ├── SESSION_LOG.md           # Development session history
+├── AUDIT_FINDINGS.md        # Code quality validation findings
 │
 ├── arch/                    # Architecture documentation
 │   ├── CODE_ARCH.md         # Code structure, patterns, modules

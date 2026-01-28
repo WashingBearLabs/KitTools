@@ -77,14 +77,34 @@ Extra (project-specific, will be preserved):
   - docs/feature_guides/AUTH_FLOW.md
 ```
 
-## Step 3: Check future components
+## Step 3: Check subagent components
 
-*(Placeholder for future expansion)*
+Check the status of subagent-related components in the project:
 
-- **Subagents**: When subagent support is added, check for updates here
-- **Other components**: As kit-tools grows, new component types will be checked
+### 3a: Hook script
 
-Report: "No subagents configured (feature coming soon)"
+Check `detect_phase_completion.py` in the project's `hooks/` directory:
+
+| Status | Meaning |
+|--------|---------|
+| **Identical** | Project script matches plugin exactly |
+| **Modified** | Project script differs (user has customized) |
+| **Missing** | Script exists in plugin but not in project |
+
+### 3b: Audit findings template
+
+Check if `kit_tools/AUDIT_FINDINGS.md` exists in the project:
+- If present, note its status (template or populated with findings)
+- If missing, note it can be added
+
+### 3c: Skill integration status
+
+Verify that the validate-phase skill integrations are present in the project's session lifecycle skills:
+- `checkpoint/SKILL.md` — Should include "Run validator" step
+- `close-session/SKILL.md` — Should include "Run validator" step
+- `start-session/SKILL.md` — Should include "Review open audit findings" step
+
+Report integration status for each.
 
 ## Step 4: Present update options
 
@@ -102,9 +122,14 @@ After showing all status reports, present options:
 7. **Add missing templates** - Copy new templates only
 8. **Update all templates** - Replace all (WARNING: loses customizations)
 
+### Subagent options:
+9. **Add/update phase completion hook** - Install or update `detect_phase_completion.py`
+10. **Add audit findings template** - Copy `AUDIT_FINDINGS.md` template to project
+11. **Update skill integrations** - Sync validator steps in checkpoint, close-session, start-session
+
 ### Global options:
-9. **Update everything** - Full sync of all components (confirm first)
-10. **Skip** - Make no changes
+12. **Update everything** - Full sync of all components (confirm first)
+13. **Skip** - Make no changes
 
 ## Step 5: Execute updates
 

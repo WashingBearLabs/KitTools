@@ -62,6 +62,7 @@ claude plugins install ./kit-tools
 | `/kit-tools:checkpoint` | Mid-session checkpoint without closing |
 | `/kit-tools:plan-feature` | Interactive feature brainstorming and planning |
 | `/kit-tools:sync-project` | Full sync between code and docs (`--quick` for audit) |
+| `/kit-tools:validate-phase` | Run code quality, security, and intent alignment validation on recent changes |
 | `/kit-tools:update-kit-tools` | Update project components (hooks, templates) from latest plugin versions |
 
 ## Hooks
@@ -74,6 +75,7 @@ kit-tools includes automation hooks that run automatically:
 | `update_doc_timestamps` | PostToolUse (Edit/Write) | Updates "Last Updated" in kit_tools docs |
 | `remind_scratchpad_before_compact` | PreCompact | Reminds to capture notes, adds compaction marker |
 | `remind_close_session` | Stop | Reminds to run close-session if scratchpad has notes |
+| `detect_phase_completion` | PostToolUse (Edit/Write) | Suggests running validate-phase when TODO tasks are completed |
 
 *Note: Setup validation is built into `/kit-tools:init-project` as a final step.*
 
@@ -159,6 +161,20 @@ kit-tools encourages a session-based workflow:
   Continue
   working...
 ```
+
+## Code Quality Validation
+
+Use `/kit-tools:validate-phase` to review recent code changes:
+
+1. Gathers git diff, phase intent from TODO files, and project rulebook docs
+2. Runs a code quality subagent with three review passes:
+   - **Quality & Conventions** — naming, patterns, code smells, error handling
+   - **Security** — injection, auth gaps, secrets, input validation
+   - **Intent Alignment** — implementation vs plan, scope creep, completeness
+3. Writes findings to `kit_tools/AUDIT_FINDINGS.md` with unique IDs and severity levels
+4. All findings are advisory — they inform but never block workflows
+
+Validation runs automatically during `/kit-tools:checkpoint` (for code changes) and `/kit-tools:close-session`. Open findings are reviewed at `/kit-tools:start-session`.
 
 ## Feature Planning
 

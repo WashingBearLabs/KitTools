@@ -43,13 +43,21 @@ Using the notes in the scratchpad (or what was discussed), update relevant docs:
 
 ```
 
-## Step 4: Confirm
+## Step 4: Run validator (if applicable)
+
+- If code changes were made since the last checkpoint (check `git diff` for non-documentation changes), run `/kit-tools:validate-phase`
+- **Skip this step** if the checkpoint is documentation-only (no code files changed)
+- Findings are advisory — they do not block the checkpoint from completing
+- Note any critical findings for the summary
+
+## Step 5: Confirm
 
 Provide a brief summary of:
 
 - What was captured from the scratchpad
 - **Which TODO file was updated**
 - Which other docs were updated
+- Audit findings count (if validator was run): N critical, N warning, N info
 - Confirmation that we're ready to continue
 
 Don't close the session — we're just checkpointing progress.

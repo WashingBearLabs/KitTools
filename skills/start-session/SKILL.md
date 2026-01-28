@@ -65,6 +65,14 @@ Skim `kit_tools/arch/CODE_ARCH.md` and `kit_tools/arch/INFRA_ARCH.md` to refresh
 
 Read `kit_tools/docs/GOTCHAS.md` for any landmines relevant to today's work.
 
+## Step 7: Review open audit findings
+
+- Check if `kit_tools/AUDIT_FINDINGS.md` exists
+- If it exists, read the **Active Findings** section
+- Note any `critical` severity findings — these should be mentioned in the summary
+- Count open findings by severity (critical / warning / info)
+- If no findings file exists or no active findings, skip this step
+
 ## As you review, flag anything that looks like:
 
 - Security concerns
@@ -78,6 +86,7 @@ Once oriented, provide a quick summary of:
 - Any recovered notes from orphaned scratchpad (if applicable)
 - Current project status (from SYNOPSIS.md)
 - **Active TODO files and their status** (list each with in-progress item count)
+- Open audit findings count (N critical, N warning, N info) — if any exist
 - Any concerns or inconsistencies noticed
 
 **Ask the user:** Which feature or area will we be working on today? (This helps track work to the correct TODO file)
