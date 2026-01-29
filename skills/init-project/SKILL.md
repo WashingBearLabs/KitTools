@@ -212,7 +212,7 @@ If `.claude/settings.local.json` already exists, merge the hooks configuration (
 
 ### 6c: Verify hook installation
 
-- Confirm all 5 Python scripts were copied
+- Confirm all 6 Python scripts were copied
 - Confirm hooks.json was copied
 - Confirm .claude/settings.local.json has the hooks configured
 

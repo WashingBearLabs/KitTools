@@ -1,4 +1,4 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 # AGENT_README.md
 
 > **TEMPLATE_INTENT:** Navigation guide for AI assistants. Defines read order, patterns to follow, and areas to avoid.
