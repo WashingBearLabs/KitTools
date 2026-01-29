@@ -192,6 +192,7 @@ For EACH documentation file in kit_tools, systematically compare against what wa
 - [ ] docs/CI_CD.md
 - [ ] docs/DEPLOYMENT.md
 - [ ] docs/MONITORING.md
+- [ ] docs/UI_STYLE_GUIDE.md
 - [ ] docs/TROUBLESHOOTING.md
 - [ ] docs/GOTCHAS.md
 - [ ] docs/feature_guides/*.md

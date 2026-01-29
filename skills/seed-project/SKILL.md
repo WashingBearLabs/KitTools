@@ -76,6 +76,7 @@ Fill in the template files based on what was discovered. Work in this order:
 13. **kit_tools/docs/CONVENTIONS.md** — Coding standards
 14. **kit_tools/docs/DEPLOYMENT.md** — Deploy procedures
 15. **kit_tools/testing/TESTING_GUIDE.md** — Testing documentation
+16. **kit_tools/docs/UI_STYLE_GUIDE.md** — UI design patterns and styles (if applicable)
 
 ### Tier 4: Ongoing Documentation
 

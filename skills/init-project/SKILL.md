@@ -132,6 +132,7 @@ Based on selection, include these templates:
 - docs/ENV_REFERENCE.md
 - docs/DEPLOYMENT.md
 - docs/CI_CD.md
+- docs/UI_STYLE_GUIDE.md
 
 **Full Stack adds:**
 - (Everything - all templates)
@@ -147,6 +148,7 @@ Based on selection, include these templates:
 - arch/SERVICE_MAP.md (backend integrations)
 - docs/ENV_REFERENCE.md
 - docs/DEPLOYMENT.md (app store deployment)
+- docs/UI_STYLE_GUIDE.md
 
 **Custom:**
 - Show all available templates grouped by category
