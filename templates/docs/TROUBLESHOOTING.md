@@ -1,4 +1,4 @@
-<!-- Template Version: 1.2.0 -->
+<!-- Template Version: 1.2.1 -->
 <!-- Seeding:
   explorer_focus: operations, tech-stack
   required_sections:
