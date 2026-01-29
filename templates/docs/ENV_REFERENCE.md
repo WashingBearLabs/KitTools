@@ -1,4 +1,4 @@
-<!-- Template Version: 1.1.0 -->
+<!-- Template Version: 1.2.0 -->
 <!-- Seeding:
   explorer_focus: tech-stack, infrastructure
   required_sections:

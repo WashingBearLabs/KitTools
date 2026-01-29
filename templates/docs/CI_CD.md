@@ -1,4 +1,4 @@
-<!-- Template Version: 1.1.0 -->
+<!-- Template Version: 1.2.0 -->
 <!-- Seeding:
   explorer_focus: infrastructure, operations
   required_sections:

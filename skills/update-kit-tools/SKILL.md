@@ -1,266 +1,350 @@
 ---
 name: update-kit-tools
-description: Update project kit-tools components (hooks, templates) from the latest plugin versions
+description: Check for plugin updates and sync new components to your project
 ---
 
 # Update Kit-Tools
 
-Compare and selectively update the project's kit-tools components against the latest versions from this plugin.
+Check for kit-tools plugin updates and sync new components (templates, agents, hooks) to your project.
 
 ## Dependencies
 
-This skill requires the following plugin components:
-
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| **Templates** | `$CLAUDE_PLUGIN_ROOT/templates/` | Canonical template versions for comparison |
-| **Hook scripts** | `$CLAUDE_PLUGIN_ROOT/hooks/*.py` | Latest hook implementations |
-| **Agents** | `$CLAUDE_PLUGIN_ROOT/agents/` | Subagent prompt templates |
+| **Plugin manifest** | `$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json` | Current installed plugin version |
+| **Plugin components** | `$CLAUDE_PLUGIN_ROOT/` | Templates, agents, hooks, skills to sync |
+| **Project kit_tools** | `kit_tools/` | Project's documentation directory |
+| **Sync marker** | `kit_tools/.kit_tools_sync.json` | Tracks last synced version |
 
-**Reads from project:**
-- `kit_tools/` — Current project templates
-- `hooks/` — Current project hook scripts
-- `.claude/settings.local.json` — Current hook configuration
+**Related commands:**
+- `/plugin marketplace update` — Updates the plugin itself from marketplace
+- `/kit-tools:init-project` — Initial project setup (this skill is for updates)
+- `/kit-tools:seed-project` — Populate templates after adding new ones
 
-## Components Checked
+## Quick Reference
 
-| Component | Location | Description |
-|-----------|----------|-------------|
-| **Hooks** | `hooks/` | Automation scripts triggered by Claude Code events |
-| **Templates** | `kit_tools/` | Documentation templates |
-| **Agents** | `agents/` | Custom agents for specialized tasks |
+```bash
+# Check what's new and sync
+/kit-tools:update-kit-tools
 
-## Step 1: Check hooks
+# Just check, don't sync
+/kit-tools:update-kit-tools --check
 
-Compare the project's `hooks/` directory against the plugin's hooks:
+# Force sync even if versions match
+/kit-tools:update-kit-tools --force
 
-### 1a: Inventory hooks
+# Sync specific component type only
+/kit-tools:update-kit-tools templates
+/kit-tools:update-kit-tools hooks
+```
+
+---
+
+## Step 1: Check Plugin Version Status
+
+### 1a: Read current installed version
+
+Read `$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json` to get the installed plugin version.
+
+### 1b: Read last synced version
+
+Check for `kit_tools/.kit_tools_sync.json` in the project:
+
+```json
+{
+  "last_synced_version": "1.1.0",
+  "last_synced_at": "2024-01-15T10:30:00Z",
+  "synced_components": {
+    "templates": ["SYNOPSIS.md", "arch/CODE_ARCH.md", ...],
+    "agents": ["code-quality-validator.md"],
+    "hooks": ["create_scratchpad.py", ...]
+  }
+}
+```
+
+If this file doesn't exist, this is the first sync — treat all components as new.
+
+### 1c: Report version status
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    KIT-TOOLS UPDATE CHECK                        │
+├─────────────────────────────────────────────────────────────────┤
+│  Installed plugin version: 1.2.0                                │
+│  Last synced to project:   1.1.0 (2024-01-15)                  │
+│  Status: Updates available                                       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+If versions match and `--force` not specified:
+```
+Your project is up to date with the installed plugin (v1.2.0).
+
+To check for newer plugin versions from the marketplace:
+  /plugin marketplace update kit-tools
+```
+
+---
+
+## Step 2: Inventory New Components
+
+Compare the plugin's components against what was last synced.
+
+### 2a: Check for new/updated templates
+
+Compare `$CLAUDE_PLUGIN_ROOT/templates/` against sync marker:
 
 | Status | Meaning |
 |--------|---------|
-| **Identical** | Project hook matches plugin exactly |
-| **Modified** | Project hook differs (user has customized) |
-| **Missing** | Hook exists in plugin but not in project |
-| **Outdated config** | `hooks.json` or `.claude/settings.local.json` differs |
+| **New** | Template exists in plugin but not in sync marker |
+| **Updated** | Template version comment changed (e.g., `<!-- Template Version: 1.2.0 -->`) |
+| **Unchanged** | Template matches synced version |
 
-### 1b: Report hook status
+### 2b: Check for new/updated agents
 
-```
-Hook Status Report:
+Compare `$CLAUDE_PLUGIN_ROOT/agents/` against sync marker.
 
-Scripts:
-  ✓ create_scratchpad.py (identical)
-  ✓ update_doc_timestamps.py (identical)
-  ⚠ remind_close_session.py (modified - 5 lines differ)
-  ✗ remind_scratchpad_before_compact.py (missing)
-  ✓ validate_setup.py (identical)
+### 2c: Check for new/updated hooks
 
-Configuration:
-  ⚠ .claude/settings.local.json (missing PreCompact hook)
-```
+Compare `$CLAUDE_PLUGIN_ROOT/hooks/*.py` against sync marker.
 
-## Step 2: Check templates
+### 2d: Check for new skills
 
-Compare the project's `kit_tools/` directory against the plugin's templates:
+Compare `$CLAUDE_PLUGIN_ROOT/skills/` directories against sync marker.
 
-### 2a: Inventory templates
-
-| Status | Meaning |
-|--------|---------|
-| **Identical** | Project template matches plugin exactly |
-| **Customized** | Project template differs (user has modified) |
-| **Missing** | Template exists in plugin but not in project |
-| **Extra** | File exists in project but not in plugin (user-created) |
-
-### 2b: Report template status
+### 2e: Report what's new
 
 ```
-Template Status Report:
+What's New in v1.2.0 (since your last sync v1.1.0):
 
-Identical (no action needed):
-  - arch/CODE_ARCH.md
-  - docs/LOCAL_DEV.md
+SKILLS (2 new):
+  + validate-seeding    — Validate seeded templates for placeholders
+  + seed-template       — Seed a single template
 
-Customized (review before updating):
-  - SYNOPSIS.md (12 lines differ)
-  - arch/SECURITY.md (8 lines differ)
+AGENTS (4 new):
+  + template-validator.md   — Validates seeded templates
+  + generic-explorer.md     — Parameterized codebase exploration
+  + generic-seeder.md       — Parameterized template seeding
+  + drift-detector.md       — Doc-to-code drift detection
 
-Missing (can be added):
-  - arch/patterns/CACHING.md (new in plugin v1.1)
+TEMPLATES (2 new):
+  + SEED_MANIFEST.json      — Seeding progress tracking
+  + SYNC_MANIFEST.json      — Sync progress tracking
 
-Extra (project-specific, will be preserved):
-  - docs/feature_guides/AUTH_FLOW.md
+TEMPLATES (28 updated):
+  All templates updated with seeding frontmatter
+
+HOOKS (2 new):
+  + validate_seeded_template.py  — Post-edit placeholder check
+  + sync_skill_symlinks.py       — Autocomplete symlink sync
 ```
 
-## Step 3: Check subagent components
+---
 
-Check the status of subagent-related components in the project:
+## Step 3: Present Sync Options
 
-### 3a: Hook script
+If `--check` flag was provided, stop here and don't make changes.
 
-Check `detect_phase_completion.py` in the project's `hooks/` directory:
+Otherwise, present options:
 
-| Status | Meaning |
-|--------|---------|
-| **Identical** | Project script matches plugin exactly |
-| **Modified** | Project script differs (user has customized) |
-| **Missing** | Script exists in plugin but not in project |
+### Sync options:
 
-### 3b: Audit findings template
+```
+What would you like to sync?
 
-Check if `kit_tools/AUDIT_FINDINGS.md` exists in the project:
-- If present, note its status (template or populated with findings)
-- If missing, note it can be added
+1. Sync everything (recommended)
+   - Adds new templates to kit_tools/
+   - Updates hooks configuration
+   - Note: Won't overwrite customized templates
 
-### 3c: Skill integration status
+2. Sync templates only
+   - Adds new templates to kit_tools/
+   - Existing templates preserved
 
-Verify that the validate-phase skill integrations are present in the project's session lifecycle skills:
-- `checkpoint/SKILL.md` — Should include "Run validator" step
-- `close-session/SKILL.md` — Should include "Run validator" step
-- `start-session/SKILL.md` — Should include "Review open audit findings" step
+3. Sync hooks only
+   - Updates .claude/settings.local.json with new hooks
+   - Copies new hook scripts
 
-Report integration status for each.
+4. Preview changes (dry run)
+   - Show what would be synced without making changes
 
-## Step 4: Present update options
+5. Skip for now
+```
 
-After showing all status reports, present options:
+---
 
-### Hook options:
-1. **Update all hooks** - Replace all hook scripts with plugin versions
-2. **Update specific hook** - Choose which scripts to update
-3. **Add missing hooks** - Only add hooks that don't exist
-4. **Update hook config** - Sync `.claude/settings.local.json` with plugin
-
-### Template options:
-5. **Preview changes** for a specific template (show diff)
-6. **Update specific template** - Replace with plugin version
-7. **Add missing templates** - Copy new templates only
-8. **Update all templates** - Replace all (WARNING: loses customizations)
-
-### Subagent options:
-9. **Add/update phase completion hook** - Install or update `detect_phase_completion.py`
-10. **Add audit findings template** - Copy `AUDIT_FINDINGS.md` template to project
-11. **Update skill integrations** - Sync validator steps in checkpoint, close-session, start-session
-
-### Global options:
-12. **Update everything** - Full sync of all components (confirm first)
-13. **Skip** - Make no changes
-
-## Step 5: Execute updates
+## Step 4: Execute Sync
 
 Based on user selection:
 
-### For hooks:
-- Copy selected Python scripts from plugin to project `hooks/`
-- Update `.claude/settings.local.json` if hook config selected
-- Preserve `hooks.json` in project (it's a reference copy)
+### 4a: Sync templates
 
-### For templates:
-- Replace selected templates with plugin versions
-- For customized files, warn that customizations will be lost
-
-## Step 6: Report changes
-
-After making changes:
+For each new template:
+1. Check if file already exists in `kit_tools/`
+2. If exists: Skip (don't overwrite project customizations)
+3. If new: Copy from plugin to `kit_tools/`
 
 ```
-Update Complete:
-
-Hooks updated:
-  - remind_scratchpad_before_compact.py (added)
-  - .claude/settings.local.json (PreCompact hook added)
-
-Templates updated:
-  - arch/SECURITY.md (replaced)
-
-Templates added:
-  - arch/patterns/CACHING.md
-
-No changes:
-  - remind_close_session.py (kept modified version)
-  - SYNOPSIS.md (kept customized version)
+Syncing templates...
+  + kit_tools/SEED_MANIFEST.json (new)
+  + kit_tools/SYNC_MANIFEST.json (new)
+  ○ kit_tools/SYNOPSIS.md (exists, skipped)
+  ○ kit_tools/arch/CODE_ARCH.md (exists, skipped)
 ```
 
-Remind user:
-- Review any replaced files to re-apply customizations if needed
-- Run `/kit-tools:seed-project` if new templates were added
-- Test hooks by starting a new session
+### 4b: Sync hooks
 
-## Handling modified/customized files
+For hooks, we need to update the project's hook configuration:
 
-When updating a file that has local modifications:
+1. Read current `.claude/settings.local.json` (create if missing)
+2. Compare hooks section against plugin's hook configuration
+3. Add any missing hook entries
+4. Copy new hook script files to project's `hooks/` directory (if it exists)
 
-1. Show the diff first
-2. Warn that customizations will be lost
-3. Offer options:
-   - Copy customizations somewhere first
-   - Manually merge the changes
-   - Skip this file
-   - Replace anyway
+```
+Syncing hooks...
+  + validate_seeded_template.py (added to config)
+  + sync_skill_symlinks.py (added to config)
+  ○ create_scratchpad.py (already configured)
+```
+
+### 4c: Note about skills and agents
+
+Skills and agents don't need to be synced to the project — they live in the plugin and are available automatically. Just inform the user:
+
+```
+Note: New skills and agents are automatically available from the plugin.
+No project-level sync needed for:
+  - Skills: validate-seeding, seed-template
+  - Agents: template-validator, generic-explorer, generic-seeder, drift-detector
+
+Run /skills to see all available skills.
+```
+
+---
+
+## Step 5: Update Sync Marker
+
+After successful sync, update `kit_tools/.kit_tools_sync.json`:
+
+```json
+{
+  "last_synced_version": "1.2.0",
+  "last_synced_at": "2024-01-29T14:30:00Z",
+  "synced_components": {
+    "templates": [
+      "SYNOPSIS.md",
+      "SEED_MANIFEST.json",
+      "SYNC_MANIFEST.json",
+      ...
+    ],
+    "hooks": [
+      "create_scratchpad.py",
+      "validate_seeded_template.py",
+      "sync_skill_symlinks.py",
+      ...
+    ]
+  }
+}
+```
+
+---
+
+## Step 6: Final Report
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    SYNC COMPLETE                                 │
+├─────────────────────────────────────────────────────────────────┤
+│  Synced from: v1.1.0 → v1.2.0                                   │
+│  Templates added: 2                                              │
+│  Hooks configured: 2                                             │
+└─────────────────────────────────────────────────────────────────┘
+
+New templates added to kit_tools/:
+  • SEED_MANIFEST.json
+  • SYNC_MANIFEST.json
+
+Next steps:
+  • Run /kit-tools:seed-project to populate new templates
+  • New skills available: /kit-tools:validate-seeding, /kit-tools:seed-template
+  • Run /skills to see all available skills
+```
+
+---
+
+## Handling Edge Cases
+
+### Project doesn't have kit_tools/
+
+```
+No kit_tools/ directory found.
+
+Run /kit-tools:init-project first to set up kit_tools.
+```
+
+### First time sync (no marker file)
+
+Treat as initial sync:
+- Create sync marker
+- Don't copy templates (they were added by init-project)
+- Just record current state
+
+```
+First sync detected. Recording current state...
+
+Your project is now tracking kit-tools v1.2.0.
+Future updates will show what's new.
+```
+
+### Template exists but has project customizations
+
+Never overwrite existing templates. The user seeded them with project-specific content.
+
+```
+Template kit_tools/SYNOPSIS.md already exists (skipped).
+
+To get the updated template structure:
+1. Review changes: Compare plugin template vs your version
+2. Manually merge any structural improvements you want
+```
+
+### Hook script modified by user
+
+If a hook script exists in project and differs from plugin:
+
+```
+Hook remind_close_session.py differs from plugin version.
+
+Options:
+1. Keep your version (recommended if you customized it)
+2. Replace with plugin version
+3. Show diff
+```
+
+---
 
 ## Arguments
 
-If `$ARGUMENTS` contains a component or filename, jump directly to that:
+| Argument | Description |
+|----------|-------------|
+| (none) | Full update check and sync |
+| `--check` | Check only, don't sync |
+| `--force` | Sync even if versions match |
+| `templates` | Sync templates only |
+| `hooks` | Sync hooks only |
+| `--dry-run` | Preview changes without applying |
 
-Examples:
-- `/kit-tools:update-kit-tools` - Full inventory of all components
-- `/kit-tools:update-kit-tools hooks` - Check hooks only
-- `/kit-tools:update-kit-tools templates` - Check templates only
-- `/kit-tools:update-kit-tools SYNOPSIS.md` - Show diff for specific template
-- `/kit-tools:update-kit-tools remind_close_session.py` - Show diff for specific hook
+---
 
-## Quick mode
+## Checking for Marketplace Updates
 
-If `$ARGUMENTS` contains `--quick`:
+This skill syncs from the **installed plugin** to your **project**.
 
-- Skip identical files in the report
-- Only show files that need attention (missing, modified, outdated)
-
-Example: `/kit-tools:update-kit-tools --quick`
-
-## Dry Run mode
-
-If `$ARGUMENTS` contains `--dry-run`:
-
-1. Perform all analysis and comparison steps (Steps 1-4)
-2. When the user selects update options, instead of applying changes, output a preview:
+To check if a newer plugin version is available from the marketplace:
 
 ```
-Dry Run Preview — No changes will be made
-
-Changes that would be applied:
-
-Hooks:
-  [UPDATE] remind_scratchpad_before_compact.py
-    - 12 lines differ from plugin version
-    - Would replace with plugin version
-
-  [ADD] detect_phase_completion.py
-    - Missing in project
-    - Would copy from plugin
-
-Templates:
-  [UPDATE] arch/SECURITY.md
-    - 8 lines differ (customized)
-    - Would replace with plugin version (WARNING: customizations lost)
-
-  [ADD] AUDIT_FINDINGS.md
-    - Missing in project
-    - Would copy from plugin
-
-Configuration:
-  [UPDATE] .claude/settings.local.json
-    - Would add PreCompact hook entry
-
-Run without --dry-run to apply these changes.
+/plugin marketplace update kit-tools
 ```
 
-3. Can be combined with `--quick`: `/kit-tools:update-kit-tools --quick --dry-run`
-
-## Related Skills
-
-| Skill | When to use |
-|-------|-------------|
-| `/kit-tools:init-project` | For initial setup (this skill is for updates) |
-| `/kit-tools:seed-project` | After adding new templates, to populate them |
-| `/kit-tools:sync-project` | To sync documentation content (not plugin components) |
+If a newer version is installed, run this skill again to sync the new components.

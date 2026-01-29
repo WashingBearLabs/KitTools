@@ -1,7 +1,7 @@
 {
   "name": "kit-tools",
   "description": "Documentation framework for AI-assisted development. Provides session management, documentation templates, and automation hooks.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": {
     "name": "WashingBearLabs",
     "email": "contact@washingbearlabs.com",
@@ -27,6 +27,15 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/create_scratchpad.py"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/sync_skill_symlinks.py"
           }
         ]
       }
