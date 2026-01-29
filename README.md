@@ -18,8 +18,8 @@ Think of it as a "documentation kit" for your projects, with AI-aware features b
 From inside Claude Code:
 
 ```
-# 1. Add the marketplace
-/plugin marketplace add WashingBearLabs/KitTools
+# 1. Add the WashingBearLabs marketplace
+/plugin marketplace add WashingBearLabs/WashingBearLabsMarketplace
 
 # 2. Install the plugin
 /plugin install kit-tools@washingbearlabs
