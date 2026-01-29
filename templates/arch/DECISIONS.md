@@ -1,4 +1,4 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 # DECISIONS.md
 
 > **TEMPLATE_INTENT:** Record architectural decisions and their rationale. Explains the 'why' behind technical choices.

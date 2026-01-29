@@ -1,4 +1,4 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 # ENV_REFERENCE.md
 
 > **TEMPLATE_INTENT:** Document environment variables and secrets. What config exists and where to find it.

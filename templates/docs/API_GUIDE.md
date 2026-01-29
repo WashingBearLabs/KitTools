@@ -1,4 +1,4 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 # API_GUIDE.md
 
 > **TEMPLATE_INTENT:** Document API endpoints, CLI commands, or library interface. The external contract.

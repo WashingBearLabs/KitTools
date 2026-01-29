@@ -1,4 +1,4 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 # LOGGING.md
 
 > **TEMPLATE_INTENT:** Document logging patterns, levels, and conventions.

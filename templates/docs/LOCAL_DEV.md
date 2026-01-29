@@ -1,4 +1,4 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 # LOCAL_DEV.md
 
 > **TEMPLATE_INTENT:** Complete local development setup guide. Get a new developer running quickly.

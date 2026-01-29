@@ -1,4 +1,4 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 # DATA_MODEL.md
 
 > **TEMPLATE_INTENT:** Document database schema and data relationships. The source of truth for data structure.

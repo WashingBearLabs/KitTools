@@ -1,4 +1,4 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 # BACKLOG.md
 
 > **TEMPLATE_INTENT:** Track future work items and ideas. The parking lot for 'someday' tasks.

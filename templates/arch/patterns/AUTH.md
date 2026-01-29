@@ -1,4 +1,4 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 # AUTH.md
 
 > **TEMPLATE_INTENT:** Document authentication patterns and implementation details.

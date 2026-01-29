@@ -1,4 +1,4 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 # CONVENTIONS.md
 
 > **TEMPLATE_INTENT:** Document coding standards and style guidelines. What 'good' looks like here.

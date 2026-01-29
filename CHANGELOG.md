@@ -27,8 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **`.claude-plugin/plugin.json`** — Bumped version to 1.1.0, added `agents` field
 - **`agents/` directory** — Renamed from `subagents/` to follow Claude Code plugin conventions; added YAML frontmatter to agent files
-- **`.claude-plugin/marketplace.json`** — Added marketplace catalog for remote plugin installation
-- **`README.md`** — Updated install instructions to use `/plugin marketplace add` + `/plugin install` workflow
+- **`README.md`** — Updated install instructions to reference WashingBearLabsMarketplace
 - **`CONTRIBUTING.md`** — Updated install instructions for local development
 - **`checkpoint/SKILL.md`** — Added Step 4 (Run validator) for code changes; renumbered Step 4 → Step 5
 - **`close-session/SKILL.md`** — Added Step 3 (Run validator); renumbered Steps 3-5 → Steps 4-6

@@ -1,4 +1,4 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 # MVP_TODO.md
 
 > **TEMPLATE_INTENT:** Track current sprint or MVP tasks. What's being worked on now.

@@ -1,4 +1,4 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 # CODE_ARCH.md
 
 > **TEMPLATE_INTENT:** Document the code structure, key modules, and architectural patterns. The map of how code is organized.

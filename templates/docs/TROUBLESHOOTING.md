@@ -1,4 +1,4 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 # TROUBLESHOOTING.md
 
 > **TEMPLATE_INTENT:** Document debugging procedures and common fixes. How to diagnose problems.

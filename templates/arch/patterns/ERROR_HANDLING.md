@@ -1,4 +1,4 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 # ERROR_HANDLING.md
 
 > **TEMPLATE_INTENT:** Document error handling patterns and conventions.

@@ -1,4 +1,4 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 # INFRA_ARCH.md
 
 > **TEMPLATE_INTENT:** Document cloud resources, networking, and infrastructure. The map of deployed systems.

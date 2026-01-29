@@ -1,4 +1,4 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 # SESSION_LOG.md
 
 > **TEMPLATE_INTENT:** Running history of development sessions. Enables continuity across sessions and team members.

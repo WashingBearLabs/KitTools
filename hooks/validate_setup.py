@@ -11,6 +11,7 @@ Can also be run manually: python3 hooks/validate_setup.py
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
 
@@ -130,9 +131,6 @@ def main():
             "message": "kit_tools setup validated successfully."
         }))
 
-
-# Need to import sys for stdin
-import sys
 
 if __name__ == "__main__":
     main()

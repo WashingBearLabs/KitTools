@@ -1,4 +1,4 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 # [FEATURE_NAME]_FEATURE_GUIDE.md
 
 > **TEMPLATE_INTENT:** Template for documenting individual features. Copy this for new feature guides.

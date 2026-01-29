@@ -1,4 +1,4 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 # TESTING_GUIDE.md
 
 > **TEMPLATE_INTENT:** Document test structure, running tests, and writing new tests. Quality assurance reference.
