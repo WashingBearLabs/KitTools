@@ -13,7 +13,7 @@ Compare and selectively update the project's kit-tools components against the la
 |-----------|----------|-------------|
 | **Hooks** | `hooks/` | Automation scripts triggered by Claude Code events |
 | **Templates** | `kit_tools/` | Documentation templates |
-| **Subagents** | *(future)* | Custom agents for specialized tasks |
+| **Agents** | `agents/` | Custom agents for specialized tasks |
 
 ## Step 1: Check hooks
 

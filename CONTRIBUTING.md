@@ -36,9 +36,9 @@ Thank you for your interest in contributing to kit-tools! This document provides
    cd KitTools
    ```
 
-2. Install locally for testing:
-   ```bash
-   claude plugins install ./
+2. Install locally for testing (run inside Claude Code):
+   ```
+   /plugin install ./
    ```
 
 3. Make changes and test in a sample project

@@ -1,7 +1,7 @@
 {
   "name": "kit-tools",
   "description": "Documentation framework for AI-assisted development. Provides session management, documentation templates, and automation hooks.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": {
     "name": "WashingBearLabs",
     "email": "contact@washingbearlabs.com",
@@ -19,5 +19,6 @@
     "raccoon"
   ],
   "skills": "./skills/",
-  "hooks": "./hooks/hooks.json"
+  "hooks": "./hooks/hooks.json",
+  "agents": "./agents/"
 }

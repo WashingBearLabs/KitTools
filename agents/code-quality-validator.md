@@ -1,6 +1,11 @@
-# Code Quality Validator — Subagent Prompt Template
+---
+description: Reviews code changes for quality, security, and intent alignment. Used by the validate-phase skill — contains placeholder tokens that must be interpolated before invocation.
+capabilities: ["code-review", "security-audit", "intent-validation"]
+---
 
-> **PURPOSE:** This is a prompt template read by the `validate-phase` skill and interpolated before being passed to the Task tool. It is NOT a skill itself.
+# Code Quality Validator
+
+> **NOTE:** This agent is invoked by the `/kit-tools:validate-phase` skill, which reads this file and interpolates `{{PLACEHOLDER}}` tokens with project context before passing it to the Task tool. It is not intended for direct invocation.
 
 ---
 

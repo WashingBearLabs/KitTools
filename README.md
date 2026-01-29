@@ -16,12 +16,12 @@ Think of it as a "documentation kit" for your projects, with AI-aware features b
 ## Installation
 
 ```bash
-# Via Claude Code plugin marketplace (coming soon)
-claude plugins install kit-tools
+# Install directly from GitHub
+/plugin install WashingBearLabs/KitTools
 
 # Or clone and install locally
-git clone https://github.com/WashingBearLabs/kit-tools.git
-claude plugins install ./kit-tools
+git clone https://github.com/WashingBearLabs/KitTools.git
+/plugin install ./KitTools
 ```
 
 ## Quick Start
@@ -167,7 +167,7 @@ kit-tools encourages a session-based workflow:
 Use `/kit-tools:validate-phase` to review recent code changes:
 
 1. Gathers git diff, phase intent from TODO files, and project rulebook docs
-2. Runs a code quality subagent with three review passes:
+2. Runs a code quality agent with three review passes:
    - **Quality & Conventions** — naming, patterns, code smells, error handling
    - **Security** — injection, auth gaps, secrets, input validation
    - **Intent Alignment** — implementation vs plan, scope creep, completeness

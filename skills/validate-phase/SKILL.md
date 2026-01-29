@@ -44,7 +44,7 @@ Run `git diff --name-only` (or `git diff HEAD~1 --name-only` if no uncommitted c
 
 ## Step 3: Spawn validator subagent
 
-1. Read the subagent prompt template from `subagents/code-quality-validator.md` (relative to the plugin root, NOT the project)
+1. Read the agent prompt template from `agents/code-quality-validator.md` (relative to the plugin root, NOT the project)
 2. Replace the placeholder tokens in the template with the gathered context:
    - `{{PHASE_INTENT}}` → Phase intent from Step 2b
    - `{{GIT_DIFF}}` → Git diff output from Step 2a

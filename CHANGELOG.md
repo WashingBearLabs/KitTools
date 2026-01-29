@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Findings written to persistent `AUDIT_FINDINGS.md` with unique IDs and severity tracking
   - Can be run manually or is invoked automatically by checkpoint and close-session
 - **New Subagent: `code-quality-validator.md`** — Prompt template for the validation subagent
-  - Located in new `subagents/` directory
+  - Located in new `agents/` directory
   - Defines structured output format for findings
   - Supports placeholder interpolation for project context
 - **New Template: `AUDIT_FINDINGS.md`** — Persistent audit findings log
@@ -25,11 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Suggests running validate-phase when tasks are completed
 
 ### Changed
+- **`.claude-plugin/plugin.json`** — Bumped version to 1.1.0, added `agents` field
+- **`agents/` directory** — Renamed from `subagents/` to follow Claude Code plugin conventions; added YAML frontmatter to agent files
+- **`README.md`** — Updated install instructions to use `/plugin install` commands
+- **`CONTRIBUTING.md`** — Updated install instructions to use `/plugin install` commands
 - **`checkpoint/SKILL.md`** — Added Step 4 (Run validator) for code changes; renumbered Step 4 → Step 5
 - **`close-session/SKILL.md`** — Added Step 3 (Run validator); renumbered Steps 3-5 → Steps 4-6
 - **`start-session/SKILL.md`** — Added Step 7 (Review open audit findings); summary includes findings count
 - **`init-project/SKILL.md`** — Added `AUDIT_FINDINGS.md` to core templates, `detect_phase_completion.py` to hooks, updated verification to 6 Python scripts
-- **`update-kit-tools/SKILL.md`** — Replaced subagent placeholder (Step 3) with actual subagent inventory and update options
+- **`update-kit-tools/SKILL.md`** — Replaced agent placeholder (Step 3) with actual agent inventory and update options
 - **`templates/AGENT_README.md`** — Added `AUDIT_FINDINGS.md` to documentation structure tree and session start checklist
 - **`hooks/hooks.json`** — Added `detect_phase_completion.py` PostToolUse hook entry
 
