@@ -1,7 +1,9 @@
 ---
-name: code-quality-validator
 description: Reviews code changes for quality, security, and intent alignment. Used by the validate-phase skill — contains placeholder tokens that must be interpolated before invocation.
-capabilities: ["code-review", "security-audit", "intent-validation"]
+capabilities:
+  - code-review
+  - security-audit
+  - intent-validation
 ---
 
 # Code Quality Validator

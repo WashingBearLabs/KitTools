@@ -19,7 +19,6 @@
     "raccoon"
   ],
   "skills": ["./skills"],
-  "agents": ["./agents"],
   "hooks": {
     "SessionStart": [
       {
