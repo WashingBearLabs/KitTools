@@ -18,8 +18,8 @@
     "kit",
     "raccoon"
   ],
-  "skills": "./skills/",
-  "agents": "./agents/",
+  "skills": ["./skills"],
+  "agents": ["./agents"],
   "hooks": {
     "SessionStart": [
       {
