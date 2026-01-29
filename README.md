@@ -15,12 +15,22 @@ Think of it as a "documentation kit" for your projects, with AI-aware features b
 
 ## Installation
 
-```bash
-# Install directly from GitHub
-/plugin install WashingBearLabs/KitTools
+From inside Claude Code:
 
-# Or clone and install locally
+```
+# 1. Add the marketplace
+/plugin marketplace add WashingBearLabs/KitTools
+
+# 2. Install the plugin
+/plugin install kit-tools@washingbearlabs
+```
+
+Or install from a local clone:
+
+```bash
 git clone https://github.com/WashingBearLabs/KitTools.git
+```
+```
 /plugin install ./KitTools
 ```
 

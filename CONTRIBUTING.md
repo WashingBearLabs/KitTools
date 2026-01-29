@@ -38,7 +38,7 @@ Thank you for your interest in contributing to kit-tools! This document provides
 
 2. Install locally for testing (run inside Claude Code):
    ```
-   /plugin install ./
+   /plugin install ./KitTools
    ```
 
 3. Make changes and test in a sample project
