@@ -7,6 +7,27 @@ description: Run code quality, security, and intent alignment validation on rece
 
 Run an automated code quality review on recent changes. Findings are advisory — they inform but never block other workflows.
 
+## Dependencies
+
+This skill requires the following components:
+
+| Component | Location | Required | Purpose |
+|-----------|----------|----------|---------|
+| **Agent template** | `$CLAUDE_PLUGIN_ROOT/agents/code-quality-validator.md` | Yes | Validator prompt template |
+| **Findings template** | `$CLAUDE_PLUGIN_ROOT/templates/AUDIT_FINDINGS.md` | Yes | Template for findings file |
+| `kit_tools/SESSION_SCRATCH.md` | Optional | Identifies active feature/TODO |
+| `kit_tools/roadmap/*.md` | Optional | Phase intent extraction |
+| `kit_tools/docs/CONVENTIONS.md` | Optional | Project conventions for validation |
+| `kit_tools/docs/GOTCHAS.md` | Optional | Known issues to check against |
+| `kit_tools/arch/CODE_ARCH.md` | Optional | Architecture patterns to validate |
+| `kit_tools/arch/SECURITY.md` | Optional | Security patterns to validate |
+
+**Creates/Updates:**
+- `kit_tools/AUDIT_FINDINGS.md` — Findings log (created from template if missing)
+
+**Related hooks:**
+- `detect_phase_completion.py` (PostToolUse) — Suggests running this skill after TODO completion
+
 ## Step 1: Determine scope
 
 - Read `kit_tools/SESSION_SCRATCH.md` to identify the active feature and TODO file

@@ -7,6 +7,21 @@ description: Update project kit-tools components (hooks, templates) from the lat
 
 Compare and selectively update the project's kit-tools components against the latest versions from this plugin.
 
+## Dependencies
+
+This skill requires the following plugin components:
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| **Templates** | `$CLAUDE_PLUGIN_ROOT/templates/` | Canonical template versions for comparison |
+| **Hook scripts** | `$CLAUDE_PLUGIN_ROOT/hooks/*.py` | Latest hook implementations |
+| **Agents** | `$CLAUDE_PLUGIN_ROOT/agents/` | Subagent prompt templates |
+
+**Reads from project:**
+- `kit_tools/` — Current project templates
+- `hooks/` — Current project hook scripts
+- `.claude/settings.local.json` — Current hook configuration
+
 ## Components Checked
 
 | Component | Location | Description |
@@ -202,3 +217,50 @@ If `$ARGUMENTS` contains `--quick`:
 - Only show files that need attention (missing, modified, outdated)
 
 Example: `/kit-tools:update-kit-tools --quick`
+
+## Dry Run mode
+
+If `$ARGUMENTS` contains `--dry-run`:
+
+1. Perform all analysis and comparison steps (Steps 1-4)
+2. When the user selects update options, instead of applying changes, output a preview:
+
+```
+Dry Run Preview — No changes will be made
+
+Changes that would be applied:
+
+Hooks:
+  [UPDATE] remind_scratchpad_before_compact.py
+    - 12 lines differ from plugin version
+    - Would replace with plugin version
+
+  [ADD] detect_phase_completion.py
+    - Missing in project
+    - Would copy from plugin
+
+Templates:
+  [UPDATE] arch/SECURITY.md
+    - 8 lines differ (customized)
+    - Would replace with plugin version (WARNING: customizations lost)
+
+  [ADD] AUDIT_FINDINGS.md
+    - Missing in project
+    - Would copy from plugin
+
+Configuration:
+  [UPDATE] .claude/settings.local.json
+    - Would add PreCompact hook entry
+
+Run without --dry-run to apply these changes.
+```
+
+3. Can be combined with `--quick`: `/kit-tools:update-kit-tools --quick --dry-run`
+
+## Related Skills
+
+| Skill | When to use |
+|-------|-------------|
+| `/kit-tools:init-project` | For initial setup (this skill is for updates) |
+| `/kit-tools:seed-project` | After adding new templates, to populate them |
+| `/kit-tools:sync-project` | To sync documentation content (not plugin components) |

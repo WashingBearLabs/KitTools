@@ -7,6 +7,27 @@ description: Orient yourself at the start of a development session
 
 Hey Claude! Let's get oriented before we start today's session.
 
+## Dependencies
+
+This skill requires the following project files:
+
+| File | Required | Purpose |
+|------|----------|---------|
+| `kit_tools/AGENT_README.md` | Yes | Navigation guide and patterns |
+| `kit_tools/SYNOPSIS.md` | Yes | Project status overview |
+| `kit_tools/SESSION_LOG.md` | Yes | Session history |
+| `kit_tools/roadmap/*.md` | Yes | TODO files for active work |
+| `kit_tools/arch/CODE_ARCH.md` | Recommended | Code architecture reference |
+| `kit_tools/arch/INFRA_ARCH.md` | Optional | Infrastructure reference |
+| `kit_tools/docs/GOTCHAS.md` | Recommended | Known issues and landmines |
+| `kit_tools/AUDIT_FINDINGS.md` | Optional | Open code quality findings |
+
+**Creates:**
+- `kit_tools/SESSION_SCRATCH.md` — Session scratchpad for notes
+
+**Related hooks:**
+- `create_scratchpad.py` (SessionStart) — Auto-creates scratchpad on session start
+
 ## Step 0: Check for orphaned scratchpad
 
 - Check if `kit_tools/SESSION_SCRATCH.md` exists

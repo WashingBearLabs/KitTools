@@ -7,6 +7,68 @@ description: Initialize kit_tools documentation framework in the current project
 
 Setting up the kit_tools documentation framework in this project.
 
+## Dependencies
+
+This skill requires the following plugin components:
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| **Templates** | `$CLAUDE_PLUGIN_ROOT/templates/` | Source templates to copy |
+| **Hook scripts** | `$CLAUDE_PLUGIN_ROOT/hooks/*.py` | Automation scripts to install |
+| **hooks.json** | `$CLAUDE_PLUGIN_ROOT/hooks/hooks.json` | Hook configuration reference |
+
+**Creates in project:**
+- `kit_tools/` directory with selected templates
+- `hooks/` directory with Python automation scripts
+- `.claude/settings.local.json` with hook configuration
+- `CLAUDE.md` with scratchpad instructions
+
+## Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `--dry-run` | Preview what would be created without making changes |
+
+### Dry Run Mode
+
+If `$ARGUMENTS` contains `--dry-run`:
+
+1. Perform all analysis steps (existing setup check, project type selection, etc.)
+2. Instead of creating files, output a detailed preview:
+
+```
+Dry Run Preview — No changes will be made
+
+Directories to create:
+  - kit_tools/
+  - kit_tools/arch/
+  - kit_tools/docs/
+  - kit_tools/roadmap/
+  - hooks/
+  - .claude/
+
+Templates to copy (14 files):
+  - AGENT_README.md
+  - SYNOPSIS.md
+  - SESSION_LOG.md
+  ... (list all)
+
+Hooks to install (6 files):
+  - create_scratchpad.py
+  - update_doc_timestamps.py
+  ... (list all)
+
+Settings to create/update:
+  - .claude/settings.local.json (hooks configuration)
+
+CLAUDE.md:
+  - Will be created with scratchpad instructions
+
+Run without --dry-run to apply these changes.
+```
+
+3. Exit without modifying any files
+
 ## Step 1: Check for existing setup
 
 - Check if `kit_tools/` directory already exists in this project
@@ -284,3 +346,11 @@ This allows the documentation to grow with the project.
 ## Note on Template Source
 
 The templates come from this plugin's `templates/` directory. They are canonical versions that can be updated independently of any project's documentation.
+
+## Related Skills
+
+| Skill | When to use |
+|-------|-------------|
+| `/kit-tools:seed-project` | After init, to populate templates with project-specific content |
+| `/kit-tools:update-kit-tools` | Later, to update hooks/templates from newer plugin versions |
+| `/kit-tools:migrate` | Instead of init, if project has existing documentation to preserve |

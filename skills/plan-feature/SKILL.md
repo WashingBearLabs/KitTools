@@ -7,6 +7,22 @@ description: Brainstorm and plan a new feature with guided questions
 
 Let's brainstorm and plan a new feature together. This is an interactive process — I'll ask clarifying questions to help refine the idea before generating the TODO file.
 
+## Dependencies
+
+This skill requires the following project files:
+
+| File | Required | Purpose |
+|------|----------|---------|
+| `kit_tools/roadmap/` directory | Yes | Location for new FEATURE_TODO file |
+| `kit_tools/roadmap/BACKLOG.md` | Yes | To add feature reference |
+| `$CLAUDE_PLUGIN_ROOT/templates/roadmap/FEATURE_TODO.md` | Yes | Template for new feature TODO |
+
+**Creates:**
+- `kit_tools/roadmap/FEATURE_TODO_[name].md` — New feature planning document
+
+**Updates:**
+- `kit_tools/roadmap/BACKLOG.md` — Adds reference to new feature
+
 ## Step 1: Capture the spark
 
 First, tell me about the feature idea:

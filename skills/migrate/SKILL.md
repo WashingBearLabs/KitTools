@@ -7,6 +7,27 @@ description: Migrate existing documentation to kit_tools structure
 
 This skill helps projects with existing documentation adopt the kit_tools framework without losing their current docs.
 
+## Dependencies
+
+This skill requires the following plugin components:
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| **Templates** | `$CLAUDE_PLUGIN_ROOT/templates/` | Target structure templates |
+| **Hook scripts** | `$CLAUDE_PLUGIN_ROOT/hooks/*.py` | Automation scripts to install |
+
+**Reads from project:**
+- Existing documentation (README.md, docs/, etc.)
+
+**Creates:**
+- `kit_tools/` directory structure with migrated content
+- `hooks/` directory with automation scripts
+- `.claude/settings.local.json` with hook configuration
+- `CLAUDE.md` with scratchpad instructions
+
+**Alternative to:**
+- `/kit-tools:init-project` — Use migrate instead when project has existing docs to preserve
+
 ## Step 1: Discovery
 
 Scan the project for existing documentation:

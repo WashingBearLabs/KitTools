@@ -7,6 +7,27 @@ description: Update documentation before ending a development session
 
 Great job today Claude! Before we close out, let's make sure documentation stays in sync.
 
+## Dependencies
+
+This skill requires the following project files:
+
+| File | Required | Purpose |
+|------|----------|---------|
+| `kit_tools/SESSION_SCRATCH.md` | Yes | Notes captured during session |
+| `kit_tools/SESSION_LOG.md` | Yes | Session history to update |
+| `kit_tools/roadmap/*.md` | Yes | TODO files to update |
+| `kit_tools/AGENT_README.md` | Yes | Documentation checklist reference |
+| `kit_tools/AUDIT_FINDINGS.md` | Optional | Created if validate-phase runs |
+
+**Deletes:**
+- `kit_tools/SESSION_SCRATCH.md` — Removed after processing notes
+
+**Invokes:**
+- `/kit-tools:validate-phase` — Runs code quality validation (Step 3)
+
+**Related hooks:**
+- `remind_close_session.py` (Stop) — Reminds to run this skill if scratchpad has notes
+
 ## Step 0: Process scratchpad
 
 - Read `kit_tools/SESSION_SCRATCH.md`

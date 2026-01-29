@@ -7,6 +7,25 @@ description: Capture work mid-session before context refreshes
 
 Let's checkpoint the current session to make sure nothing gets lost.
 
+## Dependencies
+
+This skill requires the following project files:
+
+| File | Required | Purpose |
+|------|----------|---------|
+| `kit_tools/SESSION_SCRATCH.md` | Yes | Notes to process |
+| `kit_tools/SESSION_LOG.md` | Yes | Session history to update |
+| `kit_tools/roadmap/*.md` | Yes | TODO files to update |
+
+**Modifies:**
+- `kit_tools/SESSION_SCRATCH.md` — Clears notes section (preserves Active Feature)
+
+**Optionally invokes:**
+- `/kit-tools:validate-phase` — If code changes were made since last checkpoint
+
+**Related hooks:**
+- `remind_scratchpad_before_compact.py` (PreCompact) — Adds marker before context compaction
+
 ## Step 1: Review the scratchpad
 
 - Read `kit_tools/SESSION_SCRATCH.md`

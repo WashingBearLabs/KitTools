@@ -7,6 +7,23 @@ description: Sync documentation with codebase (use --quick for lightweight audit
 
 Synchronize documentation with the actual codebase. This skill has two modes:
 
+## Dependencies
+
+This skill requires the following project files:
+
+| File | Required | Purpose |
+|------|----------|---------|
+| `kit_tools/` directory | Yes | Documentation to sync |
+| `kit_tools/AGENT_README.md` | Yes | Patterns to verify against code |
+| `kit_tools/SESSION_LOG.md` | Yes | To record sync session |
+| All `kit_tools/**/*.md` | Yes | Documentation to compare against codebase |
+
+**Creates (Full mode only):**
+- `kit_tools/SYNC_PROGRESS.md` — Progress tracking for multi-session syncs
+
+**Prerequisite:**
+- Project must have kit_tools initialized (`/kit-tools:init-project`)
+
 - **Quick mode** (`--quick`): Lightweight audit for monthly check-ins
 - **Full mode** (default): Exhaustive multi-session sync
 

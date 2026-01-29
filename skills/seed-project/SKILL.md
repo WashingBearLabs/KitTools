@@ -7,6 +7,24 @@ description: Populate documentation templates for a new or existing project
 
 I've been asked to explore this codebase and populate the kit_tools documentation templates with accurate, project-specific information.
 
+## Dependencies
+
+This skill requires the following project files:
+
+| File | Required | Purpose |
+|------|----------|---------|
+| `kit_tools/` directory | Yes | Must exist (run `/kit-tools:init-project` first) |
+| `kit_tools/AGENT_README.md` | Yes | Will be customized with project patterns |
+| `kit_tools/SYNOPSIS.md` | Yes | Will be populated with project overview |
+| `kit_tools/SESSION_LOG.md` | Yes | Will record seeding session |
+| All other `kit_tools/*.md` | Yes | Templates to populate |
+
+**Prerequisite skill:**
+- `/kit-tools:init-project` — Must be run first to create kit_tools structure
+
+**Updates:**
+- All template files in `kit_tools/` with project-specific content
+
 ## Important Instructions
 
 1. **REPLACE all placeholder text** — Don't leave `[brackets]` or `YYYY-MM-DD` in the final docs
