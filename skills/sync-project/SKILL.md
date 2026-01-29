@@ -5,7 +5,7 @@ description: Sync documentation with codebase (use --quick for lightweight audit
 
 # Sync Project Documentation
 
-Synchronize documentation with the actual codebase. This skill has two modes:
+Synchronize documentation with the actual codebase. This skill detects drift between what docs claim and what code actually does.
 
 ## Dependencies
 
@@ -18,16 +18,25 @@ This skill requires the following project files:
 | `kit_tools/SESSION_LOG.md` | Yes | To record sync session |
 | All `kit_tools/**/*.md` | Yes | Documentation to compare against codebase |
 
-**Creates (Full mode only):**
-- `kit_tools/SYNC_PROGRESS.md` — Progress tracking for multi-session syncs
+**Creates:**
+- `kit_tools/SYNC_MANIFEST.json` — Progress tracking (replaces SYNC_PROGRESS.md)
+- `kit_tools/.sync_cache/` — Exploration cache for reuse
+
+**Uses agents:**
+- `generic-explorer.md` — Focused codebase exploration
+- `drift-detector.md` — Doc-to-code comparison
+- `template-validator.md` — Placeholder cleanup verification
 
 **Prerequisite:**
 - Project must have kit_tools initialized (`/kit-tools:init-project`)
 
+## Modes
+
 - **Quick mode** (`--quick`): Lightweight audit for monthly check-ins
 - **Full mode** (default): Exhaustive multi-session sync
+- **Resume mode** (`--resume`): Continue from manifest progress
 
-Check `$ARGUMENTS` for `--quick` flag to determine mode.
+Check `$ARGUMENTS` for flags to determine mode.
 
 ---
 
@@ -35,39 +44,54 @@ Check `$ARGUMENTS` for `--quick` flag to determine mode.
 
 A lightweight documentation audit to catch drift. Run monthly or when you suspect docs are stale.
 
-### Step 1: Freshness Check
+### Step 1: Run Focused Exploration
 
-Review all files in `kit_tools/` and flag any that:
+Spawn `generic-explorer` for key areas to get current codebase state:
 
-- Have "Last updated" older than 30 days AND related code has changed
-- Reference files, functions, or patterns that no longer exist
-- Contradict what you see in the actual codebase
+```
+Focus areas: tech-stack, architecture
+```
 
-### Step 2: Completeness Check
+Cache results to `kit_tools/.sync_cache/` for reuse.
 
-For each major feature/module in the codebase, verify:
+### Step 2: Drift Detection on Critical Docs
 
-- Is there documentation in `kit_tools/arch/CODE_ARCH.md`?
-- If it has an API, is it in `kit_tools/docs/API_GUIDE.md`?
-- If it has env vars, are they in `kit_tools/docs/ENV_REFERENCE.md`?
-- If it's a significant feature, is there a feature guide?
+Run `drift-detector` on the most important docs:
 
-### Step 3: Consistency Check
+1. `SYNOPSIS.md` — Project overview accurate?
+2. `arch/CODE_ARCH.md` — Structure still valid?
+3. `docs/LOCAL_DEV.md` — Setup instructions work?
+4. `AGENT_README.md` — Patterns match reality?
 
-Spot-check for conflicts between:
+### Step 3: Freshness Check
 
-- `kit_tools/AGENT_README.md` patterns vs. actual code
-- `kit_tools/docs/API_GUIDE.md` vs. actual endpoints
-- `kit_tools/arch/DATA_MODEL.md` vs. actual schema
+For each doc in `kit_tools/`:
+
+- Extract "Last Updated" date
+- Compare against git log for related code files
+- Flag docs older than 30 days with related code changes
 
 ### Step 4: Report
 
-Provide a summary:
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    QUICK SYNC AUDIT                              │
+├─────────────────────────────────────────────────────────────────┤
+│  Documents Checked: 19                                           │
+│  Current: 12    Stale: 5    Outdated: 2                         │
+└─────────────────────────────────────────────────────────────────┘
 
-- **Stale docs** — Files needing updates (with specific issues)
-- **Missing docs** — Undocumented features or modules
-- **Inconsistencies** — Conflicts between docs and code
-- **Recommended actions** — Prioritized by impact
+OUTDATED (significant drift):
+  ✗ arch/CODE_ARCH.md
+    - References src/utils/ which no longer exists
+    - Missing new src/services/ module
+
+STALE (needs refresh):
+  ⚠ docs/API_GUIDE.md — Last updated 45 days ago, API routes changed
+  ⚠ docs/ENV_REFERENCE.md — Missing 3 new env vars
+
+RECOMMENDATION: Run full sync with `/kit-tools:sync-project`
+```
 
 If issues are significant, recommend running a full sync.
 
@@ -77,192 +101,238 @@ If issues are significant, recommend running a full sync.
 
 Exhaustive codebase-to-documentation synchronization. The codebase is the source of truth — documentation must match it exactly.
 
-This may take multiple sessions for complex projects. That's expected.
+### Phase 1: Initialize Manifest
 
-### Before You Begin
+1. **Check for existing manifest** at `kit_tools/SYNC_MANIFEST.json`
+   - If exists and `--resume`: Load and continue from last progress
+   - If exists and not `--resume`: Ask to reset or resume
+   - If doesn't exist: Copy template from plugin and initialize
 
-1. **Check for existing progress**: Look for `kit_tools/SYNC_PROGRESS.md`
-   - If it exists, a sync is already in progress — resume from where it left off
-   - If it doesn't exist, this is a fresh sync — create the progress file
+2. **Initialize manifest fields:**
+   ```json
+   {
+     "created": "[current ISO timestamp]",
+     "last_updated": "[current ISO timestamp]",
+     "project_root": "[current directory]",
+     "config": {
+       "mode": "full",
+       "stale_threshold_days": 30
+     }
+   }
+   ```
 
-2. **Create/Update SYNC_PROGRESS.md** with this structure:
+3. **Create cache directory** at `kit_tools/.sync_cache/` if it doesn't exist
 
-```markdown
-# Sync Progress
+### Phase 2: Project Discovery (Using generic-explorer)
 
-**Started:** [DATE]
-**Last Updated:** [DATE]
-**Status:** In Progress
+Instead of manual exploration, spawn focused explorers for each area:
 
-## Areas Reviewed
-- [ ] Area 1
-- [ ] Area 2
+#### Discovery Areas
 
-## Findings Log
-### [Area Name]
-- Finding 1
-- Finding 2
+| Area | Explorer Focus | What It Finds |
+|------|---------------|---------------|
+| Infrastructure | `infrastructure` | Docker, CI/CD, IaC, cloud configs |
+| Code Structure | `architecture` | Directories, modules, entry points |
+| APIs | `architecture`, `dependencies` | Endpoints, routes, interfaces |
+| Data & Storage | `architecture`, `tech-stack` | Databases, caches, queues |
+| Integrations | `dependencies` | Third-party services, SDKs |
+| Background Jobs | `operations` | Cron, workers, queues |
+| Testing | `testing` | Test frameworks, coverage |
+| Tooling | `tech-stack` | Build tools, scripts |
 
-## Pending Human Review
-- [ ] Conflict/question 1
+For each area:
 
-## Documentation Created
-- file1.md - reason
+1. **Check cache** — If `.sync_cache/{focus}_summary.md` exists and is < 60 min old, reuse
+2. **Run explorer** — Spawn `generic-explorer` with appropriate focus
+3. **Cache results** — Save to `.sync_cache/`
+4. **Update manifest** — Mark discovery area as complete
+
+```
+Discovery Progress: ████████░░░░ 6/8 areas
+
+[✓] Infrastructure    [✓] Code Structure   [✓] APIs
+[✓] Data & Storage    [✓] Integrations     [→] Background Jobs
+[ ] Testing           [ ] Tooling
 ```
 
-3. **Ask any clarifying questions** about the project before starting.
+### Phase 3: Document Review (Using drift-detector)
 
-### Phase 1: Project Discovery
+For EACH document in `kit_tools/`:
 
-Build a complete mental map of the project:
+1. **Load exploration context** for relevant focus areas
 
-#### 1.1 Infrastructure & Environment
-- [ ] Docker/container configurations
-- [ ] Terraform/CloudFormation/Pulumi (IaC)
-- [ ] Kubernetes manifests
-- [ ] CI/CD pipelines
-- [ ] Environment files
-- [ ] Build scripts and tooling
+2. **Run drift-detector** with:
+   - Document content
+   - Exploration context
+   - Last updated date
+   - Stale threshold (30 days)
 
-#### 1.2 Code Structure
-- [ ] Every top-level directory and its purpose
-- [ ] Entry points
-- [ ] All modules/packages and their responsibilities
-- [ ] Internal libraries or shared utilities
+3. **Collect drift results:**
+   - `CURRENT` — No action needed
+   - `STALE` — Flag for refresh
+   - `OUTDATED` — Needs significant updates
+   - `MISSING_REFS` — Has broken references
 
-#### 1.3 APIs & Interfaces
-- [ ] REST/GraphQL/gRPC endpoints
-- [ ] CLI commands and flags
-- [ ] Library exports and public APIs
-- [ ] Webhooks and WebSocket handlers
+4. **Update manifest** with drift status and issues
 
-#### 1.4 Data & Storage
-- [ ] Database schemas and migrations
-- [ ] Cache layers
-- [ ] File storage
-- [ ] Message queues
+```
+Document Review: ████████████░░░░ 14/19 docs
 
-#### 1.5 External Integrations
-- [ ] Third-party API clients
-- [ ] SDK usage
-- [ ] OAuth/SSO providers
+SYNOPSIS.md ................ CURRENT
+arch/CODE_ARCH.md .......... STALE (2 issues)
+arch/SERVICE_MAP.md ........ CURRENT
+docs/LOCAL_DEV.md .......... CURRENT
+docs/API_GUIDE.md .......... OUTDATED (5 issues)  ← Current
+```
 
-#### 1.6 Background Processing
-- [ ] Cron jobs and scheduled tasks
-- [ ] Queue workers and consumers
+### Phase 4: Conflict Resolution
 
-#### 1.7 Testing & Quality
-- [ ] Test suites and frameworks
-- [ ] Linting and formatting configs
+When drift-detector finds issues, categorize them:
 
-#### 1.8 Scripts & Tooling
-- [ ] One-off scripts
-- [ ] Migration scripts
-- [ ] Development utilities
+#### Auto-Fixable
+- File paths that can be updated
+- Version numbers from package files
+- Missing sections that can be added from exploration
 
-Update SYNC_PROGRESS.md as you complete each area.
-
-### Phase 2: Documentation Review
-
-For EACH documentation file in kit_tools, systematically compare against what was discovered:
-
-#### Review Process (for each doc)
-1. Read the documentation file completely
-2. Compare every statement against the actual codebase
-3. For each discrepancy, determine if it's:
-   - **Outdated**: Code changed, docs didn't update
-   - **Incomplete**: Code exists that isn't documented
-   - **Incorrect**: Documentation states something false
-   - **Missing context**: Documentation lacks important details
-
-#### Files to Review
-- [ ] SYNOPSIS.md
-- [ ] AGENT_README.md
-- [ ] arch/CODE_ARCH.md
-- [ ] arch/SERVICE_MAP.md
-- [ ] arch/INFRA_ARCH.md
-- [ ] arch/DATA_MODEL.md
-- [ ] arch/SECURITY.md
-- [ ] arch/DECISIONS.md
-- [ ] arch/patterns/*.md
-- [ ] docs/LOCAL_DEV.md
-- [ ] docs/API_GUIDE.md
-- [ ] docs/ENV_REFERENCE.md
-- [ ] docs/CONVENTIONS.md
-- [ ] docs/CI_CD.md
-- [ ] docs/DEPLOYMENT.md
-- [ ] docs/MONITORING.md
-- [ ] docs/UI_STYLE_GUIDE.md
-- [ ] docs/TROUBLESHOOTING.md
-- [ ] docs/GOTCHAS.md
-- [ ] docs/feature_guides/*.md
-- [ ] testing/TESTING_GUIDE.md
-- [ ] roadmap/*.md
-
-### Phase 3: Conflict Resolution
-
-When finding a conflict between code and documentation, STOP and ask for human input:
+#### Needs Human Input
+Present conflicts clearly:
 
 ```
 ## Conflict Found
 
-**Location:** [doc file] — [section/line]
+**Document:** docs/API_GUIDE.md — Line 45
 
 **Documentation says:**
-> [quote from docs]
+> POST /api/users/create — Creates a new user
 
-**Code actually does:**
-> [what you found in the code]
+**Code actually shows:**
+> POST /api/v2/users — Route was renamed in refactor
 
-**My recommendation:**
-[Suggested update to the documentation]
-
-Please advise:
-1. Update documentation as recommended
-2. Different update (please specify)
-3. This is intentional, leave as-is
-4. Need to investigate further
+**Options:**
+1. Update doc to match code (recommended)
+2. Keep as-is (explain why)
+3. Need more investigation
 ```
 
-Log all conflicts in SYNC_PROGRESS.md under "Pending Human Review".
+Log all conflicts in manifest under `conflicts` array.
 
-### Phase 4: New Documentation
+### Phase 5: Documentation Updates
 
-When discovering undocumented features, systems, or patterns:
+For each document needing updates:
 
-1. Note it in SYNC_PROGRESS.md under "Documentation Created"
-2. Create documentation in the appropriate location
-3. Flag for human review
+1. **Apply fixes** based on drift-detector findings
+2. **Remove stale sections** that reference deleted features
+3. **Add missing documentation** from exploration context
+4. **Update "Last Updated"** timestamp
 
-### Phase 5: Template Cleanup
+### Phase 6: Validation (Using template-validator)
 
-- Remove HTML comments with template guidance
-- Replace all `[PLACEHOLDER]` text with actual values
-- Replace `YYYY-MM-DD` with actual dates
-- Delete sections that don't apply
+After updates, run `template-validator` on each modified document:
 
-### Multi-Session Handling
+- Verify no placeholders remain
+- Check all required sections have content
+- Ensure file references are valid
 
-For complex projects spanning multiple sessions:
+```
+Validation: ████████████████ 19/19 docs
 
-1. Always update SYNC_PROGRESS.md before ending a session
-2. Natural breakpoints: after completing major areas, after presenting conflicts
-3. Resuming: Read SYNC_PROGRESS.md first, pick up where previous session left off
+Passed: 17    Warnings: 2    Failed: 0
 
-### Final Report
+Warnings:
+  ⚠ docs/MONITORING.md — "Alerts" section has minimal content
+  ⚠ arch/patterns/AUTH.md — Optional "OAuth" section empty
+```
 
-When fully complete, provide:
+### Phase 7: Final Report
 
-1. **Summary**: What was reviewed, how many sessions it took
-2. **Documentation Updated**: List of files modified
-3. **Documentation Created**: New files created and why
-4. **Conflicts Resolved**: Summary of conflicts and resolutions
-5. **Remaining Gaps**: Anything that couldn't be documented
-6. **Recommendations**: Suggested follow-up actions
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    SYNC COMPLETE                                 │
+├─────────────────────────────────────────────────────────────────┤
+│  Documents Reviewed: 19                                          │
+│  Updated: 7    Current: 10    Skipped: 2                        │
+│  Validation: 17 passed, 2 warnings, 0 failed                    │
+└─────────────────────────────────────────────────────────────────┘
 
-### Cleanup
+DOCUMENTS UPDATED:
+  • arch/CODE_ARCH.md — Added new services/ module docs
+  • docs/API_GUIDE.md — Updated 5 endpoint paths
+  • docs/ENV_REFERENCE.md — Added 3 new variables
+  • ...
 
-After the human confirms the sync is complete:
+CONFLICTS RESOLVED:
+  • API endpoint rename: /api/users/create → /api/v2/users
+  • ...
 
-1. Delete SYNC_PROGRESS.md
-2. Update SESSION_LOG.md with a summary of the sync
+SKIPPED (not applicable):
+  • docs/UI_STYLE_GUIDE.md — No frontend in project
+  • arch/DATA_MODEL.md — No database in project
+
+REMAINING ITEMS:
+  • docs/MONITORING.md needs more detail on alerting
+```
+
+### Phase 8: Cleanup
+
+After human confirms sync is complete:
+
+1. Update SESSION_LOG.md with sync summary
+2. Optionally delete manifest (or keep for next sync baseline)
+
+---
+
+## Resume Behavior (--resume)
+
+When `--resume` is used:
+
+1. Load existing `kit_tools/SYNC_MANIFEST.json`
+2. Skip completed discovery areas
+3. Skip documents with status "reviewed" or "updated"
+4. Continue from first "pending" item
+5. Maintain progress display
+
+---
+
+## Progress Display
+
+Throughout sync, maintain a progress display:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    SYNC PROJECT PROGRESS                         │
+├─────────────────────────────────────────────────────────────────┤
+│  Phase: Document Review (3/7)                                    │
+│                                                                  │
+│  Discovery:  [████████] 8/8 complete                            │
+│  Documents:  [██████░░░░░░░░░░░░░] 6/19                         │
+│  Validation: [░░░░░░░░░░░░░░░░░░░] 0/19                         │
+│                                                                  │
+│  Current: Running drift-detector on docs/API_GUIDE.md...        │
+│  Cache: 6/6 exploration areas cached                             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Agent Usage Summary
+
+| Phase | Agent | Purpose |
+|-------|-------|---------|
+| Discovery | `generic-explorer` | Build current codebase map |
+| Review | `drift-detector` | Compare docs to code |
+| Validation | `template-validator` | Verify cleanup complete |
+
+---
+
+## Quick Reference
+
+```bash
+# Quick audit (monthly check-in)
+/kit-tools:sync-project --quick
+
+# Full sync (exhaustive)
+/kit-tools:sync-project
+
+# Resume interrupted sync
+/kit-tools:sync-project --resume
+```

@@ -1,4 +1,10 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: operations, infrastructure
+  required_sections:
+    - "Logging"
+  skip_if: no-infrastructure
+-->
 # MONITORING.md
 
 > **TEMPLATE_INTENT:** Document logs, metrics, alerts, and dashboards. How to observe the system.

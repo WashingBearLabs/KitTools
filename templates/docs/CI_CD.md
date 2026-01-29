@@ -1,4 +1,10 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: infrastructure, operations
+  required_sections:
+    - "Pipeline Overview"
+  skip_if: no-ci
+-->
 # CI_CD.md
 
 > **TEMPLATE_INTENT:** Document build pipelines, deployment triggers, and automation. How code gets to production.

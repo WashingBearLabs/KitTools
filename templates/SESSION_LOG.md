@@ -1,4 +1,10 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: none
+  required_sections: []
+  skip_if: always
+  note: SESSION_LOG is populated during sessions, not during initial seeding
+-->
 # SESSION_LOG.md
 
 > **TEMPLATE_INTENT:** Running history of development sessions. Enables continuity across sessions and team members.

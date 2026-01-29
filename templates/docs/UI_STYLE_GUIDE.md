@@ -1,4 +1,10 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: architecture, tech-stack
+  required_sections:
+    - "Design System"
+  skip_if: no-frontend
+-->
 # UI_STYLE_GUIDE.md
 
 > **TEMPLATE_INTENT:** Document UI design patterns, component styles, and visual guidelines. The reference for consistent user interface implementation.

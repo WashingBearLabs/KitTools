@@ -1,4 +1,10 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: operations, tech-stack
+  required_sections:
+    - "Debugging Tools"
+  skip_if: never
+-->
 # TROUBLESHOOTING.md
 
 > **TEMPLATE_INTENT:** Document debugging procedures and common fixes. How to diagnose problems.

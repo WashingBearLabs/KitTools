@@ -1,0 +1,303 @@
+{
+  "$schema": "./SEED_MANIFEST.schema.json",
+  "_comment": "This manifest tracks seeding progress across sessions. Created by seed-project, updated during seeding.",
+  "version": "1.0.0",
+  "created": "YYYY-MM-DDTHH:MM:SSZ",
+  "last_updated": "YYYY-MM-DDTHH:MM:SSZ",
+  "project_root": "/path/to/project",
+
+  "config": {
+    "parallel_seeding": false,
+    "validation_mode": "strict",
+    "cache_ttl_minutes": 60
+  },
+
+  "exploration_cache": {
+    "tech-stack": {
+      "cached_at": null,
+      "cache_file": ".seed_cache/tech-stack_summary.md",
+      "status": "pending"
+    },
+    "architecture": {
+      "cached_at": null,
+      "cache_file": ".seed_cache/architecture_summary.md",
+      "status": "pending"
+    },
+    "infrastructure": {
+      "cached_at": null,
+      "cache_file": ".seed_cache/infrastructure_summary.md",
+      "status": "pending"
+    },
+    "security": {
+      "cached_at": null,
+      "cache_file": ".seed_cache/security_summary.md",
+      "status": "pending"
+    },
+    "testing": {
+      "cached_at": null,
+      "cache_file": ".seed_cache/testing_summary.md",
+      "status": "pending"
+    },
+    "operations": {
+      "cached_at": null,
+      "cache_file": ".seed_cache/operations_summary.md",
+      "status": "pending"
+    }
+  },
+
+  "templates": {
+    "SYNOPSIS.md": {
+      "tier": 1,
+      "path": "kit_tools/SYNOPSIS.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "arch/CODE_ARCH.md": {
+      "tier": 1,
+      "path": "kit_tools/arch/CODE_ARCH.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "arch/SERVICE_MAP.md": {
+      "tier": 1,
+      "path": "kit_tools/arch/SERVICE_MAP.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "docs/LOCAL_DEV.md": {
+      "tier": 1,
+      "path": "kit_tools/docs/LOCAL_DEV.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "arch/INFRA_ARCH.md": {
+      "tier": 2,
+      "path": "kit_tools/arch/INFRA_ARCH.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "arch/SECURITY.md": {
+      "tier": 2,
+      "path": "kit_tools/arch/SECURITY.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "docs/MONITORING.md": {
+      "tier": 2,
+      "path": "kit_tools/docs/MONITORING.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "docs/CI_CD.md": {
+      "tier": 2,
+      "path": "kit_tools/docs/CI_CD.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "docs/TROUBLESHOOTING.md": {
+      "tier": 2,
+      "path": "kit_tools/docs/TROUBLESHOOTING.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "arch/DATA_MODEL.md": {
+      "tier": 3,
+      "path": "kit_tools/arch/DATA_MODEL.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "docs/API_GUIDE.md": {
+      "tier": 3,
+      "path": "kit_tools/docs/API_GUIDE.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "docs/ENV_REFERENCE.md": {
+      "tier": 3,
+      "path": "kit_tools/docs/ENV_REFERENCE.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "docs/CONVENTIONS.md": {
+      "tier": 3,
+      "path": "kit_tools/docs/CONVENTIONS.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "docs/DEPLOYMENT.md": {
+      "tier": 3,
+      "path": "kit_tools/docs/DEPLOYMENT.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "testing/TESTING_GUIDE.md": {
+      "tier": 3,
+      "path": "kit_tools/testing/TESTING_GUIDE.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "docs/UI_STYLE_GUIDE.md": {
+      "tier": 3,
+      "path": "kit_tools/docs/UI_STYLE_GUIDE.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "docs/GOTCHAS.md": {
+      "tier": 4,
+      "path": "kit_tools/docs/GOTCHAS.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "arch/DECISIONS.md": {
+      "tier": 4,
+      "path": "kit_tools/arch/DECISIONS.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "roadmap/MVP_TODO.md": {
+      "tier": 4,
+      "path": "kit_tools/roadmap/MVP_TODO.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "AGENT_README.md": {
+      "tier": 5,
+      "path": "kit_tools/AGENT_README.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "arch/patterns/AUTH.md": {
+      "tier": 3,
+      "path": "kit_tools/arch/patterns/AUTH.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "arch/patterns/ERROR_HANDLING.md": {
+      "tier": 3,
+      "path": "kit_tools/arch/patterns/ERROR_HANDLING.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "arch/patterns/LOGGING.md": {
+      "tier": 3,
+      "path": "kit_tools/arch/patterns/LOGGING.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    }
+  },
+
+  "summary": {
+    "total": 23,
+    "by_status": {
+      "pending": 23,
+      "seeded": 0,
+      "validated": 0,
+      "skipped": 0,
+      "failed": 0
+    },
+    "by_tier": {
+      "1": { "total": 4, "completed": 0 },
+      "2": { "total": 5, "completed": 0 },
+      "3": { "total": 9, "completed": 0 },
+      "4": { "total": 3, "completed": 0 },
+      "5": { "total": 1, "completed": 0 }
+    },
+    "validation": {
+      "passed": 0,
+      "warnings": 0,
+      "failed": 0
+    }
+  }
+}

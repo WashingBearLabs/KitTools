@@ -1,4 +1,10 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: security, architecture
+  required_sections:
+    - "Overview"
+  skip_if: no-auth
+-->
 # AUTH.md
 
 > **TEMPLATE_INTENT:** Document authentication patterns and implementation details.

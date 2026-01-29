@@ -1,4 +1,10 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: none
+  required_sections: []
+  skip_if: always
+  note: AUDIT_FINDINGS is populated by validate-phase skill, not during seeding
+-->
 # AUDIT_FINDINGS.md
 
 > **TEMPLATE_INTENT:** Persistent record of code quality, security, and intent alignment findings from automated validation. Tracks findings across sessions with status tracking and archival.

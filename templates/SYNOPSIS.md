@@ -1,4 +1,12 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: tech-stack, architecture
+  required_sections:
+    - "What Is This?"
+    - "Tech Stack Summary"
+    - "How to Run Locally"
+  skip_if: never
+-->
 # SYNOPSIS.md
 
 > **TEMPLATE_INTENT:** One-page project overview for quick orientation. Answer: What is this? What state is it in? How do I run it?

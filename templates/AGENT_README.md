@@ -1,4 +1,13 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: architecture, tech-stack
+  required_sections:
+    - "Quick Start — Read Order"
+    - "Patterns to Follow"
+    - "Off-Limits Areas"
+  skip_if: never
+  note: Seeded last after all other templates are populated
+-->
 # AGENT_README.md
 
 > **TEMPLATE_INTENT:** Navigation guide for AI assistants. Defines read order, patterns to follow, and areas to avoid.

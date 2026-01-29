@@ -1,4 +1,10 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: none
+  required_sections: []
+  skip_if: always
+  note: This is a template for feature guides, copied as needed, not seeded automatically
+-->
 # [FEATURE_NAME]_FEATURE_GUIDE.md
 
 > **TEMPLATE_INTENT:** Template for documenting individual features. Copy this for new feature guides.

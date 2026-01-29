@@ -1,4 +1,11 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: tech-stack, infrastructure
+  required_sections:
+    - "Prerequisites"
+    - "Quick Start"
+  skip_if: never
+-->
 # LOCAL_DEV.md
 
 > **TEMPLATE_INTENT:** Complete local development setup guide. Get a new developer running quickly.

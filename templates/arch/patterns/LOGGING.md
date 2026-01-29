@@ -1,4 +1,10 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: operations, architecture
+  required_sections:
+    - "Overview"
+  skip_if: never
+-->
 # LOGGING.md
 
 > **TEMPLATE_INTENT:** Document logging patterns, levels, and conventions.

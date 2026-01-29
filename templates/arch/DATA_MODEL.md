@@ -1,4 +1,11 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: architecture, tech-stack
+  required_sections:
+    - "Overview"
+    - "Tables / Collections"
+  skip_if: no-database
+-->
 # DATA_MODEL.md
 
 > **TEMPLATE_INTENT:** Document database schema and data relationships. The source of truth for data structure.

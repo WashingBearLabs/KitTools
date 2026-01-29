@@ -1,4 +1,10 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: architecture, dependencies
+  required_sections:
+    - "Service Topology"
+  skip_if: never
+-->
 # SERVICE_MAP.md
 
 > **TEMPLATE_INTENT:** Document dependencies and integrations. Shows what talks to what and failure impacts.

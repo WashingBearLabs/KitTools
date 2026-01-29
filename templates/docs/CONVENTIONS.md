@@ -1,4 +1,10 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: tech-stack, architecture
+  required_sections:
+    - "Code Style"
+  skip_if: never
+-->
 # CONVENTIONS.md
 
 > **TEMPLATE_INTENT:** Document coding standards and style guidelines. What 'good' looks like here.

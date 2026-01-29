@@ -1,4 +1,10 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: security, architecture
+  required_sections:
+    - "Security Overview"
+  skip_if: no-auth
+-->
 # SECURITY.md
 
 > **TEMPLATE_INTENT:** Document authentication, authorization, and secrets management. Security architecture reference.

@@ -1,4 +1,10 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: none
+  required_sections: []
+  skip_if: always
+  note: This is a template for feature planning, not seeded automatically
+-->
 # FEATURE_TODO_[feature_name].md
 
 > **TEMPLATE_INTENT:** Track granular tasks for a specific feature. Copy this template for each major feature being developed. Name the file `FEATURE_TODO_[feature_name].md` (e.g., `FEATURE_TODO_auth.md`, `FEATURE_TODO_payments.md`).

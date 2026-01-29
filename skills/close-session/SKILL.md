@@ -22,6 +22,10 @@ This skill requires the following project files:
 **Deletes:**
 - `kit_tools/SESSION_SCRATCH.md` — Removed after processing notes
 
+**Uses agents:**
+- `template-validator.md` — Validates docs updated during session (Step 2.5)
+- `code-quality-validator.md` — Via validate-phase (Step 3)
+
 **Invokes:**
 - `/kit-tools:validate-phase` — Runs code quality validation (Step 3)
 
@@ -67,7 +71,17 @@ Using the checklist in `kit_tools/AGENT_README.md` and the scratchpad notes, rev
 - [ ] `kit_tools/docs/GOTCHAS.md` — Did we discover any landmines?
 - [ ] `kit_tools/testing/TESTING_GUIDE.md` — Did testing approach change?
 
-## Step 3: Run validator
+## Step 2.5: Validate updated docs
+
+For each doc updated in Step 2, run a quick validation using `template-validator`:
+
+- Check no placeholder text was accidentally left behind
+- Verify file paths and references are accurate
+- Ensure "Last Updated" date was set
+
+If validation finds issues, fix them before proceeding. This prevents incomplete documentation from accumulating.
+
+## Step 3: Run code validator
 
 - Run `/kit-tools:validate-phase` to review the session's code changes
 - Critical findings should be noted in the session log's "Open Items" section

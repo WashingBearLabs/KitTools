@@ -1,4 +1,10 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: infrastructure
+  required_sections:
+    - "Overview"
+  skip_if: no-infrastructure
+-->
 # INFRA_ARCH.md
 
 > **TEMPLATE_INTENT:** Document cloud resources, networking, and infrastructure. The map of deployed systems.

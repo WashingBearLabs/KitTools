@@ -1,4 +1,10 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: tech-stack, infrastructure
+  required_sections:
+    - "Environment Variables"
+  skip_if: never
+-->
 # ENV_REFERENCE.md
 
 > **TEMPLATE_INTENT:** Document environment variables and secrets. What config exists and where to find it.

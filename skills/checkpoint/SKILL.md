@@ -20,6 +20,9 @@ This skill requires the following project files:
 **Modifies:**
 - `kit_tools/SESSION_SCRATCH.md` — Clears notes section (preserves Active Feature)
 
+**Uses agents:**
+- `template-validator.md` — Quick validation on updated docs
+
 **Optionally invokes:**
 - `/kit-tools:validate-phase` — If code changes were made since last checkpoint
 
@@ -39,6 +42,16 @@ Using the notes in the scratchpad (or what was discussed), update relevant docs:
 - [ ] `kit_tools/SESSION_LOG.md` — Add/update today's entry with work completed so far
 - [ ] **The TODO file identified in "Active Feature"** — Mark completed items, add discovered items
 - [ ] Other docs as needed (CODE_ARCH.md, GOTCHAS.md, etc.)
+
+## Step 2.5: Quick validation
+
+If any docs beyond SESSION_LOG were updated, run a quick `template-validator` check:
+
+- Verify no placeholder text remains
+- Check that file paths referenced are accurate
+- Ensure "Last Updated" was set to today
+
+Skip this step if only SESSION_LOG and TODO files were updated.
 
 ## Step 3: Clear the scratchpad (preserve Active Feature)
 
@@ -76,7 +89,8 @@ Provide a brief summary of:
 - What was captured from the scratchpad
 - **Which TODO file was updated**
 - Which other docs were updated
-- Audit findings count (if validator was run): N critical, N warning, N info
+- Doc validation status (if run): passed/warnings
+- Audit findings count (if code validator was run): N critical, N warning, N info
 - Confirmation that we're ready to continue
 
 Don't close the session — we're just checkpointing progress.

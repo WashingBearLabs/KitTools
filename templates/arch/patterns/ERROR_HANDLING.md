@@ -1,4 +1,10 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: architecture, tech-stack
+  required_sections:
+    - "Overview"
+  skip_if: never
+-->
 # ERROR_HANDLING.md
 
 > **TEMPLATE_INTENT:** Document error handling patterns and conventions.

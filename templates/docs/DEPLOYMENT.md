@@ -1,4 +1,10 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: infrastructure, operations
+  required_sections:
+    - "Deployment Procedure"
+  skip_if: no-infrastructure
+-->
 # DEPLOYMENT.md
 
 > **TEMPLATE_INTENT:** Document deployment procedures and rollback processes. How to ship safely.

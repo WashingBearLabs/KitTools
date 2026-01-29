@@ -1,4 +1,9 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: architecture, tech-stack
+  required_sections: []
+  skip_if: never
+-->
 # GOTCHAS.md
 
 > **TEMPLATE_INTENT:** Document known issues, quirks, and non-obvious behaviors. Landmines to avoid.

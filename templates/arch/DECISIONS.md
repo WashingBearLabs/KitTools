@@ -1,4 +1,9 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: architecture, tech-stack
+  required_sections: []
+  skip_if: never
+-->
 # DECISIONS.md
 
 > **TEMPLATE_INTENT:** Record architectural decisions and their rationale. Explains the 'why' behind technical choices.

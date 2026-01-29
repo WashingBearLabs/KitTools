@@ -1,4 +1,10 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: architecture, dependencies
+  required_sections:
+    - "Endpoints" or "Commands" or "Interface"
+  skip_if: no-api
+-->
 # API_GUIDE.md
 
 > **TEMPLATE_INTENT:** Document API endpoints, CLI commands, or library interface. The external contract.

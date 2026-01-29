@@ -1,0 +1,326 @@
+{
+  "$schema": "./SYNC_MANIFEST.schema.json",
+  "_comment": "This manifest tracks sync progress across sessions. Created by sync-project, updated during sync operations.",
+  "version": "1.0.0",
+  "created": "YYYY-MM-DDTHH:MM:SSZ",
+  "last_updated": "YYYY-MM-DDTHH:MM:SSZ",
+  "project_root": "/path/to/project",
+
+  "config": {
+    "mode": "full",
+    "stale_threshold_days": 30
+  },
+
+  "exploration_cache": {
+    "tech-stack": {
+      "cached_at": null,
+      "cache_file": ".sync_cache/tech-stack_summary.md",
+      "status": "pending"
+    },
+    "architecture": {
+      "cached_at": null,
+      "cache_file": ".sync_cache/architecture_summary.md",
+      "status": "pending"
+    },
+    "infrastructure": {
+      "cached_at": null,
+      "cache_file": ".sync_cache/infrastructure_summary.md",
+      "status": "pending"
+    },
+    "security": {
+      "cached_at": null,
+      "cache_file": ".sync_cache/security_summary.md",
+      "status": "pending"
+    },
+    "testing": {
+      "cached_at": null,
+      "cache_file": ".sync_cache/testing_summary.md",
+      "status": "pending"
+    },
+    "operations": {
+      "cached_at": null,
+      "cache_file": ".sync_cache/operations_summary.md",
+      "status": "pending"
+    }
+  },
+
+  "discovery": {
+    "infrastructure": {
+      "status": "pending",
+      "reviewed_at": null,
+      "findings_count": 0
+    },
+    "code_structure": {
+      "status": "pending",
+      "reviewed_at": null,
+      "findings_count": 0
+    },
+    "apis": {
+      "status": "pending",
+      "reviewed_at": null,
+      "findings_count": 0
+    },
+    "data_storage": {
+      "status": "pending",
+      "reviewed_at": null,
+      "findings_count": 0
+    },
+    "integrations": {
+      "status": "pending",
+      "reviewed_at": null,
+      "findings_count": 0
+    },
+    "background_jobs": {
+      "status": "pending",
+      "reviewed_at": null,
+      "findings_count": 0
+    },
+    "testing": {
+      "status": "pending",
+      "reviewed_at": null,
+      "findings_count": 0
+    },
+    "tooling": {
+      "status": "pending",
+      "reviewed_at": null,
+      "findings_count": 0
+    }
+  },
+
+  "documents": {
+    "SYNOPSIS.md": {
+      "path": "kit_tools/SYNOPSIS.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "AGENT_README.md": {
+      "path": "kit_tools/AGENT_README.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "arch/CODE_ARCH.md": {
+      "path": "kit_tools/arch/CODE_ARCH.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "arch/SERVICE_MAP.md": {
+      "path": "kit_tools/arch/SERVICE_MAP.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "arch/INFRA_ARCH.md": {
+      "path": "kit_tools/arch/INFRA_ARCH.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "arch/DATA_MODEL.md": {
+      "path": "kit_tools/arch/DATA_MODEL.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "arch/SECURITY.md": {
+      "path": "kit_tools/arch/SECURITY.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "arch/DECISIONS.md": {
+      "path": "kit_tools/arch/DECISIONS.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "docs/LOCAL_DEV.md": {
+      "path": "kit_tools/docs/LOCAL_DEV.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "docs/API_GUIDE.md": {
+      "path": "kit_tools/docs/API_GUIDE.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "docs/ENV_REFERENCE.md": {
+      "path": "kit_tools/docs/ENV_REFERENCE.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "docs/CONVENTIONS.md": {
+      "path": "kit_tools/docs/CONVENTIONS.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "docs/CI_CD.md": {
+      "path": "kit_tools/docs/CI_CD.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "docs/DEPLOYMENT.md": {
+      "path": "kit_tools/docs/DEPLOYMENT.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "docs/MONITORING.md": {
+      "path": "kit_tools/docs/MONITORING.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "docs/UI_STYLE_GUIDE.md": {
+      "path": "kit_tools/docs/UI_STYLE_GUIDE.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "docs/TROUBLESHOOTING.md": {
+      "path": "kit_tools/docs/TROUBLESHOOTING.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "docs/GOTCHAS.md": {
+      "path": "kit_tools/docs/GOTCHAS.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "testing/TESTING_GUIDE.md": {
+      "path": "kit_tools/testing/TESTING_GUIDE.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    }
+  },
+
+  "conflicts": [],
+
+  "summary": {
+    "total_documents": 19,
+    "discovery_areas": 8,
+    "by_status": {
+      "pending": 19,
+      "reviewed": 0,
+      "updated": 0,
+      "skipped": 0,
+      "conflict": 0
+    },
+    "drift": {
+      "current": 0,
+      "stale": 0,
+      "outdated": 0,
+      "missing_refs": 0
+    },
+    "validation": {
+      "passed": 0,
+      "warnings": 0,
+      "failed": 0
+    }
+  }
+}

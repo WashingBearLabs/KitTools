@@ -1,4 +1,11 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: testing, tech-stack
+  required_sections:
+    - "Quick Start"
+    - "Test Structure"
+  skip_if: no-tests
+-->
 # TESTING_GUIDE.md
 
 > **TEMPLATE_INTENT:** Document test structure, running tests, and writing new tests. Quality assurance reference.

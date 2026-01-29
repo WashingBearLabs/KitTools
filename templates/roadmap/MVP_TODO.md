@@ -1,4 +1,9 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: architecture
+  required_sections: []
+  skip_if: never
+-->
 # MVP_TODO.md
 
 > **TEMPLATE_INTENT:** Track current sprint or MVP tasks. What's being worked on now.

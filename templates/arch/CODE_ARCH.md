@@ -1,4 +1,12 @@
 <!-- Template Version: 1.1.0 -->
+<!-- Seeding:
+  explorer_focus: tech-stack, architecture
+  required_sections:
+    - "Overview"
+    - "Directory Structure"
+    - "Key Modules"
+  skip_if: never
+-->
 # CODE_ARCH.md
 
 > **TEMPLATE_INTENT:** Document the code structure, key modules, and architectural patterns. The map of how code is organized.
