@@ -1,4 +1,4 @@
-<!-- Template Version: 1.2.2 -->
+<!-- Template Version: 1.2.3 -->
 <!-- Seeding:
   explorer_focus: architecture, tech-stack
   required_sections:
