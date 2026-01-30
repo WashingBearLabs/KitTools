@@ -9,7 +9,7 @@
 
 > **TEMPLATE_INTENT:** Persistent record of code quality, security, and intent alignment findings from automated validation. Tracks findings across sessions with status tracking and archival.
 
-> Last Updated: YYYY-MM-DD
+> Last updated: YYYY-MM-DD
 > Updated by: Claude
 
 ---

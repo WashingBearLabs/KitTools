@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-update_doc_timestamps.py - Updates "Last Updated:" in kit_tools docs.
+update_doc_timestamps.py - Updates "Last updated:" in kit_tools docs.
 
 Trigger: PostToolUse (Edit|Write)
 """
@@ -33,17 +33,18 @@ def main():
     if "SESSION_SCRATCH" in path.name:
         return
 
-    # Check if file exists and has a "Last Updated:" line
+    # Check if file exists and has a "Last updated:" line
     if not path.exists():
         return
 
     content = path.read_text()
     today = date.today().isoformat()
 
-    # Replace "Last Updated: YYYY-MM-DD" or "Last Updated: anything"
+    # Replace "Last updated: YYYY-MM-DD" or similar
+    # Handles: "> Last updated: ...", "Last Updated: ...", etc.
     new_content, count = re.subn(
-        r"^Last Updated:.*$",
-        f"Last Updated: {today}",
+        r"^(>\s*)?Last [Uu]pdated:.*$",
+        rf"\g<1>Last updated: {today}",
         content,
         flags=re.MULTILINE
     )
