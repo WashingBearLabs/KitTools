@@ -1,4 +1,4 @@
-<!-- Template Version: 1.2.1 -->
+<!-- Template Version: 1.2.2 -->
 <!-- Seeding:
   explorer_focus: operations, architecture
   required_sections:

@@ -134,9 +134,11 @@ TEMPLATES (2 new):
 TEMPLATES (28 updated):
   All templates updated with seeding frontmatter
 
-HOOKS (2 new):
+HOOKS (1 new):
   + validate_seeded_template.py  — Post-edit placeholder check
-  + sync_skill_symlinks.py       — Autocomplete symlink sync
+
+PLUGIN-ONLY (not synced to projects):
+  • sync_skill_symlinks.py — Autocomplete symlink sync (uses ${CLAUDE_PLUGIN_ROOT})
 ```
 
 ---
@@ -199,14 +201,18 @@ For hooks, we need to update the project's hook configuration:
 1. Read current `.claude/settings.local.json` (create if missing)
 2. Compare hooks section against plugin's hook configuration
 3. Add any missing hook entries
-4. Copy new hook script files to project's `hooks/` directory (if it exists)
+4. Copy new hook script files to project's `kit_tools/hooks/` directory
+
+**Important:** Hook paths in `.claude/settings.local.json` must use `kit_tools/hooks/` prefix (not just `hooks/`).
 
 ```
 Syncing hooks...
-  + validate_seeded_template.py (added to config)
-  + sync_skill_symlinks.py (added to config)
+  + kit_tools/hooks/validate_seeded_template.py (new script)
+  + .claude/settings.local.json (validate_seeded_template.py hook added)
   ○ create_scratchpad.py (already configured)
 ```
+
+**Note:** `sync_skill_symlinks.py` is plugin-only (uses `${CLAUDE_PLUGIN_ROOT}`) — don't sync to projects.
 
 ### 4c: Note about skills and agents
 
@@ -239,9 +245,9 @@ After successful sync, update `kit_tools/.kit_tools_sync.json`:
       ...
     ],
     "hooks": [
-      "create_scratchpad.py",
-      "validate_seeded_template.py",
-      "sync_skill_symlinks.py",
+      "kit_tools/hooks/create_scratchpad.py",
+      "kit_tools/hooks/update_doc_timestamps.py",
+      "kit_tools/hooks/validate_seeded_template.py",
       ...
     ]
   }

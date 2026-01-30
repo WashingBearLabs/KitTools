@@ -44,7 +44,7 @@ Directories to create:
   - kit_tools/arch/
   - kit_tools/docs/
   - kit_tools/roadmap/
-  - hooks/
+  - kit_tools/hooks/
   - .claude/
 
 Templates to copy (14 files):
@@ -53,10 +53,14 @@ Templates to copy (14 files):
   - SESSION_LOG.md
   ... (list all)
 
-Hooks to install (6 files):
+Hooks to install (7 files in kit_tools/hooks/):
   - create_scratchpad.py
   - update_doc_timestamps.py
-  ... (list all)
+  - remind_scratchpad_before_compact.py
+  - remind_close_session.py
+  - detect_phase_completion.py
+  - validate_seeded_template.py
+  - validate_setup.py
 
 Settings to create/update:
   - .claude/settings.local.json (hooks configuration)
@@ -179,7 +183,8 @@ kit_tools/
 ├── docs/
 │   └── feature_guides/
 ├── testing/
-└── roadmap/
+├── roadmap/
+└── hooks/            (automation scripts)
 ```
 
 Only create directories that will have files.
@@ -194,19 +199,22 @@ Copy the hooks from this plugin to the target project and configure them.
 
 ### 6a: Copy hook scripts
 
-Copy the entire `hooks/` directory from this plugin to the project root:
+Copy the Python hook scripts from `$CLAUDE_PLUGIN_ROOT/hooks/` to `kit_tools/hooks/`:
 
 ```
 project/
-└── hooks/
-    ├── hooks.json
-    ├── create_scratchpad.py
-    ├── update_doc_timestamps.py
-    ├── remind_scratchpad_before_compact.py
-    ├── remind_close_session.py
-    ├── detect_phase_completion.py
-    └── validate_setup.py
+└── kit_tools/
+    └── hooks/
+        ├── create_scratchpad.py
+        ├── update_doc_timestamps.py
+        ├── remind_scratchpad_before_compact.py
+        ├── remind_close_session.py
+        ├── detect_phase_completion.py
+        ├── validate_seeded_template.py
+        └── validate_setup.py
 ```
+
+**Do NOT copy:** `hooks.json` and `sync_skill_symlinks.py` — these are plugin-specific and use `${CLAUDE_PLUGIN_ROOT}` which only works in plugins, not project settings.
 
 ### 6b: Configure hooks in project settings
 
@@ -221,7 +229,7 @@ Create or update `.claude/settings.local.json` to register the hooks:
         "hooks": [
           {
             "type": "command",
-            "command": "python3 hooks/create_scratchpad.py"
+            "command": "python3 kit_tools/hooks/create_scratchpad.py"
           }
         ]
       }
@@ -232,7 +240,7 @@ Create or update `.claude/settings.local.json` to register the hooks:
         "hooks": [
           {
             "type": "command",
-            "command": "python3 hooks/update_doc_timestamps.py"
+            "command": "python3 kit_tools/hooks/update_doc_timestamps.py"
           }
         ]
       },
@@ -241,7 +249,16 @@ Create or update `.claude/settings.local.json` to register the hooks:
         "hooks": [
           {
             "type": "command",
-            "command": "python3 hooks/detect_phase_completion.py"
+            "command": "python3 kit_tools/hooks/detect_phase_completion.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 kit_tools/hooks/validate_seeded_template.py"
           }
         ]
       }
@@ -252,7 +269,7 @@ Create or update `.claude/settings.local.json` to register the hooks:
         "hooks": [
           {
             "type": "command",
-            "command": "python3 hooks/remind_scratchpad_before_compact.py"
+            "command": "python3 kit_tools/hooks/remind_scratchpad_before_compact.py"
           }
         ]
       }
@@ -263,7 +280,7 @@ Create or update `.claude/settings.local.json` to register the hooks:
         "hooks": [
           {
             "type": "command",
-            "command": "python3 hooks/remind_close_session.py"
+            "command": "python3 kit_tools/hooks/remind_close_session.py"
           }
         ]
       }
@@ -276,9 +293,9 @@ If `.claude/settings.local.json` already exists, merge the hooks configuration (
 
 ### 6c: Verify hook installation
 
-- Confirm all 6 Python scripts were copied
-- Confirm hooks.json was copied
-- Confirm .claude/settings.local.json has the hooks configured
+- Confirm all 7 Python scripts were copied to `kit_tools/hooks/`
+- Confirm `.claude/settings.local.json` exists with hooks configured
+- Verify paths in settings use `kit_tools/hooks/` prefix
 
 ## Step 7: Set up CLAUDE.md
 
@@ -313,8 +330,8 @@ Run a quick validation to ensure everything is in place:
 - [ ] CLAUDE.md exists and has scratchpad instructions
 - [ ] Directory structure is correct
 - [ ] No obvious errors in template copying
-- [ ] hooks/ directory exists with all 6 Python scripts
-- [ ] .claude/settings.local.json exists with hooks configured
+- [ ] `kit_tools/hooks/` directory exists with all 7 Python scripts
+- [ ] `.claude/settings.local.json` exists with hooks configured using `kit_tools/hooks/` paths
 
 **Report any issues** — if validation finds problems, list them clearly.
 
