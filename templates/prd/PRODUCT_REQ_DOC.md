@@ -1,10 +1,21 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 ---
 feature: {{FEATURE_NAME}}
 status: active
+ralph_ready: true
+depends_on: []
 created: {{DATE}}
 updated: {{DATE}}
 ---
+
+<!--
+Frontmatter fields:
+- feature: Kebab-case feature name (e.g., "user-auth")
+- status: active | on-hold | completed
+- ralph_ready: true if ≤7 stories and well-scoped; false if needs decomposition
+- depends_on: Array of feature names this PRD depends on (for epics)
+- created/updated: Dates in YYYY-MM-DD format
+-->
 
 # PRD: {{FEATURE_TITLE}}
 
@@ -21,9 +32,15 @@ updated: {{DATE}}
 ## User Stories
 
 <!--
-Each story should be small enough to complete in one focused session.
-Stories are ordered by dependency (schema → backend → UI).
-Use US-XXX IDs for tracking.
+RALPH-READY GUIDELINES:
+- Target 5-7 stories per PRD (max 7 for reliable Ralph execution)
+- Each story should complete in one focused session
+- 3-5 acceptance criteria per story (max 6)
+- Total criteria across all stories: ≤35
+- Order by dependency: schema → backend → UI
+
+If this PRD exceeds these limits, set ralph_ready: false in frontmatter
+and consider decomposing into multiple PRDs.
 -->
 
 ### US-001: {{Story Title}}

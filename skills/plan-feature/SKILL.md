@@ -7,6 +7,22 @@ description: Brainstorm and plan a new feature, creating a Product Requirements 
 
 Let's brainstorm and plan a new feature together. This is an interactive process — I'll ask clarifying questions to help refine the idea before generating the PRD.
 
+## Your Role as Senior Dev
+
+**You are the senior developer on this project.** Your job is to ensure PRDs are properly scoped, implementable, and set up for success. This means:
+
+- **Push back on scope creep** — If a feature is too large, say so directly
+- **Enforce atomic stories** — Each story must be completable in one focused session
+- **Detect epics early** — Large features should be decomposed into multiple PRDs
+- **Validate before generating** — Don't create PRDs that will fail during implementation
+
+When you identify issues, be direct:
+> "I need to push back on this scope. What you're describing is an epic, not a single feature. Let me break this down into manageable PRDs."
+
+Your goal is high-quality PRDs that can be implemented successfully, either manually or via Ralph autonomous execution.
+
+---
+
 ## Dependencies
 
 This skill requires the following project files:
@@ -18,11 +34,13 @@ This skill requires the following project files:
 | `$CLAUDE_PLUGIN_ROOT/templates/prd/PRODUCT_REQ_DOC.md` | Yes | Template for new PRD |
 
 **Creates:**
-- `kit_tools/prd/prd-[feature-name].md` — Product Requirements Document
+- `kit_tools/prd/prd-[feature-name].md` — Product Requirements Document (one or more)
 
 **Updates:**
-- `kit_tools/roadmap/BACKLOG.md` — Adds reference to new PRD
+- `kit_tools/roadmap/BACKLOG.md` — Adds reference to new PRD(s)
 - `kit_tools/roadmap/MVP_TODO.md` — Optionally links PRD to milestone
+
+---
 
 ## Step 1: Capture the spark
 
@@ -32,7 +50,114 @@ First, tell me about the feature idea:
 - **What problem does it solve?** (The "why" — what pain point does this address?)
 - **What triggered this idea?** (User feedback? Hit a limitation? Competitive pressure?)
 
-## Step 2: Clarifying questions
+---
+
+## Step 2: Epic detection (CRITICAL)
+
+**Before proceeding, evaluate whether this is a single feature or an epic.**
+
+### Epic warning signs
+
+Flag as an epic if ANY of these apply:
+
+| Signal | Example | Why it's a problem |
+|--------|---------|-------------------|
+| **Multiple subsystems** | "Auth with OAuth, session management, and user profiles" | Touches too many areas |
+| **Scope keywords** | "entire", "full", "complete", "from scratch", "system" | Indicates large scope |
+| **Layer spanning** | "Database + API + UI for payments" | Should be separate PRDs per layer |
+| **Estimated stories > 7** | Mental count suggests 8+ stories | Too large for one Ralph session |
+| **Multiple user types** | "Admin dashboard AND user dashboard" | Should be separate features |
+| **Vague boundaries** | "Make it production-ready" | Scope is undefined |
+
+### If epic detected
+
+**Stop and address this directly:**
+
+> "What you're describing sounds like an **epic** — a collection of related features that's too large for a single PRD.
+>
+> Large PRDs cause problems:
+> - They overwhelm autonomous execution (Ralph will exhaust context)
+> - They're harder to track and complete
+> - They delay the satisfaction of shipping
+>
+> Let me propose breaking this into focused PRDs that can each be completed in a single session."
+
+Then proceed to **Step 2b: Epic Decomposition**.
+
+### If NOT an epic
+
+Proceed to Step 3.
+
+---
+
+## Step 2b: Epic decomposition
+
+When you've identified an epic, decompose it into multiple PRDs.
+
+### Decomposition strategy
+
+Break down by **layer and concern**:
+
+```
+Epic: "OAuth Authentication System"
+         ↓ decompose into:
+
+1. prd-oauth-schema.md
+   - Database tables, migrations, types
+   - 3-4 stories
+   - No dependencies
+
+2. prd-oauth-provider.md
+   - OAuth provider config, token handling
+   - 4-5 stories
+   - depends_on: [oauth-schema]
+
+3. prd-oauth-api.md
+   - Login/logout endpoints, session validation
+   - 4-5 stories
+   - depends_on: [oauth-schema, oauth-provider]
+
+4. prd-oauth-ui.md
+   - Login button, callback handling, error states
+   - 4-5 stories
+   - depends_on: [oauth-api]
+```
+
+### Present the decomposition
+
+Show the user your proposed breakdown:
+
+> "Here's how I'd break this epic into Ralph-sized PRDs:
+>
+> | PRD | Stories | Depends On | Purpose |
+> |-----|---------|------------|---------|
+> | `prd-oauth-schema` | ~3 | — | Database foundation |
+> | `prd-oauth-provider` | ~4 | schema | OAuth integration |
+> | `prd-oauth-api` | ~4 | schema, provider | Backend endpoints |
+> | `prd-oauth-ui` | ~4 | api | User interface |
+>
+> Each PRD can be completed in one session and exported to Ralph independently.
+>
+> Should I proceed with this breakdown, or would you like to adjust it?"
+
+### User options
+
+- **Proceed** — Create all PRDs with the proposed structure
+- **Adjust** — Modify the breakdown (combine, split differently, change order)
+- **Single PRD anyway** — User insists (warn but comply, mark `ralph_ready: false`)
+
+### Creating multiple PRDs
+
+If proceeding with decomposition:
+
+1. Walk through each PRD using Steps 3-8
+2. Or offer: "Would you like me to generate all PRDs with sensible defaults, then you can refine them?"
+3. Set `depends_on` fields correctly in each PRD's frontmatter
+4. Link all PRDs in BACKLOG.md as a grouped epic
+
+---
+
+## Step 3: Clarifying questions
 
 I'll ask 3-5 essential questions to refine the scope. Format questions with lettered options for quick responses:
 
@@ -64,7 +189,9 @@ Focus questions on:
 - **Scope/Boundaries:** What should it NOT do?
 - **Success Criteria:** How do we know it's done?
 
-## Step 3: Define the scope
+---
+
+## Step 4: Define the scope
 
 Now let's set clear boundaries:
 
@@ -80,7 +207,9 @@ How will we measure success?
 - "API response time < 200ms"
 - "Zero critical bugs in first week"
 
-## Step 4: Break into user stories
+---
+
+## Step 5: Break into user stories
 
 Structure the implementation as user stories. Each story should be:
 - **Small enough** to complete in one focused session (one context window)
@@ -94,17 +223,36 @@ For each story, define:
 3. **Description:** "As a [user], I want [feature] so that [benefit]"
 4. **Acceptance Criteria:** Verifiable checklist of what "done" means
 
+### Ralph-ready story limits
+
+**Target: 5-7 stories per PRD.** This ensures:
+- PRD can complete in one Ralph session without context exhaustion
+- Each story is truly atomic
+- Progress is visible and satisfying
+
+| Stories | Assessment |
+|---------|------------|
+| 1-4 | Good — focused PRD |
+| 5-7 | Ideal — well-scoped for Ralph |
+| 8-10 | Warning — consider splitting |
+| 11+ | Too large — must decompose |
+
+**If you reach 8+ stories, stop and reconsider:**
+> "This PRD is growing beyond Ralph-safe limits. Let me split it into two focused PRDs."
+
 ### Story sizing guidance
 
-**Right-sized stories:**
+**Right-sized stories (1 story = 1 focused task):**
 - Add a database column and migration
 - Create a single UI component
 - Add one API endpoint
 - Implement one validation rule
+- Write tests for one module
 
 **Too big (split these):**
 - "Build the entire dashboard" → Split into schema, queries, components, filters
-- "Add authentication" → Split into schema, middleware, login UI, session handling
+- "Add authentication" → This is an epic, not a story
+- "Create the settings page" → Split by settings category
 
 **Rule of thumb:** If you can't describe the change in 2-3 sentences, it's too big.
 
@@ -118,11 +266,15 @@ Each criterion must be **verifiable**, not vague:
 **Good:** "API returns 401 for unauthenticated requests"
 **Bad:** "Handles auth properly"
 
+**Target: 3-5 acceptance criteria per story.** More than 6 suggests the story is too big.
+
 **Always include:**
 - "Typecheck/lint passes" for every story
 - "Verify in browser" for UI stories
 
-## Step 5: Functional requirements
+---
+
+## Step 6: Functional requirements
 
 Extract numbered functional requirements from the stories:
 
@@ -132,7 +284,9 @@ Extract numbered functional requirements from the stories:
 
 Be explicit and unambiguous. These are the "contract" for what the feature does.
 
-## Step 6: Technical considerations
+---
+
+## Step 7: Technical considerations
 
 Identify:
 
@@ -143,13 +297,36 @@ Identify:
 
 Link to existing documentation where helpful.
 
-## Step 7: Surface open questions
+---
+
+## Step 8: Surface open questions
 
 What decisions still need to be made? What assumptions should be validated?
 
 Document these as checkboxes so they can be resolved and checked off.
 
-## Step 8: Generate the PRD
+---
+
+## Step 9: Final scope check
+
+**Before generating, verify the PRD meets these criteria:**
+
+| Check | Target | Status |
+|-------|--------|--------|
+| Story count | 5-7 stories | ✓ or ✗ |
+| Acceptance criteria | 3-5 per story | ✓ or ✗ |
+| Total criteria | ≤35 checkboxes | ✓ or ✗ |
+| Layer focus | Single layer or tightly coupled | ✓ or ✗ |
+| Dependencies clear | All blockers identified | ✓ or ✗ |
+
+**If any check fails, address it before proceeding.**
+
+If the user pushes back:
+> "I understand you want to move forward, but as your senior dev I need to flag that this PRD exceeds our guidelines. If you proceed, I'll mark it as `ralph_ready: false` to indicate it needs decomposition before autonomous execution."
+
+---
+
+## Step 10: Generate the PRD
 
 Create `kit_tools/prd/prd-[feature-name].md` with:
 
@@ -157,10 +334,25 @@ Create `kit_tools/prd/prd-[feature-name].md` with:
 ---
 feature: [feature-name]
 status: active
+ralph_ready: true
+depends_on: []
 created: [YYYY-MM-DD]
 updated: [YYYY-MM-DD]
 ---
 ```
+
+### Frontmatter fields
+
+| Field | Purpose |
+|-------|---------|
+| `feature` | Kebab-case feature name |
+| `status` | `active`, `on-hold`, or `completed` |
+| `ralph_ready` | `true` if ≤7 stories and well-scoped; `false` if needs decomposition |
+| `depends_on` | Array of feature names this PRD depends on (for epics) |
+| `created` | Creation date |
+| `updated` | Last update date |
+
+### PRD content
 
 Followed by:
 - Overview (problem statement, why now)
@@ -175,7 +367,9 @@ Followed by:
 
 Use the template at `$CLAUDE_PLUGIN_ROOT/templates/prd/PRODUCT_REQ_DOC.md` as reference.
 
-## Step 9: Update tracking files
+---
+
+## Step 11: Update tracking files
 
 ### Add to BACKLOG.md
 
@@ -184,6 +378,16 @@ Add a reference to the new PRD in `kit_tools/roadmap/BACKLOG.md`:
 ```markdown
 ## Planned Features
 - [Feature Name](../prd/prd-feature-name.md) — Brief description
+```
+
+**For epics (multiple related PRDs):**
+
+```markdown
+## OAuth Authentication (Epic)
+- [OAuth Schema](../prd/prd-oauth-schema.md) — Database foundation
+- [OAuth Provider](../prd/prd-oauth-provider.md) — Provider integration (depends on: schema)
+- [OAuth API](../prd/prd-oauth-api.md) — Backend endpoints (depends on: schema, provider)
+- [OAuth UI](../prd/prd-oauth-ui.md) — User interface (depends on: api)
 ```
 
 ### Optionally link to MVP_TODO.md
@@ -195,16 +399,41 @@ If this feature is part of a milestone, add a link:
 - [ ] Feature Name ([PRD](../prd/prd-feature-name.md))
 ```
 
-## Step 10: Summary
+---
+
+## Step 12: Summary
 
 Report to the user:
 
-- The feature we planned
-- Where the PRD was created (`kit_tools/prd/prd-[name].md`)
-- Number of user stories defined
+- The feature(s) we planned
+- Whether this was decomposed from an epic
+- Where the PRD(s) were created
+- Number of user stories per PRD
+- Ralph-readiness status
+- Dependencies between PRDs (if applicable)
 - Key decisions made during brainstorming
 - Open questions that need resolution
 - Recommended next steps
+
+**Example summary:**
+
+> **Feature Planning Complete**
+>
+> Created 4 PRDs for the OAuth Authentication epic:
+>
+> | PRD | Stories | Ralph Ready | Depends On |
+> |-----|---------|-------------|------------|
+> | `prd-oauth-schema.md` | 3 | ✓ | — |
+> | `prd-oauth-provider.md` | 4 | ✓ | schema |
+> | `prd-oauth-api.md` | 5 | ✓ | schema, provider |
+> | `prd-oauth-ui.md` | 4 | ✓ | api |
+>
+> **Recommended order:** schema → provider → api → ui
+>
+> **Next steps:**
+> 1. Resolve open questions in each PRD
+> 2. Run `/kit-tools:export-ralph` on `prd-oauth-schema` to start
+> 3. Complete PRDs in dependency order
 
 ---
 

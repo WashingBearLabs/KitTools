@@ -5,6 +5,35 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2025-02-02
+
+### Added
+- **Epic Detection & Decomposition** — `/kit-tools:plan-feature` now detects large features and decomposes them
+  - Automatic detection of epic-sized scope (>7 stories, multiple subsystems, scope keywords)
+  - Proposes breakdown into multiple focused PRDs
+  - Tracks dependencies between related PRDs with `depends_on` field
+- **Ralph-Ready Validation** — `/kit-tools:export-ralph` now validates PRD scope before export
+  - Checks story count (target ≤7), acceptance criteria count (target ≤35)
+  - Soft warning with strong recommendation if PRD exceeds limits
+  - Suggests decomposition via `plan-feature` if PRD is too large
+- **Senior Dev Persona** — Both skills now act as senior dev reviewers
+  - Push back on scope creep and poorly-scoped PRDs
+  - Ensure PRDs are set up for implementation success
+
+### Changed
+- **PRD Template** — Updated to v1.1.0 with new frontmatter fields
+  - `ralph_ready: true/false` — Indicates if PRD is properly scoped for Ralph
+  - `depends_on: []` — Array of feature names this PRD depends on
+  - Added Ralph-ready guidelines in template comments
+- **`/kit-tools:plan-feature`** — Enhanced with scope validation
+  - Final scope check before generating PRD
+  - Story count limits (5-7 ideal, 8+ triggers warning)
+  - Acceptance criteria limits (3-5 per story, ≤35 total)
+- **`/kit-tools:export-ralph`** — Enhanced with pre-export validation
+  - Checks `ralph_ready` frontmatter field
+  - Validates story and criteria counts
+  - Warns on dependency PRDs not yet completed
+
 ## [1.3.0] - 2025-02-01
 
 ### Added

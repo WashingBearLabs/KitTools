@@ -66,6 +66,8 @@ git clone https://github.com/WashingBearLabs/KitTools.git
 |-------|-------------|
 | `/kit-tools:init-project` | Initialize kit_tools with project-type presets |
 | `/kit-tools:seed-project` | Populate templates from codebase exploration |
+| `/kit-tools:seed-template` | Seed a single template with project-specific content |
+| `/kit-tools:validate-seeding` | Validate seeded templates for unfilled placeholders |
 | `/kit-tools:migrate` | Migrate existing docs to kit_tools structure |
 | `/kit-tools:start-session` | Orient and create scratchpad for a work session |
 | `/kit-tools:close-session` | Process notes and update docs at session end |
@@ -85,10 +87,12 @@ kit-tools includes automation hooks that run automatically:
 | Hook | Trigger | What it does |
 |------|---------|--------------|
 | `create_scratchpad` | SessionStart | Creates SESSION_SCRATCH.md if kit_tools exists |
+| `sync_skill_symlinks` | SessionStart | Syncs skill symlinks for the plugin |
 | `update_doc_timestamps` | PostToolUse (Edit/Write) | Updates "Last Updated" in kit_tools docs |
+| `detect_phase_completion` | PostToolUse (Edit/Write) | Suggests running validate-phase when PRD criteria or TODO tasks are completed |
+| `validate_seeded_template` | PostToolUse (Edit/Write) | Validates seeded templates for unfilled placeholders |
 | `remind_scratchpad_before_compact` | PreCompact | Reminds to capture notes, adds compaction marker |
 | `remind_close_session` | Stop | Reminds to run close-session if scratchpad has notes |
-| `detect_phase_completion` | PostToolUse (Edit/Write) | Suggests running validate-phase when PRD criteria or TODO tasks are completed |
 
 *Note: Setup validation is built into `/kit-tools:init-project` as a final step.*
 
@@ -108,23 +112,31 @@ When initializing, select your project type for tailored templates:
 
 ## Templates
 
-kit-tools provides 25+ documentation templates organized by category:
+kit-tools provides 29 documentation templates organized by category:
 
 **Core** — Always included:
 - `AGENT_README.md` — AI navigation guide
 - `SYNOPSIS.md` — Project overview
+- `SESSION_LOG.md` — Session history
+- `AUDIT_FINDINGS.md` — Code quality findings log
 - `CODE_ARCH.md` — Code architecture
+- `DECISIONS.md` — Architecture decision records
 - `LOCAL_DEV.md` — Local development setup
 - `GOTCHAS.md` — Known issues and gotchas
-- `SESSION_LOG.md` — Session history
+- `CONVENTIONS.md` — Code conventions and standards
+- `TROUBLESHOOTING.md` — Common issues and solutions
+- `TESTING_GUIDE.md` — Testing strategy and patterns
 - `prd/*` — Product Requirements Documents
 - `roadmap/*` — Milestone tracking and backlog
 
 **API** — For backend services:
-- `API_GUIDE.md`, `DATA_MODEL.md`, `ENV_REFERENCE.md`
+- `API_GUIDE.md`, `DATA_MODEL.md`, `ENV_REFERENCE.md`, `SERVICE_MAP.md`
 
 **Ops** — For deployed services:
-- `DEPLOYMENT.md`, `CI_CD.md`, `MONITORING.md`, `INFRA_ARCH.md`
+- `DEPLOYMENT.md`, `CI_CD.md`, `MONITORING.md`, `INFRA_ARCH.md`, `SECURITY.md`
+
+**UI** — For frontend applications:
+- `UI_STYLE_GUIDE.md`, `feature_guides/FEATURE_TEMPLATE.md`
 
 **Patterns** — Optional deep-dives:
 - `AUTH.md`, `ERROR_HANDLING.md`, `LOGGING.md`
@@ -139,6 +151,7 @@ your-project/
 │   ├── AGENT_README.md      # AI navigation guide
 │   ├── SYNOPSIS.md          # Project overview
 │   ├── SESSION_LOG.md       # Session history
+│   ├── AUDIT_FINDINGS.md    # Code quality findings
 │   ├── arch/                # Architecture docs
 │   ├── docs/                # Operational docs
 │   ├── testing/             # Testing docs
@@ -197,19 +210,45 @@ Validation runs automatically during `/kit-tools:checkpoint` (for code changes) 
 Use `/kit-tools:plan-feature` to create Product Requirements Documents (PRDs):
 
 1. Interactive questions refine scope and requirements
-2. Generates `prd-[name].md` with:
+2. **Epic detection** — Large features are automatically decomposed into multiple PRDs
+3. Generates `prd-[name].md` with:
    - Overview and goals
    - User stories with acceptance criteria (US-XXX format)
    - Functional requirements (FR-X format)
    - Non-goals and scope boundaries
    - Technical considerations
-3. Links to backlog and milestone tracking
-4. Captures implementation notes as you work
+4. Links to backlog and milestone tracking
+5. Captures implementation notes as you work
+
+### Ralph-Ready Guidelines
+
+PRDs are sized for reliable autonomous execution:
+
+| Guideline | Target |
+|-----------|--------|
+| Stories per PRD | 5-7 (max 7) |
+| Criteria per story | 3-5 (max 6) |
+| Total criteria | ≤35 |
+
+PRDs exceeding these limits are flagged as `ralph_ready: false` and should be decomposed.
+
+### Epic Decomposition
+
+Large features ("epics") are automatically split into focused PRDs:
+
+```
+"OAuth Authentication" (epic)
+         ↓ decomposed into:
+├── prd-oauth-schema.md    (3 stories, no dependencies)
+├── prd-oauth-provider.md  (4 stories, depends_on: [oauth-schema])
+├── prd-oauth-api.md       (4 stories, depends_on: [oauth-provider])
+└── prd-oauth-ui.md        (4 stories, depends_on: [oauth-api])
+```
 
 ### PRD Lifecycle
 
 ```
-/plan-feature → prd-auth.md (status: active)
+/plan-feature → prd-auth.md (status: active, ralph_ready: true)
        ↓
     Work on feature, check off acceptance criteria
        ↓
@@ -221,10 +260,12 @@ Use `/kit-tools:plan-feature` to create Product Requirements Documents (PRDs):
 kit-tools PRDs can be exported for use with the [ralph](https://github.com/snarktank/ralph) autonomous agent system:
 
 ```
-/kit-tools:export-ralph    # Convert PRD → prd.json for ralph
+/kit-tools:export-ralph    # Validates scope, converts PRD → prd.json
 ./ralph.sh --tool claude   # Run ralph autonomous loop
 /kit-tools:import-learnings # Pull learnings back to PRD
 ```
+
+The `export-ralph` skill validates PRD scope before export, warning if a PRD is too large for reliable autonomous execution.
 
 This allows hybrid workflows: plan with kit-tools, execute with ralph, preserve learnings in your PRD.
 
