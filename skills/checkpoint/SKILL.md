@@ -15,7 +15,8 @@ This skill requires the following project files:
 |------|----------|---------|
 | `kit_tools/SESSION_SCRATCH.md` | Yes | Notes to process |
 | `kit_tools/SESSION_LOG.md` | Yes | Session history to update |
-| `kit_tools/roadmap/*.md` | Yes | TODO files to update |
+| `kit_tools/prd/*.md` | Yes | PRDs to update with progress |
+| `kit_tools/roadmap/MVP_TODO.md` | Yes | Milestone tracking |
 
 **Modifies:**
 - `kit_tools/SESSION_SCRATCH.md` — Clears notes section (preserves Active Feature)
@@ -32,7 +33,7 @@ This skill requires the following project files:
 ## Step 1: Review the scratchpad
 
 - Read `kit_tools/SESSION_SCRATCH.md`
-- **Note the "Active Feature" section** — this tells us which TODO file to update
+- **Note the "Active Feature" section** — this tells us which PRD to update
 - If it doesn't exist or is empty, ask what has been accomplished so far this session
 
 ## Step 2: Process notes into documentation
@@ -40,7 +41,9 @@ This skill requires the following project files:
 Using the notes in the scratchpad (or what was discussed), update relevant docs:
 
 - [ ] `kit_tools/SESSION_LOG.md` — Add/update today's entry with work completed so far
-- [ ] **The TODO file identified in "Active Feature"** — Mark completed items, add discovered items
+- [ ] **The PRD identified in "Active Feature"** — Mark completed acceptance criteria, update `updated:` date
+- [ ] **Implementation Notes** — Add any learnings/gotchas to the PRD's Implementation Notes section
+- [ ] `kit_tools/roadmap/MVP_TODO.md` — Update milestone progress if applicable
 - [ ] Other docs as needed (CODE_ARCH.md, GOTCHAS.md, etc.)
 
 ## Step 2.5: Quick validation
@@ -67,7 +70,7 @@ Skip this step if only SESSION_LOG and TODO files were updated.
 ## Active Feature
 
 **Working on:** [Keep the current value]
-**TODO File:** [Keep the current value]
+**PRD:** [Keep the current value]
 
 ---
 
@@ -87,7 +90,8 @@ Skip this step if only SESSION_LOG and TODO files were updated.
 Provide a brief summary of:
 
 - What was captured from the scratchpad
-- **Which TODO file was updated**
+- **Which PRD was updated** and current progress (e.g., "3/5 stories complete")
+- Implementation Notes added (if any)
 - Which other docs were updated
 - Doc validation status (if run): passed/warnings
 - Audit findings count (if code validator was run): N critical, N warning, N info

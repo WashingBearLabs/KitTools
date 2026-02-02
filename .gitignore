@@ -32,3 +32,4 @@ Desktop.ini
 
 # Project-specific
 # (kit_tools/ directories are created in user projects, not the plugin itself)
+/tmp/

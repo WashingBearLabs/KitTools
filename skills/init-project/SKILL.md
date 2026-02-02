@@ -44,6 +44,8 @@ Directories to create:
   - kit_tools/arch/
   - kit_tools/docs/
   - kit_tools/roadmap/
+  - kit_tools/prd/
+  - kit_tools/prd/archive/
   - kit_tools/hooks/
   - .claude/
 
@@ -239,7 +241,7 @@ Based on selection, include these templates:
 - testing/TESTING_GUIDE.md
 - roadmap/BACKLOG.md
 - roadmap/MVP_TODO.md
-- roadmap/FEATURE_TODO.md
+- prd/PRODUCT_REQ_DOC.md
 
 **API/Backend adds:**
 - arch/DATA_MODEL.md
@@ -320,6 +322,8 @@ kit_tools/
 │   └── feature_guides/
 ├── testing/
 ├── roadmap/
+├── prd/
+│   └── archive/      (for completed PRDs)
 └── hooks/            (automation scripts)
 ```
 
@@ -508,5 +512,6 @@ The templates come from this plugin's `templates/` directory. They are canonical
 | Skill | When to use |
 |-------|-------------|
 | `/kit-tools:seed-project` | After init, to populate templates with project-specific content |
+| `/kit-tools:plan-feature` | To create a PRD for a new feature in `kit_tools/prd/` |
 | `/kit-tools:update-kit-tools` | Later, to update hooks/templates from newer plugin versions |
 | `/kit-tools:migrate` | Instead of init, if project has existing documentation to preserve |

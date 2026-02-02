@@ -70,10 +70,13 @@ git clone https://github.com/WashingBearLabs/KitTools.git
 | `/kit-tools:start-session` | Orient and create scratchpad for a work session |
 | `/kit-tools:close-session` | Process notes and update docs at session end |
 | `/kit-tools:checkpoint` | Mid-session checkpoint without closing |
-| `/kit-tools:plan-feature` | Interactive feature brainstorming and planning |
+| `/kit-tools:plan-feature` | Create a Product Requirements Document (PRD) for a new feature |
+| `/kit-tools:complete-feature` | Mark a PRD as completed and archive it |
 | `/kit-tools:sync-project` | Full sync between code and docs (`--quick` for audit) |
-| `/kit-tools:validate-phase` | Run code quality, security, and intent alignment validation on recent changes |
-| `/kit-tools:update-kit-tools` | Update project components (hooks, templates) from latest plugin versions |
+| `/kit-tools:validate-phase` | Run code quality, security, and intent alignment validation |
+| `/kit-tools:update-kit-tools` | Update project components from latest plugin versions |
+| `/kit-tools:export-ralph` | Export PRD to ralph's prd.json format (optional ralph integration) |
+| `/kit-tools:import-learnings` | Import ralph progress.txt learnings back to PRD |
 
 ## Hooks
 
@@ -85,7 +88,7 @@ kit-tools includes automation hooks that run automatically:
 | `update_doc_timestamps` | PostToolUse (Edit/Write) | Updates "Last Updated" in kit_tools docs |
 | `remind_scratchpad_before_compact` | PreCompact | Reminds to capture notes, adds compaction marker |
 | `remind_close_session` | Stop | Reminds to run close-session if scratchpad has notes |
-| `detect_phase_completion` | PostToolUse (Edit/Write) | Suggests running validate-phase when TODO tasks are completed |
+| `detect_phase_completion` | PostToolUse (Edit/Write) | Suggests running validate-phase when PRD criteria or TODO tasks are completed |
 
 *Note: Setup validation is built into `/kit-tools:init-project` as a final step.*
 
@@ -114,7 +117,8 @@ kit-tools provides 25+ documentation templates organized by category:
 - `LOCAL_DEV.md` — Local development setup
 - `GOTCHAS.md` — Known issues and gotchas
 - `SESSION_LOG.md` — Session history
-- `roadmap/*` — Task and feature tracking
+- `prd/*` — Product Requirements Documents
+- `roadmap/*` — Milestone tracking and backlog
 
 **API** — For backend services:
 - `API_GUIDE.md`, `DATA_MODEL.md`, `ENV_REFERENCE.md`
@@ -138,7 +142,9 @@ your-project/
 │   ├── arch/                # Architecture docs
 │   ├── docs/                # Operational docs
 │   ├── testing/             # Testing docs
-│   └── roadmap/             # Task tracking
+│   ├── prd/                 # Product Requirements Documents
+│   │   └── archive/         # Completed PRDs
+│   └── roadmap/             # Milestone tracking
 └── CLAUDE.md                # Claude Code instructions
 ```
 
@@ -186,18 +192,41 @@ Use `/kit-tools:validate-phase` to review recent code changes:
 
 Validation runs automatically during `/kit-tools:checkpoint` (for code changes) and `/kit-tools:close-session`. Open findings are reviewed at `/kit-tools:start-session`.
 
-## Feature Planning
+## Feature Planning with PRDs
 
-Use `/kit-tools:plan-feature` to brainstorm new features:
+Use `/kit-tools:plan-feature` to create Product Requirements Documents (PRDs):
 
 1. Interactive questions refine scope and requirements
-2. Generates `FEATURE_TODO_[name].md` with:
-   - Feature scope (Goal, Non-Goals, Success Criteria)
-   - Origin context (Why now? What triggered this?)
-   - Phased tasks with intent statements
-   - Pre-flight checklists per phase
-3. Adds reference to backlog
-4. Preserves brainstorming context for future sessions
+2. Generates `prd-[name].md` with:
+   - Overview and goals
+   - User stories with acceptance criteria (US-XXX format)
+   - Functional requirements (FR-X format)
+   - Non-goals and scope boundaries
+   - Technical considerations
+3. Links to backlog and milestone tracking
+4. Captures implementation notes as you work
+
+### PRD Lifecycle
+
+```
+/plan-feature → prd-auth.md (status: active)
+       ↓
+    Work on feature, check off acceptance criteria
+       ↓
+/complete-feature → prd-auth.md moves to prd/archive/
+```
+
+### Ralph Integration (Optional)
+
+kit-tools PRDs can be exported for use with the [ralph](https://github.com/snarktank/ralph) autonomous agent system:
+
+```
+/kit-tools:export-ralph    # Convert PRD → prd.json for ralph
+./ralph.sh --tool claude   # Run ralph autonomous loop
+/kit-tools:import-learnings # Pull learnings back to PRD
+```
+
+This allows hybrid workflows: plan with kit-tools, execute with ralph, preserve learnings in your PRD.
 
 ## Template Versioning
 

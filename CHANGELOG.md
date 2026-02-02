@@ -5,6 +5,36 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-02-01
+
+### Added
+- **PRD (Product Requirements Document) System** — New workflow for feature planning
+  - `kit_tools/prd/` directory for PRD files with YAML frontmatter
+  - `kit_tools/prd/archive/` for completed PRDs
+  - PRD template with user stories (US-XXX), acceptance criteria, functional requirements (FR-X)
+- **New Skill: `/kit-tools:complete-feature`** — Mark PRD as completed and archive it
+- **New Skill: `/kit-tools:export-ralph`** — Convert KitTools PRD to ralph's prd.json format
+- **New Skill: `/kit-tools:import-learnings`** — Import ralph progress.txt learnings back to PRD
+- **Ralph Integration** — Optional integration with the ralph autonomous agent system
+  - Export PRDs for autonomous execution
+  - Import learnings back to preserve context
+
+### Changed
+- **`/kit-tools:plan-feature`** — Now generates PRDs (`prd-[name].md`) instead of `FEATURE_TODO_*.md`
+  - User story format with acceptance criteria
+  - Functional requirements in FR-X format
+  - Implementation Notes section for capturing learnings
+- **`/kit-tools:start-session`** — Now checks `kit_tools/prd/` for active features instead of `FEATURE_TODO_*.md`
+- **`/kit-tools:close-session`** — Prompts for Implementation Notes when working on a PRD
+- **`/kit-tools:checkpoint`** — Captures learnings to active PRD's Implementation Notes
+- **`/kit-tools:migrate`** — Now converts existing `FEATURE_TODO_*.md` files to PRD format
+- **`/kit-tools:init-project`** — Includes `prd/` directory and PRD template in project setup
+- **`detect_phase_completion` hook** — Now detects completions in both PRDs and roadmap TODO files
+- **`templates/AGENT_README.md`** — Updated to document PRD structure and workflow (v1.3.0)
+
+### Deprecated
+- **`FEATURE_TODO_*.md` files** — Replaced by PRDs; migrate skill converts existing files
+
 ## [1.1.0] - 2025-01-28
 
 ### Added

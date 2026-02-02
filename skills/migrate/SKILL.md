@@ -86,7 +86,12 @@ Will create new (no existing source):
 - kit_tools/arch/DECISIONS.md (will be empty, fill over time)
 - kit_tools/docs/GOTCHAS.md (will be empty, fill over time)
 - kit_tools/SESSION_LOG.md (session tracking)
-- kit_tools/roadmap/*.md (task tracking)
+- kit_tools/roadmap/MVP_TODO.md (milestone tracking)
+- kit_tools/prd/ (PRD directory)
+
+FEATURE_TODO conversions (if found):
+- FEATURE_TODO_auth.md      → kit_tools/prd/prd-auth.md       Convert to PRD
+- FEATURE_TODO_payments.md  → kit_tools/prd/prd-payments.md   Convert to PRD
 ```
 
 Ask user to confirm or adjust the mapping.
@@ -141,6 +146,112 @@ For each file in the mapping:
 ### For new files:
 1. Copy template
 2. Leave as template for user to fill
+
+## Step 5b: Migrate FEATURE_TODO files to PRDs
+
+If the project has existing `FEATURE_TODO_*.md` files (from older kit_tools versions), convert them to PRDs:
+
+### Conversion mapping:
+
+| FEATURE_TODO Section | PRD Section |
+|---------------------|-------------|
+| Feature Overview | Overview |
+| Goal | Goals |
+| Non-Goals | Non-Goals |
+| Success Criteria | Success Metrics |
+| Phase tasks | User Stories (convert each task to a story) |
+| Dependencies | Technical Considerations |
+| Open Questions | Open Questions |
+| Notes | Implementation Notes |
+
+### Conversion steps:
+
+1. **Read the FEATURE_TODO file**
+2. **Create PRD with frontmatter:**
+   ```yaml
+   ---
+   feature: [extracted from filename]
+   status: [infer from TODO status - "In Progress" → active, "Complete" → completed]
+   created: [from TODO if available, else today]
+   updated: [today]
+   ---
+   ```
+
+3. **Convert tasks to user stories:**
+   - Each Phase becomes a logical grouping
+   - Each task becomes a user story (US-001, US-002, etc.)
+   - Task checkboxes become acceptance criteria
+   - Preserve completion status (`[x]` stays `[x]`)
+
+4. **Extract functional requirements:**
+   - Derive FR-X items from the tasks/stories
+
+5. **Save to `kit_tools/prd/prd-[feature-name].md`**
+
+6. **Handle the original:**
+   - If status was "Complete", move original to `kit_tools/roadmap/archive/`
+   - Otherwise, delete the original (PRD replaces it)
+
+### Example conversion:
+
+**Before (FEATURE_TODO_auth.md):**
+```markdown
+## Feature Overview
+Status: In Progress
+
+## Feature Scope
+**Goal:** Allow users to log in
+
+## Phase 1: Database
+- [x] Add users table
+- [x] Add sessions table
+
+## Phase 2: API
+- [ ] Create login endpoint
+- [ ] Create logout endpoint
+```
+
+**After (prd-auth.md):**
+```markdown
+---
+feature: auth
+status: active
+created: 2025-01-28
+updated: 2025-02-01
+---
+
+# PRD: User Authentication
+
+## Overview
+Allow users to log in
+
+## User Stories
+
+### US-001: Add users table
+**Description:** As a developer, I need a users table to store user credentials.
+**Acceptance Criteria:**
+- [x] Users table created with required columns
+- [x] Migration runs successfully
+
+### US-002: Add sessions table
+**Description:** As a developer, I need a sessions table to track login sessions.
+**Acceptance Criteria:**
+- [x] Sessions table created
+- [x] Foreign key to users table
+
+### US-003: Create login endpoint
+**Description:** As a user, I want to log in so I can access my account.
+**Acceptance Criteria:**
+- [ ] POST /api/login accepts email/password
+- [ ] Returns session token on success
+- [ ] Typecheck passes
+
+### US-004: Create logout endpoint
+**Description:** As a user, I want to log out to end my session.
+**Acceptance Criteria:**
+- [ ] POST /api/logout invalidates session
+- [ ] Typecheck passes
+```
 
 ## Step 6: Handle originals
 

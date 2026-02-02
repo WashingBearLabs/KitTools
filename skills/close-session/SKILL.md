@@ -15,7 +15,8 @@ This skill requires the following project files:
 |------|----------|---------|
 | `kit_tools/SESSION_SCRATCH.md` | Yes | Notes captured during session |
 | `kit_tools/SESSION_LOG.md` | Yes | Session history to update |
-| `kit_tools/roadmap/*.md` | Yes | TODO files to update |
+| `kit_tools/prd/*.md` | Yes | PRDs to update with progress |
+| `kit_tools/roadmap/MVP_TODO.md` | Yes | Milestone tracking |
 | `kit_tools/AGENT_README.md` | Yes | Documentation checklist reference |
 | `kit_tools/AUDIT_FINDINGS.md` | Optional | Created if validate-phase runs |
 
@@ -35,26 +36,33 @@ This skill requires the following project files:
 ## Step 0: Process scratchpad
 
 - Read `kit_tools/SESSION_SCRATCH.md`
-- **Identify which feature/TODO was being worked on** from the "Active Feature" section
+- **Identify which feature/PRD was being worked on** from the "Active Feature" section
 - Use these notes to inform the documentation updates below
 - If the scratchpad is empty, that's okay — proceed with what you remember from this session
 
-## Step 1: Update the correct TODO file(s)
+## Step 1: Update PRD and tracking files
 
 Based on the scratchpad's "Active Feature" section and the work done:
 
-1. **Identify the relevant TODO file(s):**
-   - `kit_tools/roadmap/MVP_TODO.md` — For high-level MVP tasks
-   - `kit_tools/roadmap/FEATURE_TODO_[name].md` — For feature-specific tasks
-   - `kit_tools/roadmap/BACKLOG.md` — For future work items
+### 1a: Update the active PRD
 
-2. **Update the identified file(s):**
-   - Mark completed items with [x]
-   - Add any new items discovered
-   - Update the "Session Tracking" table in FEATURE_TODO files
-   - If a TODO file is 100% complete, update its Status to "Complete"
+If working on a feature with a PRD (`kit_tools/prd/prd-*.md`):
 
-3. **If work touched multiple features**, update each relevant TODO file
+- Mark completed acceptance criteria with `[x]`
+- Update the `updated:` date in the frontmatter
+- **Capture Implementation Notes** — Ask the user:
+  > "Any learnings or gotchas from today's work that should be captured in the PRD's Implementation Notes section?"
+- Add any discovered learnings to the `## Implementation Notes` section
+- If all user stories are complete, note that the PRD may be ready for `/kit-tools:complete-feature`
+
+### 1b: Update milestone tracking
+
+- `kit_tools/roadmap/MVP_TODO.md` — Update milestone progress if applicable
+- `kit_tools/roadmap/BACKLOG.md` — Add any new feature ideas discovered
+
+### 1c: Multiple features
+
+If work touched multiple PRDs, update each relevant one
 
 ## Step 2: Documentation sweep
 
@@ -93,7 +101,7 @@ If validation finds issues, fix them before proceeding. This prevents incomplete
 Add an entry to `kit_tools/SESSION_LOG.md` with:
 
 - Today's date
-- **Which feature(s)/TODO(s) were worked on**
+- **Which PRD(s)/feature(s) were worked on**
 - What was accomplished (use scratchpad notes as reference)
 - Which docs were updated
 - Open items for next session
@@ -108,7 +116,9 @@ Add an entry to `kit_tools/SESSION_LOG.md` with:
 Provide a brief summary of:
 
 - What was accomplished today
-- **Which TODO file(s) were updated**
+- **Which PRD(s) were updated** and their progress (e.g., "prd-auth.md: 4/5 stories complete")
+- Implementation Notes captured (if any)
 - What documentation was updated
 - Audit findings summary (N critical, N warning, N info) — if validator was run
 - Any open items or recommended next steps
+- If a PRD is complete, remind user about `/kit-tools:complete-feature`
