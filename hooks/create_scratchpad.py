@@ -27,7 +27,7 @@ def main():
 ## Active Feature
 
 **Working on:** [Feature name or "General" if not feature-specific]
-**TODO File:** [e.g., `FEATURE_TODO_auth.md` or `MVP_TODO.md`]
+**PRD:** [e.g., `prd-auth.md` or "N/A" if not feature-specific]
 
 ---
 

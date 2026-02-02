@@ -1,4 +1,4 @@
-<!-- Template Version: 1.2.3 -->
+<!-- Template Version: 1.3.0 -->
 <!-- Seeding:
   explorer_focus: architecture, tech-stack
   required_sections:
@@ -29,11 +29,12 @@
 **For making changes:**
 7. **arch/SECURITY.md** — Auth flows, secrets, permissions
 8. **docs/GOTCHAS.md** — Known landmines, tech debt, non-obvious behaviors
-9. **roadmap/*_TODO.md** — Current work in progress
+9. **prd/*.md** — Active feature PRDs (Product Requirements Documents)
+10. **roadmap/*.md** — MVP milestones and backlog
 
 **For infrastructure:**
-10. **arch/INFRA_ARCH.md** — Cloud resources, networking, IAM
-11. **docs/CI_CD.md** — Pipeline, deployments
+11. **arch/INFRA_ARCH.md** — Cloud resources, networking, IAM
+12. **docs/CI_CD.md** — Pipeline, deployments
 
 ---
 
@@ -42,7 +43,8 @@
 Before starting any work session:
 
 - [ ] Read `SYNOPSIS.md` to understand current project state
-- [ ] Check `roadmap/*_TODO.md` for active work items
+- [ ] Check `prd/*.md` for active PRDs (features in progress)
+- [ ] Check `roadmap/MVP_TODO.md` for milestone tracking
 - [ ] Review `arch/CODE_ARCH.md` for structure and patterns
 - [ ] Scan `docs/GOTCHAS.md` for relevant landmines
 - [ ] Check `AUDIT_FINDINGS.md` for open findings
@@ -67,7 +69,8 @@ Before closing any session, use this checklist to prevent documentation drift:
 | File | Update If... |
 |------|--------------|
 | `SESSION_LOG.md` | Always — log what was done this session |
-| `roadmap/*_TODO.md` | Any task was completed, modified, or discovered |
+| `prd/*.md` | Working on a feature — update acceptance criteria, add Implementation Notes |
+| `roadmap/MVP_TODO.md` | Milestone progress changed |
 
 ### Architecture Changes
 | File | Update If... |
@@ -185,9 +188,14 @@ kit_tools/
 │   ├── GOTCHAS.md           # Known issues and landmines
 │   └── feature_guides/      # Feature-specific docs
 │
+├── prd/                     # Product Requirements Documents
+│   ├── prd-*.md             # Active feature PRDs
+│   └── archive/             # Completed PRDs
+│
 ├── testing/                 # Test documentation
-├── roadmap/                 # TODOs and backlog
-└── prompts/                 # AI session prompts
+└── roadmap/                 # Milestones and backlog
+    ├── MVP_TODO.md          # High-level milestone tracking
+    └── BACKLOG.md           # Future work items
 ```
 
 ---
@@ -196,8 +204,9 @@ kit_tools/
 
 | Type | Pattern | Example |
 |------|---------|---------|
+| PRDs | `prd-feature-name.md` (kebab-case) | `prd-user-auth.md`, `prd-payments.md` |
 | Feature guides | `FEATURENAME_FEATURE_GUIDE.md` | `AUTH_FEATURE_GUIDE.md` |
-| TODO lists | `SCOPE_TODO.md` | `MVP_TODO.md`, `V2_TODO.md` |
+| Milestone tracking | `SCOPE_TODO.md` | `MVP_TODO.md`, `V2_TODO.md` |
 | Architecture patterns | `PATTERNNAME.md` | `LOGGING.md`, `AUTH.md` |
 | Decision records | Date prefix in `DECISIONS.md` | `2024-01-15: Chose X over Y` |
 

@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
-detect_phase_completion.py - Detects TODO checkbox completions in roadmap files.
+detect_phase_completion.py - Detects checkbox completions in PRDs and roadmap files.
 
 Trigger: PostToolUse (Edit|Write)
 
-When a checkbox is marked complete (- [ ] → - [x]) in a kit_tools/roadmap/ TODO file,
-outputs an advisory message suggesting to run /kit-tools:validate-phase.
+When a checkbox is marked complete (- [ ] → - [x]) in:
+- kit_tools/prd/*.md (PRD acceptance criteria)
+- kit_tools/roadmap/*_TODO.md (milestone tasks)
+
+Outputs an advisory message suggesting to run /kit-tools:validate-phase.
 """
 import json
 import re
@@ -30,10 +33,13 @@ def main():
     if not file_path:
         return
 
-    # Only process TODO files in kit_tools/roadmap/
-    if "kit_tools/roadmap/" not in file_path:
-        return
-    if not file_path.endswith("_TODO.md") and not file_path.endswith("BACKLOG.md"):
+    # Determine file type
+    is_prd = "kit_tools/prd/" in file_path and file_path.endswith(".md") and "/archive/" not in file_path
+    is_roadmap = "kit_tools/roadmap/" in file_path and (
+        file_path.endswith("_TODO.md") or file_path.endswith("BACKLOG.md")
+    )
+
+    if not is_prd and not is_roadmap:
         return
 
     old_string = tool_input.get("old_string", "")
@@ -54,10 +60,18 @@ def main():
         filename = file_path.split("/")[-1]
         completed_count = old_unchecked - new_unchecked
 
-        message = f"Task(s) completed in {filename}."
-        if completed_count > 0:
-            message = f"{completed_count} task(s) completed in {filename}."
-        message += " Consider running `/kit-tools:validate-phase` to review changes."
+        if is_prd:
+            # PRD acceptance criteria completed
+            message = f"Acceptance criteria completed in {filename}."
+            if completed_count > 0:
+                message = f"{completed_count} acceptance criteria completed in {filename}."
+            message += " Consider running `/kit-tools:validate-phase` to review changes."
+        else:
+            # Roadmap TODO task completed
+            message = f"Task(s) completed in {filename}."
+            if completed_count > 0:
+                message = f"{completed_count} task(s) completed in {filename}."
+            message += " Consider running `/kit-tools:validate-phase` to review changes."
 
         print(json.dumps({"message": message}))
 

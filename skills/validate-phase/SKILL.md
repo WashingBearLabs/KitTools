@@ -15,8 +15,9 @@ This skill requires the following components:
 |-----------|----------|----------|---------|
 | **Agent template** | `$CLAUDE_PLUGIN_ROOT/agents/code-quality-validator.md` | Yes | Validator prompt template |
 | **Findings template** | `$CLAUDE_PLUGIN_ROOT/templates/AUDIT_FINDINGS.md` | Yes | Template for findings file |
-| `kit_tools/SESSION_SCRATCH.md` | Optional | Identifies active feature/TODO |
-| `kit_tools/roadmap/*.md` | Optional | Phase intent extraction |
+| `kit_tools/SESSION_SCRATCH.md` | Optional | Identifies active feature/PRD |
+| `kit_tools/prd/*.md` | Optional | PRD acceptance criteria and scope |
+| `kit_tools/roadmap/*.md` | Optional | Milestone context |
 | `kit_tools/docs/CONVENTIONS.md` | Optional | Project conventions for validation |
 | `kit_tools/docs/GOTCHAS.md` | Optional | Known issues to check against |
 | `kit_tools/arch/CODE_ARCH.md` | Optional | Architecture patterns to validate |
@@ -26,13 +27,13 @@ This skill requires the following components:
 - `kit_tools/AUDIT_FINDINGS.md` — Findings log (created from template if missing)
 
 **Related hooks:**
-- `detect_phase_completion.py` (PostToolUse) — Suggests running this skill after TODO completion
+- `detect_phase_completion.py` (PostToolUse) — Suggests running this skill after PRD criteria or TODO completion
 
 ## Step 1: Determine scope
 
-- Read `kit_tools/SESSION_SCRATCH.md` to identify the active feature and TODO file
-- If `$ARGUMENTS` specifies a TODO file (e.g., `FEATURE_TODO_auth.md`), use that instead
-- If `$ARGUMENTS` contains `--phase N`, focus validation on that specific phase's intent
+- Read `kit_tools/SESSION_SCRATCH.md` to identify the active feature and PRD
+- If `$ARGUMENTS` specifies a PRD (e.g., `prd-auth.md`), use that instead
+- If `$ARGUMENTS` contains `--story US-XXX`, focus validation on that specific story's acceptance criteria
 - If no scratchpad or arguments are available, validate all uncommitted changes
 
 ## Step 2: Gather context
@@ -43,12 +44,13 @@ Collect the following inputs for the validator:
 
 Run `git diff` to capture current uncommitted changes. If there are no uncommitted changes, use `git diff HEAD~1` to capture the last commit's changes. Store the diff output.
 
-### 2b: Phase intent
+### 2b: Feature intent
 
-- Read the identified TODO file from `kit_tools/roadmap/`
-- Extract the current phase's **Intent** statement (the line starting with `> **Intent:**` under the active phase heading)
-- If `--phase N` was specified, use that phase's intent
-- If no phase intent is found, use "General development — no specific phase intent documented"
+- Read the identified PRD from `kit_tools/prd/`
+- Extract the **Overview** section and relevant **User Story** acceptance criteria
+- If `--story US-XXX` was specified, focus on that story's acceptance criteria
+- If no PRD is identified, check `kit_tools/roadmap/MVP_TODO.md` for milestone context
+- If no intent is found, use "General development — no specific feature intent documented"
 
 ### 2c: Project rulebook docs
 
@@ -67,7 +69,7 @@ Run `git diff --name-only` (or `git diff HEAD~1 --name-only` if no uncommitted c
 
 1. Read the agent prompt template from `$CLAUDE_PLUGIN_ROOT/agents/code-quality-validator.md`
 2. Replace the placeholder tokens in the template with the gathered context:
-   - `{{PHASE_INTENT}}` → Phase intent from Step 2b
+   - `{{PHASE_INTENT}}` → Feature intent from Step 2b (PRD overview and acceptance criteria)
    - `{{GIT_DIFF}}` → Git diff output from Step 2a
    - `{{CHANGED_FILES}}` → File list from Step 2d
    - `{{CONVENTIONS}}` → Contents of CONVENTIONS.md (or "Not available" note)

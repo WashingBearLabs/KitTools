@@ -16,7 +16,8 @@ This skill requires the following project files:
 | `kit_tools/AGENT_README.md` | Yes | Navigation guide and patterns |
 | `kit_tools/SYNOPSIS.md` | Yes | Project status overview |
 | `kit_tools/SESSION_LOG.md` | Yes | Session history |
-| `kit_tools/roadmap/*.md` | Yes | TODO files for active work |
+| `kit_tools/prd/*.md` | Yes | PRDs for active features |
+| `kit_tools/roadmap/MVP_TODO.md` | Yes | Milestone tracking |
 | `kit_tools/arch/CODE_ARCH.md` | Recommended | Code architecture reference |
 | `kit_tools/arch/INFRA_ARCH.md` | Optional | Infrastructure reference |
 | `kit_tools/docs/GOTCHAS.md` | Recommended | Known issues and landmines |
@@ -50,7 +51,7 @@ Create `kit_tools/SESSION_SCRATCH.md` with this content:
 ## Active Feature
 
 **Working on:** [Feature name or "General" if not feature-specific]
-**TODO File:** [e.g., `FEATURE_TODO_auth.md` or `MVP_TODO.md`]
+**PRD:** [e.g., `prd-auth.md` or "N/A" if not feature-specific]
 
 ---
 
@@ -70,13 +71,24 @@ Read `kit_tools/SYNOPSIS.md` to understand the current project state.
 
 ## Step 4: Check active work
 
-Review all TODO files in `kit_tools/roadmap/`:
+### PRDs (Product Requirements Documents)
 
-- `MVP_TODO.md` — High-level MVP tasks
-- `BACKLOG.md` — Future work items
-- `FEATURE_TODO_*.md` — Feature-specific task lists (there may be multiple)
+Check `kit_tools/prd/` for active features:
 
-List any active features (TODO files with in-progress items) so we know what's being worked on.
+- Look for `prd-*.md` files (excluding `archive/` subdirectory)
+- Read the YAML frontmatter to check `status: active`
+- For each active PRD, note:
+  - Feature name
+  - How many user stories are complete vs total (count `- [x]` vs `- [ ]` in acceptance criteria)
+
+### Milestone tracking
+
+Review `kit_tools/roadmap/`:
+
+- `MVP_TODO.md` — High-level milestone tasks
+- `BACKLOG.md` — Future work items and planned features
+
+List any active PRDs and their progress so we know what's being worked on.
 
 ## Step 5: Architecture refresh
 
@@ -106,10 +118,11 @@ Once oriented, provide a quick summary of:
 
 - Any recovered notes from orphaned scratchpad (if applicable)
 - Current project status (from SYNOPSIS.md)
-- **Active TODO files and their status** (list each with in-progress item count)
+- **Active PRDs and their progress** (list each with story completion count, e.g., "prd-auth.md: 3/5 stories complete")
+- Milestone progress from MVP_TODO.md
 - Open audit findings count (N critical, N warning, N info) — if any exist
 - Any concerns or inconsistencies noticed
 
-**Ask the user:** Which feature or area will we be working on today? (This helps track work to the correct TODO file)
+**Ask the user:** Which feature or area will we be working on today? (This helps track work to the correct PRD)
 
 Then we're ready to get started!
