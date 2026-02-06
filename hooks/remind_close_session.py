@@ -6,10 +6,17 @@ Trigger: Stop
 """
 import json
 import os
+import sys
 from pathlib import Path
 
 
 def main():
+    # Consume stdin per hook protocol
+    try:
+        json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        pass
+
     project_dir = os.environ.get("CLAUDE_PROJECT_DIR", "")
     if not project_dir:
         return

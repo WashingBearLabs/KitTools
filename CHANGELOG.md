@@ -5,6 +5,38 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-02-06
+
+### Added
+- **Native Autonomous Execution** — `/kit-tools:execute-feature` replaces Ralph integration
+  - Three execution modes: Supervised, Autonomous, and Guarded
+  - Supervised: in-session with user review between stories
+  - Autonomous: spawns independent `claude -p` sessions per story (unlimited retries by default)
+  - Guarded: autonomous with human oversight on failures (3 retries default)
+- **Story Implementer Agent** — `agents/story-implementer.md` implements a single user story
+  - Explores codebase, implements changes, self-verifies, commits
+  - Structured output format for orchestrator parsing
+- **Story Verifier Agent** — `agents/story-verifier.md` independently verifies acceptance criteria
+  - Skeptical assessment — reads actual code, doesn't trust implementer claims
+  - Runs typecheck/lint/tests as specified in criteria
+- **Execution Orchestrator** — `scripts/execute_orchestrator.py` manages multi-session execution
+  - Spawns fresh Claude sessions per story (implementation + verification)
+  - Pause/resume via `touch kit_tools/.pause_execution`
+  - Dual-track state: PRD checkboxes + JSON sidecar
+  - Execution log at `kit_tools/EXECUTION_LOG.md`
+- **Git Branch Isolation** — All execution happens on `feature/[prd-name]` branches
+  - Failed retries reset working tree, never touch main
+  - Branch ready for user review when all stories complete
+
+### Changed
+- **PRD Template** — `ralph_ready` field renamed to `session_ready`
+- **`/kit-tools:plan-feature`** — Removed Ralph references, uses `session_ready` and `execute-feature`
+- **`/kit-tools:complete-feature`** — Removed Ralph cleanup step, updated Related Skills
+
+### Removed
+- **`/kit-tools:export-ralph`** — Replaced by native `execute-feature`
+- **`/kit-tools:import-learnings`** — Learnings captured natively during execution
+
 ## [1.4.0] - 2025-02-02
 
 ### Added

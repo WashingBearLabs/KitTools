@@ -77,8 +77,7 @@ git clone https://github.com/WashingBearLabs/KitTools.git
 | `/kit-tools:sync-project` | Full sync between code and docs (`--quick` for audit) |
 | `/kit-tools:validate-phase` | Run code quality, security, and intent alignment validation |
 | `/kit-tools:update-kit-tools` | Update project components from latest plugin versions |
-| `/kit-tools:export-ralph` | Export PRD to ralph's prd.json format (optional ralph integration) |
-| `/kit-tools:import-learnings` | Import ralph progress.txt learnings back to PRD |
+| `/kit-tools:execute-feature` | Execute PRD stories autonomously, supervised, or guarded |
 
 ## Hooks
 
@@ -220,7 +219,7 @@ Use `/kit-tools:plan-feature` to create Product Requirements Documents (PRDs):
 4. Links to backlog and milestone tracking
 5. Captures implementation notes as you work
 
-### Ralph-Ready Guidelines
+### Session-Fit Guidelines
 
 PRDs are sized for reliable autonomous execution:
 
@@ -230,7 +229,7 @@ PRDs are sized for reliable autonomous execution:
 | Criteria per story | 3-5 (max 6) |
 | Total criteria | ≤35 |
 
-PRDs exceeding these limits are flagged as `ralph_ready: false` and should be decomposed.
+PRDs exceeding these limits are flagged as `session_ready: false` and should be decomposed.
 
 ### Epic Decomposition
 
@@ -248,26 +247,27 @@ Large features ("epics") are automatically split into focused PRDs:
 ### PRD Lifecycle
 
 ```
-/plan-feature → prd-auth.md (status: active, ralph_ready: true)
+/plan-feature → prd-auth.md (status: active, session_ready: true)
        ↓
     Work on feature, check off acceptance criteria
        ↓
 /complete-feature → prd-auth.md moves to prd/archive/
 ```
 
-### Ralph Integration (Optional)
+### Autonomous Execution
 
-kit-tools PRDs can be exported for use with the [ralph](https://github.com/snarktank/ralph) autonomous agent system:
+kit-tools can execute PRD stories autonomously using `/kit-tools:execute-feature`:
 
 ```
-/kit-tools:export-ralph    # Validates scope, converts PRD → prd.json
-./ralph.sh --tool claude   # Run ralph autonomous loop
-/kit-tools:import-learnings # Pull learnings back to PRD
+/kit-tools:execute-feature    # Select PRD, choose execution mode, run
 ```
 
-The `export-ralph` skill validates PRD scope before export, warning if a PRD is too large for reliable autonomous execution.
+Three execution modes:
+- **Supervised** — Review each story in-session before continuing
+- **Autonomous** — Spawn separate Claude sessions per story, run until complete
+- **Guarded** — Autonomous with human oversight on failures
 
-This allows hybrid workflows: plan with kit-tools, execute with ralph, preserve learnings in your PRD.
+Autonomous execution uses git branch isolation (`feature/[prd-name]`), independent story verification, and a pause mechanism (`touch kit_tools/.pause_execution`). Progress is tracked in `kit_tools/EXECUTION_LOG.md` and PRD checkboxes.
 
 ## Template Versioning
 

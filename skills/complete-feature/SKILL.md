@@ -127,24 +127,7 @@ If the feature was listed in BACKLOG.md:
 - Remove it from "Planned Features" section
 - Optionally add to a "Completed Features" section (if one exists)
 
-## Step 7: Clean up ralph files (if applicable)
-
-If ralph files exist at project root:
-
-### Check prd.json
-If `prd.json` exists and matches this feature:
-
-> "Found ralph prd.json for this feature. Would you like to archive it?"
-
-If yes:
-- Create `kit_tools/prd/archive/ralph/` if needed
-- Move `prd.json` → `kit_tools/prd/archive/ralph/prd-auth.json`
-- Move `progress.txt` → `kit_tools/prd/archive/ralph/progress-auth.txt`
-
-If no:
-- Leave ralph files in place (user may want to reference them)
-
-## Step 8: Summary
+## Step 7: Summary
 
 ```
 Feature completed and archived!
@@ -157,9 +140,6 @@ PRD: prd-auth.md
 Updated:
 - kit_tools/roadmap/MVP_TODO.md (marked feature complete)
 - kit_tools/roadmap/BACKLOG.md (removed from planned)
-
-Ralph files:
-- Archived prd.json and progress.txt
 
 The feature is now archived. Great work!
 ```
@@ -183,6 +163,6 @@ For now, flat structure is fine. Reorganize when needed.
 
 | Skill | When to use |
 |-------|-------------|
-| `/kit-tools:import-learnings` | Before completing, if ralph was used |
+| `/kit-tools:execute-feature` | To execute PRD stories autonomously or with supervision |
 | `/kit-tools:plan-feature` | To start a new feature |
 | `/kit-tools:start-session` | To see remaining active PRDs |

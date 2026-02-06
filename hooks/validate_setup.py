@@ -84,14 +84,6 @@ def main():
     except (json.JSONDecodeError, EOFError):
         return
 
-    # Only run after init-project skill
-    tool_name = data.get("tool_name", "")
-    if "init-project" not in str(data.get("tool_input", {})).lower():
-        # Check if this was a skill invocation for init-project
-        session_id = data.get("session_id", "")
-        # This is a simple heuristic - in practice, we'd need better detection
-        pass
-
     project_dir = os.environ.get("CLAUDE_PROJECT_DIR", "")
     if not project_dir:
         return

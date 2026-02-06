@@ -19,7 +19,7 @@ Let's brainstorm and plan a new feature together. This is an interactive process
 When you identify issues, be direct:
 > "I need to push back on this scope. What you're describing is an epic, not a single feature. Let me break this down into manageable PRDs."
 
-Your goal is high-quality PRDs that can be implemented successfully, either manually or via Ralph autonomous execution.
+Your goal is high-quality PRDs that can be implemented successfully, either manually or via autonomous execution.
 
 ---
 
@@ -65,9 +65,10 @@ Flag as an epic if ANY of these apply:
 | **Multiple subsystems** | "Auth with OAuth, session management, and user profiles" | Touches too many areas |
 | **Scope keywords** | "entire", "full", "complete", "from scratch", "system" | Indicates large scope |
 | **Layer spanning** | "Database + API + UI for payments" | Should be separate PRDs per layer |
-| **Estimated stories > 7** | Mental count suggests 8+ stories | Too large for one Ralph session |
 | **Multiple user types** | "Admin dashboard AND user dashboard" | Should be separate features |
 | **Vague boundaries** | "Make it production-ready" | Scope is undefined |
+
+**Note:** Epic = multi-subsystem feature, not just "many stories". A PRD with 15 well-refined, session-fit stories is fine. A PRD spanning 3 subsystems with 5 stories is an epic.
 
 ### If epic detected
 
@@ -76,7 +77,7 @@ Flag as an epic if ANY of these apply:
 > "What you're describing sounds like an **epic** — a collection of related features that's too large for a single PRD.
 >
 > Large PRDs cause problems:
-> - They overwhelm autonomous execution (Ralph will exhaust context)
+> - They overwhelm autonomous execution (agents will exhaust context)
 > - They're harder to track and complete
 > - They delay the satisfaction of shipping
 >
@@ -127,7 +128,7 @@ Epic: "OAuth Authentication System"
 
 Show the user your proposed breakdown:
 
-> "Here's how I'd break this epic into Ralph-sized PRDs:
+> "Here's how I'd break this epic into session-sized PRDs:
 >
 > | PRD | Stories | Depends On | Purpose |
 > |-----|---------|------------|---------|
@@ -136,7 +137,7 @@ Show the user your proposed breakdown:
 > | `prd-oauth-api` | ~4 | schema, provider | Backend endpoints |
 > | `prd-oauth-ui` | ~4 | api | User interface |
 >
-> Each PRD can be completed in one session and exported to Ralph independently.
+> Each PRD can be completed in one session and executed autonomously.
 >
 > Should I proceed with this breakdown, or would you like to adjust it?"
 
@@ -144,7 +145,7 @@ Show the user your proposed breakdown:
 
 - **Proceed** — Create all PRDs with the proposed structure
 - **Adjust** — Modify the breakdown (combine, split differently, change order)
-- **Single PRD anyway** — User insists (warn but comply, mark `ralph_ready: false`)
+- **Single PRD anyway** — User insists (warn but comply, mark `session_ready: false`)
 
 ### Creating multiple PRDs
 
@@ -223,22 +224,14 @@ For each story, define:
 3. **Description:** "As a [user], I want [feature] so that [benefit]"
 4. **Acceptance Criteria:** Verifiable checklist of what "done" means
 
-### Ralph-ready story limits
+### Session-fit focus
 
-**Target: 5-7 stories per PRD.** This ensures:
-- PRD can complete in one Ralph session without context exhaustion
-- Each story is truly atomic
-- Progress is visible and satisfying
+**Focus on session-fit per story, not story count.** The goal is right-sized stories that can each be completed in a single Claude session. If 20 well-refined stories are needed, that's fine — what matters is that each story is atomic and achievable.
 
-| Stories | Assessment |
-|---------|------------|
-| 1-4 | Good — focused PRD |
-| 5-7 | Ideal — well-scoped for Ralph |
-| 8-10 | Warning — consider splitting |
-| 11+ | Too large — must decompose |
-
-**If you reach 8+ stories, stop and reconsider:**
-> "This PRD is growing beyond Ralph-safe limits. Let me split it into two focused PRDs."
+Stories will be evaluated during the refinement step (Step 11) for:
+- Single responsibility (one concern per story)
+- Session fit (completable in one context window)
+- Clear acceptance criteria
 
 ### Story sizing guidance
 
@@ -313,16 +306,14 @@ Document these as checkboxes so they can be resolved and checked off.
 
 | Check | Target | Status |
 |-------|--------|--------|
-| Story count | 5-7 stories | ✓ or ✗ |
 | Acceptance criteria | 3-5 per story | ✓ or ✗ |
-| Total criteria | ≤35 checkboxes | ✓ or ✗ |
 | Layer focus | Single layer or tightly coupled | ✓ or ✗ |
 | Dependencies clear | All blockers identified | ✓ or ✗ |
+| Stories well-defined | Clear scope per story | ✓ or ✗ |
+
+**Note:** Story count is not a target — session-fit per story matters more. Stories will be refined in Step 11.
 
 **If any check fails, address it before proceeding.**
-
-If the user pushes back:
-> "I understand you want to move forward, but as your senior dev I need to flag that this PRD exceeds our guidelines. If you proceed, I'll mark it as `ralph_ready: false` to indicate it needs decomposition before autonomous execution."
 
 ---
 
@@ -334,7 +325,7 @@ Create `kit_tools/prd/prd-[feature-name].md` with:
 ---
 feature: [feature-name]
 status: active
-ralph_ready: true
+session_ready: true
 depends_on: []
 created: [YYYY-MM-DD]
 updated: [YYYY-MM-DD]
@@ -347,7 +338,7 @@ updated: [YYYY-MM-DD]
 |-------|---------|
 | `feature` | Kebab-case feature name |
 | `status` | `active`, `on-hold`, or `completed` |
-| `ralph_ready` | `true` if ≤7 stories and well-scoped; `false` if needs decomposition |
+| `session_ready` | `true` if all stories pass session-fit checks; `false` if user skipped refinement or stories have unresolved issues |
 | `depends_on` | Array of feature names this PRD depends on (for epics) |
 | `created` | Creation date |
 | `updated` | Last update date |
@@ -363,13 +354,110 @@ Followed by:
 - Technical Considerations
 - Related Documentation (links to CODE_ARCH, GOTCHAS, etc.)
 - Implementation Notes (empty — populated during development)
+- Refinement Notes (populated during Step 11 refinement)
 - Open Questions
 
 Use the template at `$CLAUDE_PLUGIN_ROOT/templates/prd/PRODUCT_REQ_DOC.md` as reference.
 
 ---
 
-## Step 11: Update tracking files
+## Step 11: Story Refinement
+
+**Iterative per-story review to ensure each story is session-fit.**
+
+PRD creation should represent the bulk of pre-coding work. This refinement step is investment, not overhead — catching over-scoped stories now prevents wasted context during implementation.
+
+### Refinement heuristics
+
+Evaluate each story against these checks:
+
+| Check | Question | Red Flag |
+|-------|----------|----------|
+| **Single Responsibility** | Is this story trying to do multiple things? | "and", "also", multiple verbs |
+| **Session Fit** | Can this realistically complete in one context window? | Touches >3 files, crosses subsystems |
+| **Research Needs** | Are there unknowns that would eat context during implementation? | Vague tech, unexplored patterns |
+| **Scope Clarity** | Are acceptance criteria specific and verifiable? | "works correctly", "handles properly" |
+| **Exploration Load** | How much discovery is needed vs. straightforward implementation? | "figure out", "determine how" |
+
+### Refinement loop
+
+For each user story:
+
+1. **Present** the story with current acceptance criteria
+2. **Evaluate** against the heuristics above
+3. **If issues found:**
+   - **Multi-concern:** Propose split into separate stories
+   - **Over-scoped:** Propose narrowing or splitting
+   - **Research needs:**
+     a. Explain what research is needed and why
+     b. Conduct the research (using exploration patterns)
+     c. Document findings in Refinement Notes
+     d. Apply findings to refine the story
+   - **Vague criteria:** Propose specific, verifiable criteria
+4. **Ask:** "Ready to move to next story, or refine further?"
+5. **Apply** changes and continue
+
+### Populate Refinement Notes
+
+As you refine, update the PRD's Refinement Notes section:
+
+- **Research Conducted:** What was explored and key findings
+- **Scope Adjustments:** Stories that were split, combined, or modified
+- **Decisions Made:** Key decisions and their rationale
+
+### After all stories reviewed
+
+> "All stories reviewed — any you want to revisit before finalizing?"
+
+### Example refinement
+
+**Before refinement:**
+```
+US-003: Implement OAuth login flow
+- [ ] User can click "Login with Google" button
+- [ ] OAuth callback is handled correctly
+- [ ] User session is created
+- [ ] Works with existing auth system
+```
+
+**Refinement catches:**
+- "Works with existing auth system" is vague
+- This touches UI, API, and session management (multiple areas)
+- Need to research: How does existing auth work?
+
+**After refinement:**
+```
+US-003: Add Google OAuth button to login page
+- [ ] Login page shows "Continue with Google" button
+- [ ] Button triggers OAuth redirect to Google
+- [ ] Typecheck/lint passes
+
+US-004: Handle OAuth callback and create session
+- [ ] /auth/callback endpoint receives Google callback
+- [ ] Valid callback creates user session using existing SessionService.create()
+- [ ] Invalid callback redirects to /login with error param
+- [ ] Typecheck/lint passes
+```
+
+**Refinement Notes populated:**
+```
+### Research Conducted
+- Existing auth uses SessionService at src/services/session.ts
+- Session creation: SessionService.create(userId, metadata)
+- Login page at src/pages/login.tsx uses AuthForm component
+
+### Scope Adjustments
+- US-003 split into US-003 (UI) and US-004 (callback handling)
+- Original US-003 was crossing UI and API layers
+
+### Decisions Made
+- Reuse existing SessionService rather than creating OAuth-specific session handling
+- Place OAuth callback at /auth/callback to match existing /auth/* routes
+```
+
+---
+
+## Step 12: Update tracking files
 
 ### Add to BACKLOG.md
 
@@ -401,7 +489,7 @@ If this feature is part of a milestone, add a link:
 
 ---
 
-## Step 12: Summary
+## Step 13: Summary
 
 Report to the user:
 
@@ -409,9 +497,10 @@ Report to the user:
 - Whether this was decomposed from an epic
 - Where the PRD(s) were created
 - Number of user stories per PRD
-- Ralph-readiness status
+- Refinement status (all stories refined, or skipped)
+- Session-readiness status
 - Dependencies between PRDs (if applicable)
-- Key decisions made during brainstorming
+- Key decisions made during brainstorming and refinement
 - Open questions that need resolution
 - Recommended next steps
 
@@ -421,18 +510,20 @@ Report to the user:
 >
 > Created 4 PRDs for the OAuth Authentication epic:
 >
-> | PRD | Stories | Ralph Ready | Depends On |
-> |-----|---------|-------------|------------|
-> | `prd-oauth-schema.md` | 3 | ✓ | — |
-> | `prd-oauth-provider.md` | 4 | ✓ | schema |
-> | `prd-oauth-api.md` | 5 | ✓ | schema, provider |
-> | `prd-oauth-ui.md` | 4 | ✓ | api |
+> | PRD | Stories | Refined | Session Ready | Depends On |
+> |-----|---------|---------|--------------|------------|
+> | `prd-oauth-schema.md` | 3 | ✓ | ✓ | — |
+> | `prd-oauth-provider.md` | 5 | ✓ | ✓ | schema |
+> | `prd-oauth-api.md` | 6 | ✓ | ✓ | schema, provider |
+> | `prd-oauth-ui.md` | 4 | ✓ | ✓ | api |
+>
+> **Refinement notes:** 2 stories split during refinement, research conducted on existing SessionService
 >
 > **Recommended order:** schema → provider → api → ui
 >
 > **Next steps:**
 > 1. Resolve open questions in each PRD
-> 2. Run `/kit-tools:export-ralph` on `prd-oauth-schema` to start
+> 2. Run `/kit-tools:execute-feature` on `prd-oauth-schema` to start
 > 3. Complete PRDs in dependency order
 
 ---
@@ -455,7 +546,7 @@ Use `/kit-tools:complete-feature` to mark a PRD as completed and archive it.
 
 | Skill | When to use |
 |-------|-------------|
-| `/kit-tools:export-ralph` | To convert PRD to ralph's prd.json format for autonomous execution |
+| `/kit-tools:execute-feature` | To execute PRD stories autonomously or with supervision |
 | `/kit-tools:complete-feature` | To mark PRD completed and archive it |
 | `/kit-tools:start-session` | To orient on active PRDs at session start |
 

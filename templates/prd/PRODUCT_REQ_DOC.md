@@ -1,8 +1,8 @@
-<!-- Template Version: 1.1.0 -->
+<!-- Template Version: 1.2.0 -->
 ---
 feature: {{FEATURE_NAME}}
 status: active
-ralph_ready: true
+session_ready: true
 depends_on: []
 created: {{DATE}}
 updated: {{DATE}}
@@ -12,7 +12,7 @@ updated: {{DATE}}
 Frontmatter fields:
 - feature: Kebab-case feature name (e.g., "user-auth")
 - status: active | on-hold | completed
-- ralph_ready: true if ≤7 stories and well-scoped; false if needs decomposition
+- session_ready: true if all stories pass session-fit checks; false if skipped or unresolved issues
 - depends_on: Array of feature names this PRD depends on (for epics)
 - created/updated: Dates in YYYY-MM-DD format
 -->
@@ -32,15 +32,16 @@ Frontmatter fields:
 ## User Stories
 
 <!--
-RALPH-READY GUIDELINES:
-- Target 5-7 stories per PRD (max 7 for reliable Ralph execution)
-- Each story should complete in one focused session
-- 3-5 acceptance criteria per story (max 6)
-- Total criteria across all stories: ≤35
+SESSION-FIT GUIDELINES:
+- Each story should complete in one focused session (single context window)
+- 3-5 acceptance criteria per story (clear, verifiable)
 - Order by dependency: schema → backend → UI
+- Stories are refined during planning to ensure session-fit
 
-If this PRD exceeds these limits, set ralph_ready: false in frontmatter
-and consider decomposing into multiple PRDs.
+Story count is not a target — what matters is that each story:
+- Has single responsibility (one concern)
+- Is session-fit (completable in one context window)
+- Has clear, verifiable acceptance criteria
 -->
 
 ### US-001: {{Story Title}}
@@ -131,6 +132,21 @@ Populated during and after implementation.
 Capture learnings, gotchas discovered, patterns that worked.
 This section is valuable for future reference and archival.
 -->
+
+## Refinement Notes
+
+<!--
+Populated during planning refinement. Documents research conducted and decisions made.
+-->
+
+### Research Conducted
+<!-- What was explored during refinement and key findings -->
+
+### Scope Adjustments
+<!-- Stories that were split, combined, or modified during refinement -->
+
+### Decisions Made
+<!-- Key decisions and their rationale -->
 
 ## Open Questions
 

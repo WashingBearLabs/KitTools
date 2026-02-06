@@ -35,7 +35,7 @@ def main():
         marker = f"\n[{now}] --- Context compacted, session continuing ---\n"
 
         # Only add marker if not already the last thing added
-        if "Context compacted" not in content.split("\n")[-3:]:
+        if "Context compacted" not in content.strip().split("\n")[-3:]:
             scratchpad.write_text(content + marker)
 
     # Always remind before compaction

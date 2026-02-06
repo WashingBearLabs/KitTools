@@ -33,3 +33,11 @@ Desktop.ini
 # Project-specific
 # (kit_tools/ directories are created in user projects, not the plugin itself)
 /tmp/
+
+# Execution state files (transient, not project documentation)
+kit_tools/prd/.execution-state.json
+kit_tools/prd/.execution-config.json
+kit_tools/.pause_execution
+
+# Internal planning (not part of plugin distribution)
+ROADMAP.md
