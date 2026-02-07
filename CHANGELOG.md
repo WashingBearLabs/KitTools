@@ -5,6 +5,19 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-02-06
+
+### Added
+- **New Skill: `/kit-tools:sync-symlinks`** — Force-refresh skill symlinks after a plugin update
+  - Reads `installed_plugins.json` to find correct install path
+  - Runs sync script with the authoritative path
+  - Useful when skills appear stale after `/plugin update`
+
+### Fixed
+- **`sync_skill_symlinks` hook** — Now reads `~/.claude/plugins/installed_plugins.json` as the source of truth for the plugin install path, instead of solely trusting `$CLAUDE_PLUGIN_ROOT`
+  - Fixes issue where skill symlinks remained pointed at the previous version after a plugin update
+  - Falls back to `$CLAUDE_PLUGIN_ROOT` if `installed_plugins.json` is unavailable
+
 ## [1.5.0] - 2026-02-06
 
 ### Added

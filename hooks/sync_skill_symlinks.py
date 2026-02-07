@@ -2,7 +2,7 @@
 """
 sync_skill_symlinks.py - Syncs kit-tools skills to ~/.claude/skills/ for autocomplete visibility.
 
-Trigger: SessionStart
+Trigger: SessionStart (also invocable directly via /kit-tools:sync-symlinks)
 
 Due to a known Claude Code bug, skills from installed plugins don't appear in autocomplete
 suggestions. This hook creates symlinks from the plugin's skills directory to ~/.claude/skills/
@@ -13,6 +13,7 @@ The script is idempotent and self-healing:
 - Creates symlinks for all current plugin skills
 - Updates symlinks if they point to wrong location
 - Removes orphaned kit-tools-* symlinks for skills that no longer exist
+- Verifies $CLAUDE_PLUGIN_ROOT against installed_plugins.json to handle stale env vars
 """
 import json
 import os
@@ -23,9 +24,47 @@ from pathlib import Path
 # Prefix for symlinks to identify kit-tools skills
 SYMLINK_PREFIX = "kit-tools-"
 
+# Plugin identifier in installed_plugins.json
+PLUGIN_ID = "kit-tools@washingbearlabs"
+
+
+def get_installed_plugin_path() -> Path | None:
+    """Read installed_plugins.json to find the authoritative install path for kit-tools."""
+    installed_plugins_file = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
+    if not installed_plugins_file.exists():
+        return None
+
+    try:
+        data = json.loads(installed_plugins_file.read_text())
+        plugins = data.get("plugins", {})
+        entries = plugins.get(PLUGIN_ID, [])
+        if entries:
+            install_path = entries[0].get("installPath")
+            if install_path:
+                path = Path(install_path)
+                if path.is_dir():
+                    return path
+    except (json.JSONDecodeError, KeyError, IndexError, OSError):
+        pass
+
+    return None
+
 
 def get_plugin_skills_dir() -> Path | None:
-    """Get the plugin's skills directory from environment."""
+    """Get the plugin's skills directory, preferring installed_plugins.json over env var.
+
+    Uses installed_plugins.json as the source of truth for the plugin root path.
+    Falls back to $CLAUDE_PLUGIN_ROOT if the JSON lookup fails. This handles the case
+    where the env var is stale after a plugin update but installed_plugins.json is correct.
+    """
+    # Primary: read from installed_plugins.json (authoritative after plugin updates)
+    installed_path = get_installed_plugin_path()
+    if installed_path:
+        skills_dir = installed_path / "skills"
+        if skills_dir.is_dir():
+            return skills_dir
+
+    # Fallback: use environment variable
     plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
     if not plugin_root:
         return None

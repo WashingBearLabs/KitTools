@@ -78,6 +78,7 @@ git clone https://github.com/WashingBearLabs/KitTools.git
 | `/kit-tools:validate-phase` | Run code quality, security, and intent alignment validation |
 | `/kit-tools:update-kit-tools` | Update project components from latest plugin versions |
 | `/kit-tools:execute-feature` | Execute PRD stories autonomously, supervised, or guarded |
+| `/kit-tools:sync-symlinks` | Force-refresh skill symlinks after a plugin update |
 
 ## Hooks
 
@@ -86,7 +87,7 @@ kit-tools includes automation hooks that run automatically:
 | Hook | Trigger | What it does |
 |------|---------|--------------|
 | `create_scratchpad` | SessionStart | Creates SESSION_SCRATCH.md if kit_tools exists |
-| `sync_skill_symlinks` | SessionStart | Syncs skill symlinks for the plugin |
+| `sync_skill_symlinks` | SessionStart | Syncs skill symlinks (verifies against `installed_plugins.json`) |
 | `update_doc_timestamps` | PostToolUse (Edit/Write) | Updates "Last Updated" in kit_tools docs |
 | `detect_phase_completion` | PostToolUse (Edit/Write) | Suggests running validate-phase when PRD criteria or TODO tasks are completed |
 | `validate_seeded_template` | PostToolUse (Edit/Write) | Validates seeded templates for unfilled placeholders |
