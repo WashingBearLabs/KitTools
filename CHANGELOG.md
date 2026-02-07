@@ -5,6 +5,38 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.2] - 2026-02-07
+
+### Added
+- **New Skill: `/kit-tools:validate-feature`** — Full branch-level validation against PRD
+  - Reviews entire `git diff main...HEAD` — all changes across the feature, not just recent edits
+  - Three independent review passes: code quality, security, and PRD compliance
+  - PRD compliance checks acceptance criteria coverage, functional requirements, and scope creep
+  - Automatic fix loop (max 3 iterations) for critical findings
+  - Autonomous mode: spawns fixer agent; supervised mode: fixes inline
+  - Logs remaining findings to `kit_tools/AUDIT_FINDINGS.md`
+- **New Agent: `security-reviewer.md`** — Dedicated security review agent
+  - Focused on injection vulns, auth gaps, secrets, input validation, insecure defaults, dependency risks
+  - Extracted from code-quality-validator Pass 2 for focused attention
+- **New Agent: `feature-fixer.md`** — Targeted fix agent for autonomous mode
+  - Parses validation findings and applies minimal, focused fixes
+  - Self-verifies and commits with structured output
+- **Autonomous validation in orchestrator** — `execute_orchestrator.py` now spawns a validation session after all stories complete
+
+### Changed
+- **`code-quality-validator.md`** — Narrowed to quality-only (removed security and intent alignment passes)
+- **`execute-feature/SKILL.md`** — Completion messaging now directs to validate-feature
+- **`complete-feature/SKILL.md`** — Added execution artifact cleanup (Step 7), feature branch handling with PR/merge option (Step 8), validate-feature in Related Skills
+- **`close-session/SKILL.md`** — Replaced validate-feature invocation with inline quality check using code-quality-validator agent directly (session-level diff, not branch-level)
+- **`checkpoint/SKILL.md`** — Replaced validate-feature invocation with inline quality check using code-quality-validator agent directly
+- **`detect_phase_completion.py`** — Suggests validate-feature instead of validate-phase
+- **`init-project/SKILL.md`** — References updated to validate-feature
+- **`README.md`** — Skills table, hooks table, and "Code Quality Validation" section rewritten as "Feature Validation"
+- **`templates/AUDIT_FINDINGS.md`** — References updated to validate-feature
+
+### Removed
+- **`/kit-tools:validate-phase`** — Replaced by validate-feature (branch-level validation)
+
 ## [1.5.1] - 2026-02-06
 
 ### Added

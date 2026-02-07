@@ -75,7 +75,7 @@ git clone https://github.com/WashingBearLabs/KitTools.git
 | `/kit-tools:plan-feature` | Create a Product Requirements Document (PRD) for a new feature |
 | `/kit-tools:complete-feature` | Mark a PRD as completed and archive it |
 | `/kit-tools:sync-project` | Full sync between code and docs (`--quick` for audit) |
-| `/kit-tools:validate-phase` | Run code quality, security, and intent alignment validation |
+| `/kit-tools:validate-feature` | Validate a feature branch against its PRD (quality, security, compliance) |
 | `/kit-tools:update-kit-tools` | Update project components from latest plugin versions |
 | `/kit-tools:execute-feature` | Execute PRD stories autonomously, supervised, or guarded |
 | `/kit-tools:sync-symlinks` | Force-refresh skill symlinks after a plugin update |
@@ -89,7 +89,7 @@ kit-tools includes automation hooks that run automatically:
 | `create_scratchpad` | SessionStart | Creates SESSION_SCRATCH.md if kit_tools exists |
 | `sync_skill_symlinks` | SessionStart | Syncs skill symlinks (verifies against `installed_plugins.json`) |
 | `update_doc_timestamps` | PostToolUse (Edit/Write) | Updates "Last Updated" in kit_tools docs |
-| `detect_phase_completion` | PostToolUse (Edit/Write) | Suggests running validate-phase when PRD criteria or TODO tasks are completed |
+| `detect_phase_completion` | PostToolUse (Edit/Write) | Notes PRD criteria and TODO task completions; suggests validate-feature when all PRD criteria are done |
 | `validate_seeded_template` | PostToolUse (Edit/Write) | Validates seeded templates for unfilled placeholders |
 | `remind_scratchpad_before_compact` | PreCompact | Reminds to capture notes, adds compaction marker |
 | `remind_close_session` | Stop | Reminds to run close-session if scratchpad has notes |
@@ -191,19 +191,20 @@ kit-tools encourages a session-based workflow:
   working...
 ```
 
-## Code Quality Validation
+## Feature Validation
 
-Use `/kit-tools:validate-phase` to review recent code changes:
+Use `/kit-tools:validate-feature` to validate an entire feature branch against its PRD:
 
-1. Gathers git diff, phase intent from TODO files, and project rulebook docs
-2. Runs a code quality agent with three review passes:
-   - **Quality & Conventions** — naming, patterns, code smells, error handling
-   - **Security** — injection, auth gaps, secrets, input validation
-   - **Intent Alignment** — implementation vs plan, scope creep, completeness
-3. Writes findings to `kit_tools/AUDIT_FINDINGS.md` with unique IDs and severity levels
-4. All findings are advisory — they inform but never block workflows
+1. Captures the full branch diff (`git diff main...HEAD`) — all changes across the feature
+2. Runs three independent review passes:
+   - **Code Quality** — naming, patterns, code smells, error handling (dedicated agent)
+   - **Security** — injection, auth gaps, secrets, input validation (dedicated agent)
+   - **PRD Compliance** — acceptance criteria coverage, requirement fulfillment, scope creep
+3. Fixes critical findings automatically (autonomous mode) or inline (supervised mode)
+4. Writes remaining findings to `kit_tools/AUDIT_FINDINGS.md` with unique IDs and severity levels
+5. All findings are advisory — they inform but never block workflows
 
-Validation runs automatically during `/kit-tools:checkpoint` (for code changes) and `/kit-tools:close-session`. Open findings are reviewed at `/kit-tools:start-session`.
+Validation runs automatically after autonomous execution completes, and can be invoked manually at any time. Open findings are reviewed at `/kit-tools:start-session`.
 
 ## Feature Planning with PRDs
 

@@ -41,3 +41,6 @@ kit_tools/.pause_execution
 
 # Internal planning (not part of plugin distribution)
 ROADMAP.md
+
+# Local-only skills (plugin maintenance, not shipped to users)
+.claude/skills/

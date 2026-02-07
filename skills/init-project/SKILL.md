@@ -491,7 +491,7 @@ Report to the user:
 - Run `/kit-tools:seed-project` next to populate templates with project-specific content
   - The project context gathered in Step 0 (description, tech stack, special considerations) will help seed SYNOPSIS and other templates more accurately
 - Run `/kit-tools:update-kit-tools` later to update hooks, templates, or other components as the project grows
-- Run `/kit-tools:validate-phase` anytime to review code changes for quality, security, and intent alignment
+- Run `/kit-tools:validate-feature` after completing a feature to validate the full branch against its PRD
 
 ## Adding Templates Later
 

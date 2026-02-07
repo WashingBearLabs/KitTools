@@ -62,7 +62,7 @@ First, check if `kit_tools/prd/.execution-state.json` exists:
 > All stories implemented and verified.
 > Branch: feature/[name]
 >
-> Next step: Review the branch, then run /kit-tools:complete-feature
+> Next step: Run `/kit-tools:validate-feature` to validate the implementation
 > ```
 
 **If it exists and `status: failed` or `status: paused`:**
@@ -225,7 +225,8 @@ Create or update execution state:
   "sessions": {
     "total": 0,
     "implementation": 0,
-    "verification": 0
+    "verification": 0,
+    "validation": 0
   }
 }
 ```
@@ -345,7 +346,7 @@ Learnings captured in:
 - PRD Implementation Notes
 - kit_tools/EXECUTION_LOG.md
 
-Next step: Review the feature branch, then run /kit-tools:complete-feature
+Next step: Run `/kit-tools:validate-feature` to validate the implementation
 ```
 
 ---
@@ -380,4 +381,4 @@ These tokens are used in the agent templates and interpolated by this skill (sup
 | `/kit-tools:plan-feature` | To create a PRD before executing |
 | `/kit-tools:complete-feature` | To archive PRD after all stories pass |
 | `/kit-tools:start-session` | To orient on active PRDs at session start |
-| `/kit-tools:validate-phase` | To validate code quality after execution |
+| `/kit-tools:validate-feature` | To validate the full feature branch against its PRD |

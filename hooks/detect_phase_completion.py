@@ -8,7 +8,7 @@ When a checkbox is marked complete (- [ ] → - [x]) in:
 - kit_tools/prd/*.md (PRD acceptance criteria)
 - kit_tools/roadmap/*_TODO.md (milestone tasks)
 
-Outputs an advisory message suggesting to run /kit-tools:validate-phase.
+Outputs an advisory message. Suggests /kit-tools:validate-feature only when all PRD criteria are complete.
 """
 import json
 import re
@@ -65,13 +65,14 @@ def main():
             message = f"Acceptance criteria completed in {filename}."
             if completed_count > 0:
                 message = f"{completed_count} acceptance criteria completed in {filename}."
-            message += " Consider running `/kit-tools:validate-phase` to review changes."
+            # Only suggest validate-feature if no unchecked criteria remain
+            if new_unchecked == 0:
+                message += " All criteria complete — consider running `/kit-tools:validate-feature`."
         else:
             # Roadmap TODO task completed
             message = f"Task(s) completed in {filename}."
             if completed_count > 0:
                 message = f"{completed_count} task(s) completed in {filename}."
-            message += " Consider running `/kit-tools:validate-phase` to review changes."
 
         print(json.dumps({"message": message}))
 

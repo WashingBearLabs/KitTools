@@ -24,8 +24,8 @@ This skill requires the following project files:
 **Uses agents:**
 - `template-validator.md` — Quick validation on updated docs
 
-**Optionally invokes:**
-- `/kit-tools:validate-phase` — If code changes were made since last checkpoint
+**Optionally uses agents:**
+- `code-quality-validator.md` — Inline quality check if code changes were made since last checkpoint
 
 **Related hooks:**
 - `remind_scratchpad_before_compact.py` (PreCompact) — Adds marker before context compaction
@@ -78,10 +78,18 @@ Skip this step if only SESSION_LOG and TODO files were updated.
 
 ```
 
-## Step 4: Run validator (if applicable)
+## Step 4: Quick code quality check (if applicable)
 
-- If code changes were made since the last checkpoint (check `git diff` for non-documentation changes), run `/kit-tools:validate-phase`
+Run a lightweight quality check on code changes since the last checkpoint. This is NOT the full feature validation — use `/kit-tools:validate-feature` for that after executing a feature.
+
+- Check `git diff` for non-documentation code changes
 - **Skip this step** if the checkpoint is documentation-only (no code files changed)
+- If code changes exist:
+  1. Read `$CLAUDE_PLUGIN_ROOT/agents/code-quality-validator.md`
+  2. Read project context files if they exist: `kit_tools/docs/CONVENTIONS.md`, `kit_tools/docs/GOTCHAS.md`, `kit_tools/arch/CODE_ARCH.md`
+  3. Interpolate `{{GIT_DIFF}}`, `{{CHANGED_FILES}}`, `{{CONVENTIONS}}`, `{{GOTCHAS}}`, `{{CODE_ARCH}}` into the template
+  4. Spawn via Task tool with `subagent_type: "general-purpose"`
+  5. Write any findings to `kit_tools/AUDIT_FINDINGS.md` (create from template if missing)
 - Findings are advisory — they do not block the checkpoint from completing
 - Note any critical findings for the summary
 

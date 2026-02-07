@@ -59,7 +59,7 @@ def load_or_create_state(config: dict) -> dict:
         "updated_at": now_iso(),
         "status": "running",
         "stories": {},
-        "sessions": {"total": 0, "implementation": 0, "verification": 0},
+        "sessions": {"total": 0, "implementation": 0, "verification": 0, "validation": 0},
     }
 
 
@@ -566,9 +566,29 @@ def main():
         story = find_next_uncompleted_story(prd_path, state)
         if not story:
             log("All stories complete!")
+
+            # Mark completed and log BEFORE spawning validation.
+            # validate-feature → complete-feature will clean up state files,
+            # so we must not write to them after the validation session returns.
             state["status"] = "completed"
             save_state(state, config)
             log_completion(config, state)
+
+            # Run feature validation (may auto-invoke complete-feature)
+            prd_basename = os.path.basename(prd_path)
+            branch = config["branch_name"]
+            log("Running feature validation...")
+            validate_prompt = (
+                f"Run /kit-tools:validate-feature for PRD {prd_basename}. "
+                f"Mode: autonomous. Branch: {branch}."
+            )
+            validate_output = run_claude_session(validate_prompt, project_dir)
+
+            if validate_output.startswith("SESSION_ERROR:"):
+                log(f"Validation session error: {validate_output[:200]}")
+            else:
+                log("Feature validation complete.")
+
             break
 
         story_state = state.get("stories", {}).get(story["id"], {})

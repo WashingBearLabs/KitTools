@@ -26,6 +26,11 @@ This skill requires:
 - `kit_tools/roadmap/MVP_TODO.md` — Marks milestone item complete
 - `kit_tools/roadmap/BACKLOG.md` — Removes or updates feature reference
 
+**Cleans up:**
+- `kit_tools/prd/.execution-state.json` — Removes execution state sidecar
+- `kit_tools/prd/.execution-config.json` — Removes orchestrator config
+- `kit_tools/.pause_execution` — Removes pause file if present
+
 ## Arguments
 
 | Argument | Description |
@@ -127,7 +132,43 @@ If the feature was listed in BACKLOG.md:
 - Remove it from "Planned Features" section
 - Optionally add to a "Completed Features" section (if one exists)
 
-## Step 7: Summary
+## Step 7: Clean up execution artifacts
+
+Remove files created by execute-feature that are no longer needed:
+
+- Delete `kit_tools/prd/.execution-state.json` if it exists
+- Delete `kit_tools/prd/.execution-config.json` if it exists
+- Delete `kit_tools/.pause_execution` if it exists
+
+These are transient files used during execution and should not persist after completion.
+
+## Step 8: Feature branch
+
+Check if the feature was implemented on a branch:
+
+```bash
+git branch --show-current
+```
+
+Read the PRD frontmatter `feature` field. If a `feature/[name]` branch exists:
+
+- **Autonomous mode** (auto-invoked by validate-feature): Note the branch in the summary. The user should merge or create a PR after reviewing.
+- **Supervised/manual mode**: Ask the user what to do:
+
+```
+Feature branch: feature/auth
+
+What would you like to do with the branch?
+  1. Create a PR (recommended)
+  2. Merge to main now
+  3. Leave it — I'll handle it myself
+```
+
+If the user chooses option 1, create a PR using `gh pr create` with a summary drawn from the PRD overview and stories completed.
+
+If the user chooses option 2, merge with `git checkout main && git merge feature/[name]`.
+
+## Step 9: Summary
 
 ```
 Feature completed and archived!
@@ -136,10 +177,15 @@ PRD: prd-auth.md
 - Status: completed
 - Archived to: kit_tools/prd/archive/prd-auth.md
 - Completion: 5/5 stories (100%)
+- Branch: feature/auth [merged / PR created / user will handle]
 
 Updated:
 - kit_tools/roadmap/MVP_TODO.md (marked feature complete)
 - kit_tools/roadmap/BACKLOG.md (removed from planned)
+
+Cleaned up:
+- .execution-state.json (removed)
+- .execution-config.json (removed)
 
 The feature is now archived. Great work!
 ```
@@ -163,6 +209,7 @@ For now, flat structure is fine. Reorganize when needed.
 
 | Skill | When to use |
 |-------|-------------|
+| `/kit-tools:validate-feature` | Run this before completing to validate the full branch |
 | `/kit-tools:execute-feature` | To execute PRD stories autonomously or with supervision |
 | `/kit-tools:plan-feature` | To start a new feature |
 | `/kit-tools:start-session` | To see remaining active PRDs |

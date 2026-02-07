@@ -3,7 +3,7 @@
   explorer_focus: none
   required_sections: []
   skip_if: always
-  note: AUDIT_FINDINGS is populated by validate-phase skill, not during seeding
+  note: AUDIT_FINDINGS is populated by validate-feature skill, not during seeding
 -->
 # AUDIT_FINDINGS.md
 
@@ -35,7 +35,7 @@
 ## Active Findings
 
 <!-- Newest findings at top. Each entry has a unique ID: YYYY-MM-DD-NNN -->
-<!-- Findings are added by /kit-tools:validate-phase -->
+<!-- Findings are added by /kit-tools:validate-feature -->
 
 *No active findings.*
 

@@ -18,17 +18,14 @@ This skill requires the following project files:
 | `kit_tools/prd/*.md` | Yes | PRDs to update with progress |
 | `kit_tools/roadmap/MVP_TODO.md` | Yes | Milestone tracking |
 | `kit_tools/AGENT_README.md` | Yes | Documentation checklist reference |
-| `kit_tools/AUDIT_FINDINGS.md` | Optional | Created if validate-phase runs |
+| `kit_tools/AUDIT_FINDINGS.md` | Optional | Created if code quality check runs |
 
 **Deletes:**
 - `kit_tools/SESSION_SCRATCH.md` — Removed after processing notes
 
 **Uses agents:**
 - `template-validator.md` — Validates docs updated during session (Step 2.5)
-- `code-quality-validator.md` — Via validate-phase (Step 3)
-
-**Invokes:**
-- `/kit-tools:validate-phase` — Runs code quality validation (Step 3)
+- `code-quality-validator.md` — Inline quality check on session changes (Step 3)
 
 **Related hooks:**
 - `remind_close_session.py` (Stop) — Reminds to run this skill if scratchpad has notes
@@ -89,11 +86,29 @@ For each doc updated in Step 2, run a quick validation using `template-validator
 
 If validation finds issues, fix them before proceeding. This prevents incomplete documentation from accumulating.
 
-## Step 3: Run code validator
+## Step 3: Quick code quality check
 
-- Run `/kit-tools:validate-phase` to review the session's code changes
+Run a lightweight quality check on the session's code changes. This is NOT the full feature validation — use `/kit-tools:validate-feature` for that after executing a feature.
+
+### 3a: Get the session diff
+
+- Run `git diff` to capture uncommitted changes
+- If no uncommitted changes, use `git diff HEAD~1` to capture the last commit
+- Run `git diff --name-only` (or `HEAD~1`) for the file list
+- If no code changes (only documentation), skip to Step 4
+
+### 3b: Run quality check
+
+1. Read `$CLAUDE_PLUGIN_ROOT/agents/code-quality-validator.md`
+2. Read project context files if they exist: `kit_tools/docs/CONVENTIONS.md`, `kit_tools/docs/GOTCHAS.md`, `kit_tools/arch/CODE_ARCH.md`
+3. Interpolate `{{GIT_DIFF}}`, `{{CHANGED_FILES}}`, `{{CONVENTIONS}}`, `{{GOTCHAS}}`, `{{CODE_ARCH}}` into the template
+4. Spawn via Task tool with `subagent_type: "general-purpose"`
+5. Parse findings from the response
+
+### 3c: Log findings
+
+- If findings exist, write them to `kit_tools/AUDIT_FINDINGS.md` (create from template if missing)
 - Critical findings should be noted in the session log's "Open Items" section
-- All findings are written to `kit_tools/AUDIT_FINDINGS.md`
 - Findings are advisory — they do not block the session from closing
 
 ## Step 4: Update Session Log
