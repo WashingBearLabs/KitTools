@@ -5,6 +5,40 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.3] - 2026-02-09
+
+### Added
+- **Epic Chaining for Execute-Feature Pipeline** — Multi-PRD epics now execute automatically on a shared branch
+  - PRD template gains `epic`, `epic_seq`, `epic_final` frontmatter fields
+  - `/kit-tools:execute-feature` detects epic PRDs, offers sequential execution with pause-between-PRDs option
+  - Orchestrator chains PRDs: stories → validate → tag checkpoint → archive → next PRD
+  - Hard dependency gate: blocks PRD execution if `depends_on` PRDs aren't archived
+  - Git tags mark each PRD checkpoint (`[epic]/[feature]-complete`)
+  - Resume support: skips already-completed PRDs on restart
+  - Cross-PRD learnings carried forward to subsequent PRD story prompts
+- **Epic-Aware Completion** — `/kit-tools:complete-feature` handles mid-epic and final-epic PRDs
+  - Mid-epic: tag + archive only, no PR or artifact cleanup
+  - Final epic PRD: PR references all PRDs and checkpoint tags
+- **Pause Between PRDs** — New `epic_pause_between_prds` config option
+  - Drops a pause file after each PRD completes for user review
+  - Recommended default for epic execution
+
+### Fixed
+- **Verifier structured output parsing** — `parse_verification_result()` now strips markdown code fences before regex search, fixing ~33% false failure rate when LLMs wrap output in triple backticks
+  - Added fallback verdict detection: scans for `verdict: pass` and natural language pass/fail signals when structured block is missing
+  - Logs raw verifier output tail on parse failure for diagnosis
+- **Verification-only retry** — When implementation succeeded but verifier output couldn't be parsed, retries now skip re-implementation and only re-run verification (saves a full implementation session per retry)
+- **Failure detail sanitization** — `log_story_failure()` no longer dumps raw template/session content into `EXECUTION_LOG.md`; extracts first meaningful line and truncates
+- **Verifier template hardening** — `story-verifier.md` now explicitly instructs the LLM to output the structured block as plain text, not inside code fences
+
+### Changed
+- **`execute_orchestrator.py`** — Refactored into `run_single_prd()` and `run_epic()` with shared `execute_prd_stories()` loop
+  - `update_state_story()` accepts `prd_key` for epic nested state
+  - `build_implementation_prompt()` gathers cross-PRD learnings in epic mode
+  - `log_completion()` aggregates stats across all PRDs in epic mode
+- **`/kit-tools:plan-feature`** — Step 2b now sets epic chaining fields; Step 10 includes epic fields in frontmatter template
+- **`/kit-tools:execute-feature`** — Epic detection in Step 1, dependency hard gate in Step 3, `epic/[name]` branching in Step 4, `epic_prds` config format in Step 7
+
 ## [1.5.2] - 2026-02-07
 
 ### Added

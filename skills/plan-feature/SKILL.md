@@ -154,7 +154,37 @@ If proceeding with decomposition:
 1. Walk through each PRD using Steps 3-8
 2. Or offer: "Would you like me to generate all PRDs with sensible defaults, then you can refine them?"
 3. Set `depends_on` fields correctly in each PRD's frontmatter
-4. Link all PRDs in BACKLOG.md as a grouped epic
+4. **Set epic chaining fields** in each PRD's frontmatter:
+   - `epic`: The epic name (same across all PRDs in the epic, kebab-case)
+   - `epic_seq`: Execution order (1-based, sequential)
+   - `epic_final`: `true` only on the **last** PRD in the epic
+5. Link all PRDs in BACKLOG.md as a grouped epic
+
+**Example epic frontmatter:**
+
+```yaml
+# prd-oauth-schema.md
+epic: oauth
+epic_seq: 1
+
+# prd-oauth-provider.md
+epic: oauth
+epic_seq: 2
+depends_on: [oauth-schema]
+
+# prd-oauth-api.md
+epic: oauth
+epic_seq: 3
+depends_on: [oauth-schema, oauth-provider]
+
+# prd-oauth-ui.md
+epic: oauth
+epic_seq: 4
+epic_final: true
+depends_on: [oauth-api]
+```
+
+The `epic` fields enable the execute-feature orchestrator to chain PRD execution automatically on a shared `epic/[name]` branch.
 
 ---
 
@@ -327,6 +357,9 @@ feature: [feature-name]
 status: active
 session_ready: true
 depends_on: []
+epic:                              # Epic name (empty for standalone PRDs)
+epic_seq:                          # Execution order within epic (1-based)
+epic_final:                        # true only on last PRD in epic
 created: [YYYY-MM-DD]
 updated: [YYYY-MM-DD]
 ---
@@ -340,6 +373,9 @@ updated: [YYYY-MM-DD]
 | `status` | `active`, `on-hold`, or `completed` |
 | `session_ready` | `true` if all stories pass session-fit checks; `false` if user skipped refinement or stories have unresolved issues |
 | `depends_on` | Array of feature names this PRD depends on (for epics) |
+| `epic` | Epic name — same across all PRDs in the epic (empty for standalone) |
+| `epic_seq` | Execution order within the epic, 1-based (empty for standalone) |
+| `epic_final` | `true` only on the last PRD in the epic (empty for standalone) |
 | `created` | Creation date |
 | `updated` | Last update date |
 

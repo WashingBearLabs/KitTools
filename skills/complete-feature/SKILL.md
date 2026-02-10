@@ -56,6 +56,42 @@ Active PRDs:
 Which PRD would you like to mark as completed?
 ```
 
+## Step 1b: Epic Detection
+
+After selecting a PRD, read its frontmatter. If the `epic` field is present and non-empty:
+
+### Mid-epic PRD (not `epic_final`)
+
+The orchestrator handles mid-epic completion automatically (tag + archive). If manually invoked:
+
+```
+Warning: This PRD is part of epic "[epic-name]" and is NOT the final PRD.
+Mid-epic completion is normally handled by the orchestrator during epic execution.
+
+Are you sure you want to complete it manually?
+  1. Yes — tag checkpoint, archive PRD, skip PR/merge, skip artifact cleanup
+  2. No — cancel
+```
+
+If yes:
+- Tag checkpoint: `git tag [epic-name]/[feature-name]-complete`
+- Archive PRD (update frontmatter, move to archive/)
+- **Do NOT** create a PR or merge
+- **Do NOT** clean up execution artifacts (other PRDs may still need them)
+
+### Final PRD (`epic_final: true`)
+
+- Tag checkpoint
+- Archive PRD
+- Offer PR for the entire `epic/[name]` branch (see Step 8 epic variant)
+- Clean up all execution artifacts
+
+### Standalone PRD (no `epic` field)
+
+Existing behavior, no changes — proceed to Step 2.
+
+---
+
 ## Step 2: Verify completion
 
 Before archiving, verify the PRD is actually complete:
@@ -134,6 +170,8 @@ If the feature was listed in BACKLOG.md:
 
 ## Step 7: Clean up execution artifacts
 
+**Standalone PRD or final epic PRD (`epic_final: true`):**
+
 Remove files created by execute-feature that are no longer needed:
 
 - Delete `kit_tools/prd/.execution-state.json` if it exists
@@ -142,6 +180,10 @@ Remove files created by execute-feature that are no longer needed:
 
 These are transient files used during execution and should not persist after completion.
 
+**Mid-epic PRD (has `epic` but not `epic_final`):**
+
+Do NOT clean up execution artifacts — they are still needed for subsequent PRDs in the epic.
+
 ## Step 8: Feature branch
 
 Check if the feature was implemented on a branch:
@@ -149,6 +191,8 @@ Check if the feature was implemented on a branch:
 ```bash
 git branch --show-current
 ```
+
+### Standalone PRD (no `epic` field)
 
 Read the PRD frontmatter `feature` field. If a `feature/[name]` branch exists:
 
@@ -167,6 +211,40 @@ What would you like to do with the branch?
 If the user chooses option 1, create a PR using `gh pr create` with a summary drawn from the PRD overview and stories completed.
 
 If the user chooses option 2, merge with `git checkout main && git merge feature/[name]`.
+
+### Epic PRD (`epic_final: true`)
+
+For the final PRD in an epic, the PR should reference **all PRDs** in the epic. Scan `kit_tools/prd/archive/` for all PRDs with the same `epic` field, and `git tag -l` for checkpoint tags.
+
+```
+Epic branch: epic/arxiv
+
+What would you like to do with the branch?
+  1. Create a PR for the epic (recommended)
+  2. Merge to main now
+  3. Leave it — I'll handle it myself
+```
+
+If creating a PR, use this format:
+
+```
+PR title: feat([epic-name]): complete epic
+
+PR body:
+## Summary
+- prd-[name-1]: [N stories]
+- prd-[name-2]: [N stories]
+- prd-[name-3]: [N stories]
+
+## Checkpoints
+- [epic-name]/[feature-1]-complete
+- [epic-name]/[feature-2]-complete
+- [epic-name]/[feature-3]-complete
+```
+
+### Mid-epic PRD (has `epic` but not `epic_final`)
+
+Skip branch handling entirely — the branch is shared and still in use by subsequent PRDs.
 
 ## Step 9: Summary
 

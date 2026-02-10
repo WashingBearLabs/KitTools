@@ -4,6 +4,9 @@ feature: {{FEATURE_NAME}}
 status: active
 session_ready: true
 depends_on: []
+epic:
+epic_seq:
+epic_final:
 created: {{DATE}}
 updated: {{DATE}}
 ---
@@ -14,6 +17,9 @@ Frontmatter fields:
 - status: active | on-hold | completed
 - session_ready: true if all stories pass session-fit checks; false if skipped or unresolved issues
 - depends_on: Array of feature names this PRD depends on (for epics)
+- epic: Epic name (empty for standalone PRDs)
+- epic_seq: Execution order within epic (1-based; empty for standalone)
+- epic_final: true only on the last PRD in an epic (empty for standalone)
 - created/updated: Dates in YYYY-MM-DD format
 -->
 

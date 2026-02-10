@@ -96,6 +96,39 @@ Which PRD would you like to execute?
 
 Show story completion progress for each PRD by counting `- [ ]` vs `- [x]` checkboxes.
 
+### Epic Detection
+
+After selecting a PRD, read its frontmatter. If the `epic` field is present and non-empty:
+
+1. Scan `kit_tools/prd/` (non-archived) for all PRDs with the same `epic` value
+2. Also scan `kit_tools/prd/archive/` for completed PRDs in the same epic
+3. Order all by `epic_seq`
+4. Determine which are already completed (archived)
+
+Present to user:
+
+```
+This PRD is part of epic "[epic-name]" ([N] PRDs):
+
+  1. prd-[name-1].md  [completed - archived]
+  2. prd-[name-2].md  [next]  ← you are here
+  3. prd-[name-3].md  [pending]
+
+How would you like to proceed?
+  A. Execute all remaining PRDs, pause between each for review (recommended)
+  B. Execute all remaining PRDs non-stop
+  C. Execute just this PRD
+  D. Cancel
+```
+
+**If option A:** Same as B, but sets `epic_pause_between_prds: true` in the config. The orchestrator will pause after each PRD completes (validate + tag + archive), giving you a chance to review before the next PRD starts. Resume by removing the pause file.
+
+**If option B:** The orchestrator will be configured with `epic_prds` (all non-archived PRDs) and will execute them in sequence on a shared `epic/[name]` branch with no stops between PRDs.
+
+**If option C:** Execute only this PRD as a standalone, but still use the `epic/[name]` branch.
+
+**If no `epic` field:** Continue with standalone behavior (no change).
+
 ---
 
 ## Step 2: Permission Level
@@ -160,6 +193,23 @@ Parse PRD for stories with unchecked criteria.
 Check `.execution-state.json` for `status: running`.
 - If running: Report existing execution and abort.
 
+### 6. Branch base point (new branch only)
+If the feature/epic branch does NOT already exist:
+- Verify current branch is `main` by running `git branch --show-current`
+- If not on main: switch to main first with `git checkout main`
+- This ensures the new branch will be based on main, not on another feature branch
+
+If the branch already exists (resuming):
+- Verify the branch is based on main: `git merge-base --is-ancestor main [branch-name]`
+- If check fails: Warn that the branch may contain commits from another feature. Ask whether to continue or rebase first.
+
+### 7. Dependency gate (epic PRDs)
+For PRDs with an `epic` field: this is a **hard gate**.
+- All PRDs listed in `depends_on` **must** be archived in `kit_tools/prd/archive/`
+- If any dependency is not archived, **block execution** and report which are missing
+
+For standalone PRDs (no `epic` field): soft warning only (existing behavior from check 2).
+
 Report results:
 
 ```
@@ -170,6 +220,8 @@ Pre-flight checks:
 [PASS] Working tree clean
 [PASS] 4 uncompleted stories found
 [PASS] No concurrent execution
+[PASS] Branch base: will branch from main
+[PASS] Epic dependencies: arxiv-source (archived)
 
 Ready to execute.
 ```
@@ -178,14 +230,38 @@ Ready to execute.
 
 ## Step 4: Git Branch Setup
 
-Create or switch to the feature branch:
+### Epic PRD (has `epic` field)
 
+Branch name: `epic/[epic-name]` (e.g., `epic/arxiv`)
+
+**New epic:**
 ```bash
+git checkout main
+git checkout -b epic/[epic-name]
+```
+
+**Resuming (branch exists):**
+```bash
+git checkout epic/[epic-name]
+```
+
+### Standalone PRD (no `epic` field)
+
+Branch name: `feature/[prd-feature-name]` (unchanged)
+
+**New branch:**
+```bash
+git checkout main
 git checkout -b feature/[prd-feature-name]
 ```
 
-- If branch already exists (resuming): `git checkout feature/[prd-feature-name]`
+**Resuming (branch exists):**
+```bash
+git checkout feature/[prd-feature-name]
+```
+
 - Feature name comes from the PRD frontmatter `feature` field
+- Epic name comes from the PRD frontmatter `epic` field
 - Record branch name for state tracking
 
 ---
@@ -285,6 +361,8 @@ For each uncompleted story (in PRD order):
 ### Autonomous/Guarded Mode (multi-session)
 
 1. **Write execution config** to `kit_tools/prd/.execution-config.json`:
+
+   **Standalone PRD (no epic):**
    ```json
    {
      "prd_path": "kit_tools/prd/prd-auth.md",
@@ -304,6 +382,53 @@ For each uncompleted story (in PRD order):
      }
    }
    ```
+
+   **Epic PRD (user chose "Execute remaining epic PRDs in sequence"):**
+   ```json
+   {
+     "project_dir": "/absolute/path/to/project",
+     "branch_name": "epic/arxiv",
+     "mode": "autonomous",
+     "max_retries": null,
+     "implementer_template": "... raw story-implementer.md content ...",
+     "verifier_template": "... raw story-verifier.md content ...",
+     "project_context": {
+       "synopsis": "... SYNOPSIS.md content ...",
+       "code_arch": "... CODE_ARCH.md content ...",
+       "conventions": "... CONVENTIONS.md content ...",
+       "gotchas": "... GOTCHAS.md content ...",
+       "prd_overview": "... PRD overview section ..."
+     },
+     "epic_name": "arxiv",
+     "epic_pause_between_prds": true,
+     "epic_prds": [
+       {
+         "prd_path": "/abs/path/kit_tools/prd/prd-arxiv-source.md",
+         "feature_name": "arxiv-source",
+         "epic_seq": 1,
+         "epic_final": false
+       },
+       {
+         "prd_path": "/abs/path/kit_tools/prd/prd-arxiv-api.md",
+         "feature_name": "arxiv-api",
+         "epic_seq": 2,
+         "epic_final": false
+       },
+       {
+         "prd_path": "/abs/path/kit_tools/prd/prd-arxiv-ui.md",
+         "feature_name": "arxiv-ui",
+         "epic_seq": 3,
+         "epic_final": true
+       }
+     ]
+   }
+   ```
+
+   When `epic_prds` is present, the orchestrator runs in epic mode — executing each PRD's stories in sequence on the shared branch, with tagging and archiving between PRDs.
+
+   When `epic_prds` is absent, the orchestrator runs in single-PRD mode (backwards compatible — uses `prd_path`/`feature_name` top-level fields).
+
+   **Important:** Exclude already-completed/archived PRDs from `epic_prds`. Only include PRDs that still need execution.
 
 2. **Launch orchestrator** via Bash (run_in_background):
    ```bash
