@@ -5,6 +5,16 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.4] - 2026-02-19
+
+### Fixed
+- **Hook path resolution** — Project-level hook commands now use `$CLAUDE_PROJECT_DIR` instead of relative paths
+  - Hooks previously used `python3 kit_tools/hooks/...` which breaks when shell CWD drifts during a session
+  - Now uses `python3 "$CLAUDE_PROJECT_DIR/kit_tools/hooks/..."` which resolves correctly regardless of CWD
+  - Fixes infinite loop where a Stop hook file-not-found error re-triggers the Stop event
+  - `/kit-tools:init-project` writes the correct absolute-path commands into `.claude/settings.local.json`
+  - `/kit-tools:update-kit-tools` documentation updated to reflect the new path convention
+
 ## [1.5.3] - 2026-02-09
 
 ### Added

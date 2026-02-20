@@ -203,7 +203,7 @@ For hooks, we need to update the project's hook configuration:
 3. Add any missing hook entries
 4. Copy new hook script files to project's `kit_tools/hooks/` directory
 
-**Important:** Hook paths in `.claude/settings.local.json` must use `kit_tools/hooks/` prefix (not just `hooks/`).
+**Important:** Hook paths in `.claude/settings.local.json` must use `$CLAUDE_PROJECT_DIR/kit_tools/hooks/` prefix (not just relative `kit_tools/hooks/`). This ensures hooks work regardless of shell CWD.
 
 ```
 Syncing hooks...
