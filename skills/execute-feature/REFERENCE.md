@@ -211,6 +211,51 @@ For each uncompleted story (in PRD order):
 
 ---
 
+## Autonomous Launch Details
+
+### Why tmux?
+
+Claude Code prevents running `claude -p` from within an existing Claude session to avoid infinite recursion. Since the orchestrator spawns `claude -p` subprocesses, launching it via `run_in_background` from inside a skill fails. A detached tmux session runs in a completely separate process tree, bypassing this restriction.
+
+### tmux session convention
+
+- **Session name:** `kit-execute` (fixed name, one execution at a time)
+- Any existing `kit-execute` session is killed before launching to avoid conflicts
+- The `; echo ...; read` suffix keeps the tmux window open after the orchestrator exits so the user can review final output
+
+### Launch command
+
+```bash
+tmux kill-session -t kit-execute 2>/dev/null; \
+tmux new-session -d -s kit-execute \
+  "python3 \"$CLAUDE_PLUGIN_ROOT/scripts/execute_orchestrator.py\" \
+  --config \"$(pwd)/kit_tools/prd/.execution-config.json\"; \
+  echo ''; echo 'Orchestrator finished. Press Enter to close.'; read"
+```
+
+### Fallback (no tmux)
+
+If `which tmux` fails, print a copy-pasteable command for the user to run in a separate terminal window. Use the actual resolved paths (not environment variables) so the command works standalone:
+
+```
+python3 "/resolved/plugin/root/scripts/execute_orchestrator.py" \
+  --config "/resolved/project/dir/kit_tools/prd/.execution-config.json"
+```
+
+### Monitoring commands
+
+After launching, report these to the user:
+
+| Command | Purpose |
+|---------|---------|
+| `/kit-tools:execution-status` | Full status report with progress, errors, and actions |
+| `tmux attach -t kit-execute` | Attach to watch live output |
+| `tail -f kit_tools/EXECUTION_LOG.md` | Follow the execution log |
+| `cat kit_tools/prd/.execution-state.json` | Check current state |
+| `touch kit_tools/.pause_execution` | Pause after current story |
+
+---
+
 ## Branch-per-Attempt Strategy
 
 The orchestrator uses temporary branches for each implementation attempt:

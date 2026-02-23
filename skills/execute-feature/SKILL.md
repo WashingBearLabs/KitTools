@@ -62,6 +62,8 @@ Run checks and report pass/fail for each:
 5. **No concurrent execution** — State not `running`
 6. **Branch base** — New branch from `main`, or existing branch based on `main`
 7. **Epic dependency gate** — Hard gate: all `depends_on` PRDs must be archived
+8. **tmux available** (autonomous/guarded only) — `which tmux` succeeds
+   - If not installed: warn, offer manual launch fallback (print command for separate terminal)
 
 ---
 
@@ -112,12 +114,28 @@ For each uncompleted story:
 ### Autonomous/Guarded Mode
 
 1. Write `.execution-config.json` (see REFERENCE.md for schema)
-2. Launch orchestrator in background:
+2. Check for tmux: `which tmux`
+3. **If tmux available:** Launch orchestrator in a detached tmux session:
    ```bash
-   python3 "$CLAUDE_PLUGIN_ROOT/scripts/execute_orchestrator.py" \
-     --config "kit_tools/prd/.execution-config.json"
+   tmux kill-session -t kit-execute 2>/dev/null; \
+   tmux new-session -d -s kit-execute \
+     "python3 \"$CLAUDE_PLUGIN_ROOT/scripts/execute_orchestrator.py\" \
+     --config \"$(pwd)/kit_tools/prd/.execution-config.json\"; \
+     echo ''; echo 'Orchestrator finished. Press Enter to close.'; read"
    ```
-3. Report monitoring commands to user
+4. **If no tmux:** Print the command for the user to run in a separate terminal:
+   ```
+   Run this in a separate terminal window:
+
+   python3 "<plugin_root>/scripts/execute_orchestrator.py" \
+     --config "<project_dir>/kit_tools/prd/.execution-config.json"
+   ```
+5. Report monitoring commands:
+   - `/kit-tools:execution-status` — check progress, errors, and available actions
+   - `tmux attach -t kit-execute` — attach to watch live output
+   - `tail -f kit_tools/EXECUTION_LOG.md` — follow the execution log
+   - `cat kit_tools/prd/.execution-state.json` — check current state
+   - `touch kit_tools/.pause_execution` — pause after current story
 
 ---
 

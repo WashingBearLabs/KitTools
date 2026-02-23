@@ -5,6 +5,23 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2] - 2026-02-23
+
+### Added
+- **New Skill: `/kit-tools:execution-status`** — Check progress of autonomous execution
+  - Shows completion percentage, per-story status table, session stats
+  - Detects stale state (orchestrator crashed/exited)
+  - Offers contextual actions: pause, resume, attach to tmux, retry
+
+## [1.6.1] - 2026-02-23
+
+### Fixed
+- **Autonomous execution launch** — Orchestrator now launches in a detached tmux session instead of `run_in_background`
+  - Fixes nested `claude -p` calls being blocked when launched from inside a Claude session
+  - Fallback: prints a copy-pasteable command if tmux is not installed
+  - Pre-flight check #8 verifies tmux availability for autonomous/guarded modes
+  - Monitoring commands reported after launch (tmux attach, tail log, check state, pause)
+
 ## [1.6.0] - 2026-02-22
 
 ### Added
