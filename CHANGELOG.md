@@ -5,6 +5,70 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-02-22
+
+### Added
+- **Unit Test Suite** — 72 tests for the execute orchestrator (`tests/test_orchestrator.py`)
+  - Covers PRD parsing, frontmatter extraction, story parsing with hints, result reading, prompt building, test command detection
+  - PyYAML and pytest added as dependencies (`requirements.txt`)
+- **File-Based Agent Results** — Agents write structured JSON result files instead of stdout parsing
+  - Implementation: `.story-impl-result.json` with status, criteria met, files changed, learnings
+  - Verification: `.story-verify-result.json` with verdict, criteria details, recommendations
+  - Eliminates ~33% false failure rate from regex parsing of LLM output
+- **Branch-per-Attempt Strategy** — Each implementation attempt runs on a temporary branch
+  - Creates `[feature-branch]-[story-id]-attempt-[N]` branches
+  - Successful attempts merge into the feature branch; failed attempts are deleted
+  - Replaces destructive `git reset --hard` + `git clean -fd`
+- **Patch-Based Retry Context** — Failed attempt diffs captured and included in retry prompts
+  - Shows the implementer what was tried before so it can take a different approach
+- **Token Estimation** — Per-session input/output token tracking (~4 chars/token)
+  - Logged per session and accumulated in execution state
+- **Auto-Detect Test Command** — `detect_test_command()` finds the project's test runner
+  - Checks: `package.json`, `pyproject.toml`, `pytest.ini`, `Makefile`, `TESTING_GUIDE.md`
+  - Skips npm default "no test specified" placeholder
+- **Test Execution in Validation** — `/kit-tools:validate-feature` Step 4b runs the test suite
+  - Failed tests logged as critical findings; passing tests noted in summary
+  - Graceful fallback if no test command detected
+- **Auto-Injected Test Criteria** — `/kit-tools:plan-feature` adds test criteria to every code story
+  - "Tests written/updated for new functionality" and "Full test suite passes" auto-appended
+  - Doc/config-only stories exempt
+- **Implementation Hints** — Per-story hints flow from planning to implementation
+  - `plan-feature` generates hints during refinement (key files, patterns, gotchas)
+  - `parse_stories_from_prd()` extracts `**Implementation Hints:**` blocks
+  - Implementer agent receives hints to reduce exploration time
+- **Pause on Critical Findings** — Autonomous execution pauses when validation finds critical issues
+  - Creates `.pause_execution` file referencing `AUDIT_FINDINGS.md`
+  - Resumes when file is removed after review
+  - Only in autonomous mode; supervised/guarded modes just report
+
+### Changed
+- **YAML Parsing** — Replaced hand-rolled frontmatter parser with PyYAML (`yaml.safe_load()`)
+  - Properly handles lists, booleans, nested values, edge cases
+  - Dates auto-converted to ISO strings for backward compatibility
+- **Verifier Independence** — Verifier receives git-sourced file lists, not implementer claims
+  - `build_verification_prompt()` takes `files_changed_from_git` from `git diff --name-only`
+  - "Evidence from Implementer" section removed from verifier template
+- **Reference-Based Context** — All agent prompts reference file paths instead of inlining full contents
+  - `{{CODE_ARCH_PATH}}`, `{{CONVENTIONS_PATH}}`, etc. replace `{{CODE_ARCH}}`, `{{CONVENTIONS}}`
+  - Applies to implementer, verifier, code-quality-validator, security-reviewer, and feature-fixer agents
+  - Agents read context on-demand via their Read tool
+  - Prompts shrink ~80% for large projects
+- **Skill Structure** — 4 pipeline skills split into SKILL.md (workflow) + REFERENCE.md (details)
+  - `execute-feature`: 509 -> 139 lines SKILL.md + 226 lines REFERENCE.md
+  - `plan-feature`: 647 -> 177 lines SKILL.md + 211 lines REFERENCE.md
+  - `validate-feature`: 414 -> 141 lines SKILL.md + 159 lines REFERENCE.md
+  - `complete-feature`: 293 -> 101 lines SKILL.md + 127 lines REFERENCE.md
+- **PRD Template** — Updated to v1.3.0 with Implementation Hints section and test criteria
+
+### Fixed
+- **`validate_setup.py`** — No longer silently exits when called without stdin (e.g., from init-project Step 7)
+- **`remind_close_session.py`** — Checks for actual content below `## Notes` instead of line count heuristic, preventing false positives after context compactions
+- **`test_normalizes_verdict_to_lowercase`** — Fixed broken test that passed a directory instead of using the actual result file path
+
+### Removed
+- **Deprecated functions** — Removed `parse_verification_result()`, `_fallback_verdict_scan()`, `extract_combined_learnings()`, `extract_section()`, `reset_to_commit()` from orchestrator (superseded by file-based JSON and branch-per-attempt)
+- **`hooks/hooks.json`** — Removed legacy hook config file (superseded by `plugin.json` hooks section since v1.1.0)
+
 ## [1.5.4] - 2026-02-19
 
 ### Fixed

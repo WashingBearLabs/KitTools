@@ -78,11 +78,11 @@ def check_claude_md(project_dir: Path) -> bool:
 
 
 def main():
-    # Get tool input from stdin
+    # Get tool input from stdin (may be empty when called manually)
     try:
         data = json.load(sys.stdin)
     except (json.JSONDecodeError, EOFError):
-        return
+        data = {}
 
     project_dir = os.environ.get("CLAUDE_PROJECT_DIR", "")
     if not project_dir:

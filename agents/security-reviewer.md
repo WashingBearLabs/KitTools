@@ -22,11 +22,11 @@ You are a security reviewer. Review the provided code changes for security vulne
 {{GIT_DIFF}}
 ```
 
-### Code Architecture
-{{CODE_ARCH}}
+### Project Context (read these files for architecture and security guidelines)
+- **Code Architecture:** `{{CODE_ARCH_PATH}}`
+- **Security Guidelines:** `{{SECURITY_PATH}}`
 
-### Security Guidelines
-{{SECURITY}}
+Read these files using the Read tool to understand project security patterns before reviewing.
 
 ---
 

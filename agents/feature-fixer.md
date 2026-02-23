@@ -27,11 +27,11 @@ You are a targeted code fixer. Your job is to address specific validation findin
 {{GIT_DIFF}}
 ```
 
-### Conventions
-{{CONVENTIONS}}
+### Project Context (read these files for conventions and architecture)
+- **Conventions:** `{{CONVENTIONS_PATH}}`
+- **Code Architecture:** `{{CODE_ARCH_PATH}}`
 
-### Code Architecture
-{{CODE_ARCH}}
+Read these files using the Read tool to understand project patterns before fixing.
 
 ---
 
@@ -75,20 +75,21 @@ git commit -m "fix([feature]): address validation findings"
 
 ### 5. Report
 
-Output a structured result block. This is parsed by the skill, so use the exact format:
+Write a JSON result file at `{{RESULT_FILE_PATH}}` with this structure:
 
+```json
+{
+  "findings_fixed": [
+    {"id": "YYYY-MM-DD-NNN", "description": "What was fixed and how"}
+  ],
+  "findings_unfixable": [
+    {"id": "YYYY-MM-DD-NNN", "reason": "Why this finding cannot be safely fixed in isolation"}
+  ],
+  "files_changed": ["path/to/file.ts"]
+}
 ```
-FIX_RESULT:
-  findings_fixed:
-    - id: "YYYY-MM-DD-NNN"
-      description: "What was fixed and how"
-  findings_unfixable:
-    - id: "YYYY-MM-DD-NNN"
-      reason: "Why this finding cannot be safely fixed in isolation"
-  files_changed:
-    - path/to/file.ts (modified)
-END_FIX_RESULT
-```
+
+Write the file using the Write tool. The skill reads this file to determine fix outcomes.
 
 ## Critical Rules
 

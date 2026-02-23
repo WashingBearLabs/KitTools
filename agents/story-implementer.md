@@ -22,6 +22,9 @@ You are implementing a single user story for a software project. Your job is to 
 **Description:**
 {{STORY_DESCRIPTION}}
 
+**Implementation Hints:**
+{{IMPLEMENTATION_HINTS}}
+
 **Acceptance Criteria:**
 {{ACCEPTANCE_CRITERIA}}
 
@@ -30,23 +33,21 @@ You are implementing a single user story for a software project. Your job is to 
 ### PRD Overview
 {{PRD_OVERVIEW}}
 
-### Project Synopsis
-{{PROJECT_SYNOPSIS}}
-
-### Code Architecture
-{{CODE_ARCH}}
-
-### Conventions
-{{CONVENTIONS}}
-
-### Known Gotchas
-{{GOTCHAS}}
+### Project Context Files
+Read these files for additional context as needed:
+- **Synopsis:** {{SYNOPSIS_PATH}}
+- **Code Architecture:** {{CODE_ARCH_PATH}}
+- **Conventions:** {{CONVENTIONS_PATH}}
+- **Known Gotchas:** {{GOTCHAS_PATH}}
 
 ### Prior Learnings
 {{PRIOR_LEARNINGS}}
 
 ### Retry Context
 {{RETRY_CONTEXT}}
+
+### Previous Attempt Diff
+{{PREVIOUS_ATTEMPT_DIFF}}
 
 ---
 
@@ -58,6 +59,7 @@ Follow these steps in order:
 
 Read relevant code using Glob, Grep, and Read tools. Understand the area you'll modify before writing any code.
 
+- Read the project context files listed above for architecture, conventions, and gotchas
 - Identify the files you'll need to change or create
 - Understand existing patterns in the area you're modifying
 - Check for related tests, types, and imports
@@ -108,27 +110,39 @@ git commit -m "feat({{FEATURE}}): {{STORY_ID}} - {{STORY_TITLE}}"
 - Add specific files, not `git add .`
 - Use the commit message format shown above
 
-### 7. Report
+### 7. Write Result File
 
-Output a structured result block. This is parsed by the orchestrator, so use the exact format:
+Write your structured result as a JSON file. **This is machine-read by the orchestrator — use the exact schema.**
 
+Write to: `{{RESULT_FILE_PATH}}`
+
+```json
+{
+  "story_id": "{{STORY_ID}}",
+  "status": "complete|partial|failed",
+  "criteria_met": [
+    {
+      "criterion": "Text of criterion",
+      "met": true,
+      "evidence": "What was done and how it satisfies this"
+    }
+  ],
+  "files_changed": [
+    "path/to/file.ts (created|modified|deleted)"
+  ],
+  "learnings": [
+    "Reusable pattern or discovery",
+    "Gotcha encountered"
+  ],
+  "issues": [
+    "Description of any issue encountered"
+  ]
+}
 ```
-IMPLEMENTATION_RESULT:
-  story_id: {{STORY_ID}}
-  status: [complete|partial|failed]
-  criteria_met:
-    - criterion: "Text of criterion"
-      met: true|false
-      evidence: "What was done and how it satisfies this"
-  files_changed:
-    - path/to/file.ts (created|modified|deleted)
-  learnings:
-    - "Reusable pattern or discovery"
-    - "Gotcha encountered"
-  issues:
-    - "Description of any issue encountered"
-END_IMPLEMENTATION_RESULT
-```
+
+Use the Write tool to create this file. Ensure it is valid JSON.
+
+After writing the result file, output a brief human-readable summary of what you did (for monitoring via `tail -f`).
 
 ## Critical Rules
 
@@ -137,3 +151,4 @@ END_IMPLEMENTATION_RESULT
 - Do NOT refactor code outside the scope of this story
 - Do NOT add features not listed in the acceptance criteria
 - If you encounter a blocking issue, report it in the `issues` field rather than silently working around it
+- You MUST write the result JSON file — the orchestrator depends on it

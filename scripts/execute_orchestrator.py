@@ -26,6 +26,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import yaml
+
 
 # --- Constants ---
 
@@ -33,6 +35,10 @@ SESSION_TIMEOUT = 900  # 15 minutes per claude session
 PAUSE_POLL_INTERVAL = 10  # seconds between pause file checks
 NETWORK_RETRY_WAIT = 30  # seconds between network retries
 NETWORK_MAX_RETRIES = 3
+
+# File-based result paths (relative to project_dir)
+IMPL_RESULT_FILE = os.path.join("kit_tools", ".story-impl-result.json")
+VERIFY_RESULT_FILE = os.path.join("kit_tools", ".story-verify-result.json")
 
 
 # --- State Management ---
@@ -142,33 +148,30 @@ def update_state_story(
 
 
 def parse_prd_frontmatter(prd_path: str) -> dict:
-    """Parse YAML frontmatter from a PRD markdown file."""
+    """Parse YAML frontmatter from a PRD markdown file using PyYAML."""
     with open(prd_path, "r") as f:
         content = f.read()
     match = re.match(r'^---\s*\n(.*?)\n---', content, re.DOTALL)
     if not match:
         return {}
-    frontmatter = {}
-    for line in match.group(1).split('\n'):
-        if ':' in line:
-            key, _, value = line.partition(':')
-            key = key.strip()
-            value = value.strip()
-            if not value:
-                continue  # Skip empty values
-            if value == '[]':
-                frontmatter[key] = []
-            elif value.startswith('['):
-                frontmatter[key] = [v.strip().strip("'\"") for v in value[1:-1].split(',') if v.strip()]
-            elif value.lower() == 'true':
-                frontmatter[key] = True
-            elif value.lower() == 'false':
-                frontmatter[key] = False
-            elif value.isdigit():
-                frontmatter[key] = int(value)
-            else:
-                frontmatter[key] = value
-    return frontmatter
+    try:
+        frontmatter = yaml.safe_load(match.group(1))
+    except yaml.YAMLError:
+        return {}
+    if not isinstance(frontmatter, dict):
+        return {}
+    # Normalize values:
+    # - Exclude None (callers expect missing keys, not None values)
+    # - Convert date objects to ISO strings (PyYAML auto-parses YYYY-MM-DD as datetime.date)
+    result = {}
+    for k, v in frontmatter.items():
+        if v is None:
+            continue
+        if hasattr(v, "isoformat"):
+            result[k] = v.isoformat()
+        else:
+            result[k] = v
+    return result
 
 
 def parse_stories_from_prd(prd_path: str) -> list[dict]:
@@ -208,6 +211,13 @@ def parse_stories_from_prd(prd_path: str) -> list[dict]:
         )
         description = desc_match.group(1).strip() if desc_match else ""
 
+        # Extract implementation hints (between **Implementation Hints:** and **Acceptance Criteria:**)
+        hints_match = re.search(
+            r"\*\*Implementation Hints:\*\*\s*\n(.+?)(?=\n\*\*Acceptance Criteria:\*\*|\n###|\Z)",
+            story_content, re.DOTALL
+        )
+        hints = hints_match.group(1).strip() if hints_match else ""
+
         # Extract acceptance criteria
         criteria = []
         criteria_pattern = re.compile(r"^- \[[ x]\] (.+)$", re.MULTILINE)
@@ -222,6 +232,7 @@ def parse_stories_from_prd(prd_path: str) -> list[dict]:
             "id": story_id,
             "title": story_title,
             "description": description,
+            "hints": hints,
             "criteria": criteria,
             "criteria_text": "\n".join(
                 f"- [ ] {c}" for c in criteria
@@ -399,23 +410,40 @@ def build_implementation_prompt(
             + "\n".join(f"- {l}" for l in prev_learnings)
         )
 
+    # Build previous attempt diff context
+    previous_diff = ""
+    if attempt > 1:
+        if prd_key is not None:
+            stories_dict = state.get("prds", {}).get(prd_key, {}).get("stories", {})
+        else:
+            stories_dict = state.get("stories", {})
+        story_state = stories_dict.get(story["id"], {})
+        previous_diff = story_state.get("last_attempt_diff", "")
+    previous_diff_text = previous_diff if previous_diff else "No previous attempt."
+
     # Interpolate template
     prompt = template
     prompt = prompt.replace("{{STORY_ID}}", story["id"])
     prompt = prompt.replace("{{STORY_TITLE}}", story["title"])
     prompt = prompt.replace("{{STORY_DESCRIPTION}}", story["description"])
+    prompt = prompt.replace("{{IMPLEMENTATION_HINTS}}", story.get("hints") or "No hints provided — explore the codebase.")
     prompt = prompt.replace("{{ACCEPTANCE_CRITERIA}}", story["criteria_text"])
     prompt = prompt.replace("{{FEATURE}}", feat_name)
     prompt = prompt.replace("{{PRD_OVERVIEW}}", context.get("prd_overview", "Not available"))
-    prompt = prompt.replace("{{PROJECT_SYNOPSIS}}", context.get("synopsis", "Not available"))
-    prompt = prompt.replace("{{CODE_ARCH}}", context.get("code_arch", "Not available"))
-    prompt = prompt.replace("{{CONVENTIONS}}", context.get("conventions", "Not available"))
-    prompt = prompt.replace("{{GOTCHAS}}", context.get("gotchas", "Not available"))
+    # Reference-based context: paths instead of content
+    prompt = prompt.replace("{{SYNOPSIS_PATH}}", context.get("synopsis", "kit_tools/SYNOPSIS.md"))
+    prompt = prompt.replace("{{CODE_ARCH_PATH}}", context.get("code_arch", "kit_tools/arch/CODE_ARCH.md"))
+    prompt = prompt.replace("{{CONVENTIONS_PATH}}", context.get("conventions", "kit_tools/docs/CONVENTIONS.md"))
+    prompt = prompt.replace("{{GOTCHAS_PATH}}", context.get("gotchas", "kit_tools/docs/GOTCHAS.md"))
     prompt = prompt.replace(
         "{{PRIOR_LEARNINGS}}",
         "\n".join(f"- {l}" for l in prior_learnings) if prior_learnings else "None yet"
     )
     prompt = prompt.replace("{{RETRY_CONTEXT}}", retry_context or "First attempt — no retry context.")
+    prompt = prompt.replace("{{PREVIOUS_ATTEMPT_DIFF}}", previous_diff_text)
+    # Result file path for the agent to write to
+    result_path = os.path.join(config["project_dir"], IMPL_RESULT_FILE)
+    prompt = prompt.replace("{{RESULT_FILE_PATH}}", result_path)
 
     # Add autonomous-mode instructions
     prompt += f"\n\n## Additional Instructions (Autonomous Mode)\n"
@@ -429,40 +457,29 @@ def build_implementation_prompt(
 
 
 def build_verification_prompt(
-    story: dict, config: dict, impl_output: str
+    story: dict, config: dict, files_changed_from_git: str
 ) -> str:
-    """Interpolate the story-verifier template with implementation results."""
+    """Interpolate the story-verifier template with git-sourced context.
+
+    Args:
+        files_changed_from_git: File list from `git diff --name-only`, sourced
+            by the orchestrator — NOT from the implementer's output.
+    """
     template = strip_frontmatter(config["verifier_template"])
     context = config.get("project_context", {})
-
-    # Parse implementation result for files changed and evidence
-    files_changed = extract_section(impl_output, "files_changed:")
-    evidence = extract_section(impl_output, "criteria_met:")
 
     prompt = template
     prompt = prompt.replace("{{STORY_ID}}", story["id"])
     prompt = prompt.replace("{{STORY_TITLE}}", story["title"])
     prompt = prompt.replace("{{ACCEPTANCE_CRITERIA}}", story["criteria_text"])
-    prompt = prompt.replace("{{FILES_CHANGED}}", files_changed or "See implementation output below")
-    prompt = prompt.replace("{{IMPLEMENTATION_EVIDENCE}}", evidence or impl_output[-3000:])
-    prompt = prompt.replace("{{CONVENTIONS}}", context.get("conventions", "Not available"))
+    prompt = prompt.replace("{{FILES_CHANGED}}", files_changed_from_git or "No files changed detected")
+    # Reference-based context
+    prompt = prompt.replace("{{CONVENTIONS_PATH}}", context.get("conventions", "kit_tools/docs/CONVENTIONS.md"))
+    # Result file path for the agent to write to
+    result_path = os.path.join(config["project_dir"], VERIFY_RESULT_FILE)
+    prompt = prompt.replace("{{RESULT_FILE_PATH}}", result_path)
 
     return prompt
-
-
-def extract_section(text: str, section_header: str) -> str | None:
-    """Extract a section from structured output text."""
-    start = text.find(section_header)
-    if start == -1:
-        return None
-
-    # Find the next section header or end marker
-    rest = text[start + len(section_header):]
-    # Look for next top-level key (word followed by colon at start of line)
-    end_match = re.search(r"^\w+:", rest, re.MULTILINE)
-    if end_match:
-        return rest[:end_match.start()].strip()
-    return rest.strip()
 
 
 # --- Claude Session ---
@@ -503,125 +520,89 @@ def run_claude_session(prompt: str, project_dir: str) -> str:
     return "SESSION_ERROR: All network retries exhausted"
 
 
-# --- Verification Parsing ---
+# --- Result File Reading ---
 
 
-def parse_verification_result(output: str) -> dict:
-    """Extract VERIFICATION_RESULT block from verifier output.
+def get_impl_result_path(project_dir: str) -> str:
+    """Return absolute path to the implementation result file."""
+    return os.path.join(project_dir, IMPL_RESULT_FILE)
 
-    Handles common LLM output quirks:
-    - Markdown code fences wrapping the structured block
-    - Whitespace variations in the markers
-    - Falls back to scanning for verdict patterns if structured block is missing
+
+def get_verify_result_path(project_dir: str) -> str:
+    """Return absolute path to the verification result file."""
+    return os.path.join(project_dir, VERIFY_RESULT_FILE)
+
+
+def clean_result_files(project_dir: str) -> None:
+    """Remove result files before a new attempt to prevent stale reads."""
+    for path in [get_impl_result_path(project_dir), get_verify_result_path(project_dir)]:
+        if os.path.exists(path):
+            os.remove(path)
+
+
+def read_json_result(file_path: str) -> tuple[dict | None, str]:
+    """Read and parse a JSON result file.
+
+    Returns (result_dict, error_message). On success, error_message is empty.
+    On failure, result_dict is None and error_message explains why.
     """
-    # Strip markdown code fences before searching (LLMs often wrap output in ```)
-    cleaned = re.sub(r'```\w*\n?', '', output)
-
-    match = re.search(
-        r"VERIFICATION_RESULT:\s*\n(.+?)END_VERIFICATION_RESULT",
-        cleaned, re.DOTALL
-    )
-    if not match:
-        # Fallback: scan for verdict patterns outside the structured block
-        fallback_verdict = _fallback_verdict_scan(cleaned)
-        if fallback_verdict:
-            log(f"  [parse] Structured block missing, fallback detected verdict: {fallback_verdict}")
-            return {
-                "verdict": fallback_verdict,
-                "recommendations": "",
-                "overall_notes": "Verdict detected via fallback (no structured output block).",
-                "parse_method": "fallback",
-            }
-
-        # No structured output and no fallback — log raw tail for diagnosis
-        raw_tail = output[-1500:] if len(output) > 1500 else output
-        log(f"  [parse] No structured output found. Raw output tail ({len(output)} chars total):")
-        for line in raw_tail.split('\n')[-10:]:
-            log(f"    | {line[:200]}")
-
-        return {
-            "verdict": "fail",
-            "raw_output": output[-2000:],
-            "recommendations": "Verifier did not produce structured output. Review manually.",
-            "parse_method": "none",
-        }
-
-    block = match.group(1)
-
-    # Extract verdict
-    verdict_match = re.search(r"verdict:\s*(\w+)", block)
-    verdict = verdict_match.group(1).lower() if verdict_match else "fail"
-
-    # Extract recommendations
-    rec_match = re.search(r"recommendations:\s*\"?(.+?)\"?\s*$", block, re.MULTILINE)
-    recommendations = rec_match.group(1) if rec_match else ""
-
-    # Extract overall notes
-    notes_match = re.search(r"overall_notes:\s*\"?(.+?)\"?\s*$", block, re.MULTILINE)
-    overall_notes = notes_match.group(1) if notes_match else ""
-
-    return {
-        "verdict": verdict,
-        "recommendations": recommendations,
-        "overall_notes": overall_notes,
-        "raw_block": block,
-        "parse_method": "structured",
-    }
+    if not os.path.exists(file_path):
+        return None, f"Result file not found: {os.path.basename(file_path)}"
+    try:
+        with open(file_path, "r") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return None, f"Result file is not a JSON object: {os.path.basename(file_path)}"
+        return data, ""
+    except json.JSONDecodeError as e:
+        return None, f"Invalid JSON in {os.path.basename(file_path)}: {e}"
+    except OSError as e:
+        return None, f"Could not read {os.path.basename(file_path)}: {e}"
 
 
-def _fallback_verdict_scan(text: str) -> str | None:
-    """Scan verifier output for verdict patterns when the structured block is missing.
+def read_implementation_result(project_dir: str) -> tuple[dict | None, str]:
+    """Read the implementation result JSON file.
 
-    Returns "pass" or "fail", or None if no pattern is detected.
+    Returns (result_dict, error_message).
     """
-    # Look for explicit verdict lines anywhere in the output
-    verdict_match = re.search(r"verdict:\s*(pass|fail)", text, re.IGNORECASE)
-    if verdict_match:
-        return verdict_match.group(1).lower()
-
-    # Look for strong pass/fail signals in the last 500 chars (where conclusions tend to be)
-    tail = text[-500:].lower()
-    pass_signals = [
-        "all criteria met", "all criteria verified", "all criteria pass",
-        "verification: pass", "overall: pass",
-    ]
-    fail_signals = [
-        "criteria not met", "verification: fail", "overall: fail",
-        "criteria failed",
-    ]
-
-    has_pass = any(s in tail for s in pass_signals)
-    has_fail = any(s in tail for s in fail_signals)
-
-    if has_pass and not has_fail:
-        return "pass"
-    if has_fail and not has_pass:
-        return "fail"
-
-    return None
+    return read_json_result(get_impl_result_path(project_dir))
 
 
-def extract_combined_learnings(impl_output: str, verify_output: str) -> list[str]:
-    """Extract learnings from both implementation and verification outputs."""
+def read_verification_result(project_dir: str) -> tuple[dict | None, str]:
+    """Read the verification result JSON file.
+
+    Returns (result_dict, error_message).
+    Expected keys: story_id, verdict, criteria, overall_notes, recommendations
+    """
+    result, error = read_json_result(get_verify_result_path(project_dir))
+    if result is not None:
+        # Normalize verdict to lowercase
+        if "verdict" in result:
+            result["verdict"] = str(result["verdict"]).lower()
+        else:
+            return None, "Verification result missing 'verdict' field"
+    return result, error
+
+
+def extract_learnings_from_results(
+    impl_result: dict | None, verify_result: dict | None
+) -> list[str]:
+    """Extract learnings from file-based implementation and verification results."""
     learnings = []
 
-    # From implementation output
-    impl_match = re.search(
-        r"IMPLEMENTATION_RESULT:.+?learnings:\s*\n(.+?)(?:issues:|END_IMPLEMENTATION_RESULT)",
-        impl_output, re.DOTALL
-    )
-    if impl_match:
-        for line in impl_match.group(1).strip().split("\n"):
-            line = line.strip().lstrip("- ").strip('"').strip("'")
-            if line:
-                learnings.append(line)
+    if impl_result:
+        for learning in impl_result.get("learnings", []):
+            if learning:
+                learnings.append(str(learning))
+        for issue in impl_result.get("issues", []):
+            if issue:
+                learnings.append(f"Issue: {issue}")
 
-    # From verification output
-    verify_result = parse_verification_result(verify_output)
-    if verify_result.get("recommendations"):
-        learnings.append(f"Verifier: {verify_result['recommendations']}")
-    if verify_result.get("overall_notes"):
-        learnings.append(f"Verifier note: {verify_result['overall_notes']}")
+    if verify_result:
+        if verify_result.get("recommendations"):
+            learnings.append(f"Verifier: {verify_result['recommendations']}")
+        if verify_result.get("overall_notes"):
+            learnings.append(f"Verifier note: {verify_result['overall_notes']}")
 
     return learnings
 
@@ -805,35 +786,97 @@ def get_head_commit(project_dir: str) -> str:
     return result.stdout.strip()
 
 
-def reset_to_commit(project_dir: str, target_hash: str) -> None:
-    """Reset branch to a specific commit, preserving tracking files."""
-    # Save tracking files before reset
-    tracking_files = [
-        os.path.join(project_dir, "kit_tools", "EXECUTION_LOG.md"),
-        os.path.join(project_dir, "kit_tools", "AUDIT_FINDINGS.md"),
-        os.path.join(project_dir, "kit_tools", "SESSION_SCRATCH.md"),
-    ]
-    saved = {}
-    for f in tracking_files:
-        if os.path.exists(f):
-            with open(f, "r") as fh:
-                saved[f] = fh.read()
+def get_current_branch(project_dir: str) -> str:
+    """Get the current branch name."""
+    result = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=project_dir, capture_output=True, text=True
+    )
+    return result.stdout.strip()
 
-    # Hard reset to undo any commits made by the implementer
+
+def create_attempt_branch(project_dir: str, feature_branch: str, story_id: str, attempt: int) -> str:
+    """Create a temporary branch for this implementation attempt.
+
+    Returns the attempt branch name.
+    """
+    attempt_branch = f"{feature_branch}-{story_id}-attempt-{attempt}"
+    # Ensure we're on the feature branch
     subprocess.run(
-        ["git", "reset", "--hard", target_hash],
+        ["git", "checkout", feature_branch],
         cwd=project_dir, capture_output=True
     )
+    # Create and switch to the attempt branch
     subprocess.run(
-        ["git", "clean", "-fd"],
+        ["git", "checkout", "-b", attempt_branch],
         cwd=project_dir, capture_output=True
     )
+    log(f"  Created attempt branch: {attempt_branch}")
+    return attempt_branch
 
-    # Restore tracking files
-    for f, content in saved.items():
-        os.makedirs(os.path.dirname(f), exist_ok=True)
-        with open(f, "w") as fh:
-            fh.write(content)
+
+def get_attempt_diff(project_dir: str, feature_branch: str, attempt_branch: str) -> str:
+    """Capture the diff between the feature branch and the attempt branch.
+
+    Used to provide patch-based retry context for subsequent attempts.
+    """
+    result = subprocess.run(
+        ["git", "diff", f"{feature_branch}...{attempt_branch}"],
+        cwd=project_dir, capture_output=True, text=True
+    )
+    diff = result.stdout.strip() if result.returncode == 0 else ""
+    # Truncate if too large
+    if len(diff) > 10000:
+        diff = diff[:10000] + "\n\n... [diff truncated at 10KB] ..."
+    return diff
+
+
+def merge_attempt_branch(project_dir: str, feature_branch: str, attempt_branch: str) -> bool:
+    """Merge a successful attempt branch into the feature branch.
+
+    Returns True if merge succeeded.
+    """
+    # Switch to the feature branch
+    subprocess.run(
+        ["git", "checkout", feature_branch],
+        cwd=project_dir, capture_output=True
+    )
+    # Merge the attempt branch (fast-forward if possible)
+    result = subprocess.run(
+        ["git", "merge", attempt_branch, "--no-edit"],
+        cwd=project_dir, capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        log(f"  Merge failed: {result.stderr[:200]}")
+        return False
+    # Delete the attempt branch
+    subprocess.run(
+        ["git", "branch", "-d", attempt_branch],
+        cwd=project_dir, capture_output=True
+    )
+    log(f"  Merged {attempt_branch} into {feature_branch}")
+    return True
+
+
+def delete_attempt_branch(project_dir: str, feature_branch: str, attempt_branch: str) -> str:
+    """Delete a failed attempt branch and return to the feature branch.
+
+    Returns the captured diff (for retry context) before deleting.
+    """
+    # Capture the diff before deleting
+    diff = get_attempt_diff(project_dir, feature_branch, attempt_branch)
+    # Switch back to feature branch
+    subprocess.run(
+        ["git", "checkout", feature_branch],
+        cwd=project_dir, capture_output=True
+    )
+    # Force-delete the attempt branch
+    subprocess.run(
+        ["git", "branch", "-D", attempt_branch],
+        cwd=project_dir, capture_output=True
+    )
+    log(f"  Deleted failed attempt branch: {attempt_branch}")
+    return diff
 
 
 def verify_branch_base(project_dir: str) -> bool:
@@ -867,6 +910,87 @@ def commit_tracking_files(project_dir: str, feature_name: str) -> None:
         ["git", "commit", "-m", f"chore({feature_name}): execution log and audit findings"],
         cwd=project_dir, capture_output=True
     )
+
+
+# --- Test Command Detection ---
+
+
+def detect_test_command(project_dir: str) -> str | None:
+    """Auto-detect the project's test command.
+
+    Checks in order:
+    1. package.json "test" script (skip if it's the npm default)
+    2. pyproject.toml [tool.pytest] or [tool.poetry.scripts]
+    3. pytest.ini
+    4. Makefile "test" target
+    5. kit_tools/testing/TESTING_GUIDE.md Quick Start section
+
+    Returns the test command string, or None if not detected.
+    """
+    # 1. package.json
+    pkg_json = os.path.join(project_dir, "package.json")
+    if os.path.exists(pkg_json):
+        try:
+            with open(pkg_json, "r") as f:
+                pkg = json.load(f)
+            test_script = pkg.get("scripts", {}).get("test", "")
+            # Skip npm default placeholder
+            if test_script and 'echo "Error: no test specified"' not in test_script:
+                return f"npm test"
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # 2. pyproject.toml
+    pyproject = os.path.join(project_dir, "pyproject.toml")
+    if os.path.exists(pyproject):
+        try:
+            with open(pyproject, "r") as f:
+                content = f.read()
+            # Check for pytest configuration
+            if "[tool.pytest" in content:
+                return "python3 -m pytest"
+            # Check for poetry test script
+            if "[tool.poetry.scripts]" in content and "test" in content:
+                return "poetry run pytest"
+        except OSError:
+            pass
+
+    # 3. pytest.ini
+    if os.path.exists(os.path.join(project_dir, "pytest.ini")):
+        return "python3 -m pytest"
+
+    # 4. Makefile
+    makefile = os.path.join(project_dir, "Makefile")
+    if os.path.exists(makefile):
+        try:
+            with open(makefile, "r") as f:
+                content = f.read()
+            if re.search(r"^test\s*:", content, re.MULTILINE):
+                return "make test"
+        except OSError:
+            pass
+
+    # 5. kit_tools/testing/TESTING_GUIDE.md
+    testing_guide = os.path.join(project_dir, "kit_tools", "testing", "TESTING_GUIDE.md")
+    if os.path.exists(testing_guide):
+        try:
+            with open(testing_guide, "r") as f:
+                content = f.read()
+            # Look for a code block in the Quick Start section
+            qs_match = re.search(
+                r"##\s*Quick Start.*?```(?:\w*)\n(.+?)```",
+                content, re.DOTALL | re.IGNORECASE
+            )
+            if qs_match:
+                # Take the first non-empty line from the code block
+                for line in qs_match.group(1).strip().split("\n"):
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        return line
+        except OSError:
+            pass
+
+    return None
 
 
 # --- Utilities ---
@@ -922,7 +1046,7 @@ def execute_prd_stories(
 
         story_state_entry = stories_state.get("stories", {}).get(story["id"], {})
         attempt = story_state_entry.get("attempts", 0)
-        pre_story_hash = get_head_commit(project_dir)
+        feature_branch = config["branch_name"]
 
         while True:
             attempt += 1
@@ -952,83 +1076,133 @@ def execute_prd_stories(
                     save_state(state, config)
                     sys.exit(1)
 
-            # Check if this is a verification-only retry (implementation succeeded
-            # but verifier output couldn't be parsed). If the HEAD has moved past
-            # pre_story_hash, the implementation commit exists — skip re-implementation.
-            current_hash = get_head_commit(project_dir)
-            verify_only = (
-                attempt > 1
-                and current_hash != pre_story_hash
-                and stories_state.get("stories", {}).get(story["id"], {}).get("last_failure", "")
-                    .startswith("Verifier did not produce structured output")
+            # Clean result files before each attempt
+            clean_result_files(project_dir)
+
+            # --- Create attempt branch ---
+            attempt_branch = create_attempt_branch(
+                project_dir, feature_branch, story["id"], attempt
             )
 
-            if attempt > 1 and not verify_only:
-                log(f"  Resetting to pre-story state for retry...")
-                reset_to_commit(project_dir, pre_story_hash)
+            # --- Implementation session ---
+            log(f"Implementing {story['id']}: {story['title']} (attempt {attempt})...")
+            update_state_story(state, story["id"], "in_progress", attempt, prd_key=prd_key)
+            save_state(state, config)
 
-            # --- Implementation session (skip if verify-only retry) ---
-            if verify_only:
-                log(f"Verify-only retry for {story['id']}: {story['title']} (attempt {attempt})...")
-                impl_output = ""  # No new implementation output
-            else:
-                log(f"Implementing {story['id']}: {story['title']} (attempt {attempt})...")
-                update_state_story(state, story["id"], "in_progress", attempt, prd_key=prd_key)
-                save_state(state, config)
+            prompt = build_implementation_prompt(
+                story, config, state, attempt,
+                feature_name=feature_name, prd_path=prd_path, prd_key=prd_key
+            )
 
-                prompt = build_implementation_prompt(
-                    story, config, state, attempt,
-                    feature_name=feature_name, prd_path=prd_path, prd_key=prd_key
+            # Estimate input tokens
+            prompt_chars = len(prompt)
+            impl_output = run_claude_session(prompt, project_dir)
+            output_chars = len(impl_output)
+
+            state["sessions"]["total"] += 1
+            state["sessions"]["implementation"] += 1
+            # Track token estimates
+            token_est = state.setdefault("token_estimates", {"input": 0, "output": 0})
+            token_est["input"] += prompt_chars // 4
+            token_est["output"] += output_chars // 4
+            log(f"  Session tokens: ~{prompt_chars // 4000}k input, ~{output_chars // 4000}k output")
+            save_state(state, config)
+
+            # Check for session errors
+            if impl_output.startswith("SESSION_ERROR:"):
+                log(f"  Implementation session error: {impl_output[:200]}")
+                learnings = [f"Session error: {impl_output[:200]}"]
+                log_story_failure(story, attempt, config, impl_output[:500], learnings)
+                update_state_story(
+                    state, story["id"], "retrying", attempt, learnings, impl_output[:500],
+                    prd_key=prd_key
                 )
-                impl_output = run_claude_session(prompt, project_dir)
-
-                state["sessions"]["total"] += 1
-                state["sessions"]["implementation"] += 1
                 save_state(state, config)
+                # Delete the failed attempt branch (no diff to capture on session error)
+                delete_attempt_branch(project_dir, feature_branch, attempt_branch)
+                continue
 
-                # Check for session errors
-                if impl_output.startswith("SESSION_ERROR:"):
-                    log(f"  Implementation session error: {impl_output[:200]}")
-                    learnings = [f"Session error: {impl_output[:200]}"]
-                    log_story_failure(story, attempt, config, impl_output[:500], learnings)
-                    update_state_story(
-                        state, story["id"], "retrying", attempt, learnings, impl_output[:500],
-                        prd_key=prd_key
-                    )
-                    save_state(state, config)
-                    continue
+            # --- Read implementation result from file ---
+            impl_result, impl_error = read_implementation_result(project_dir)
+            if impl_error:
+                log(f"  Implementation result: {impl_error}")
+
+            # --- Get files changed from git (for verifier) ---
+            git_files_result = subprocess.run(
+                ["git", "diff", "--name-only", f"{feature_branch}...{attempt_branch}"],
+                cwd=project_dir, capture_output=True, text=True
+            )
+            files_changed_from_git = git_files_result.stdout.strip() if git_files_result.returncode == 0 else ""
 
             # --- Verification session ---
             log(f"  Verifying {story['id']}...")
-            verify_prompt = build_verification_prompt(story, config, impl_output)
+            verify_prompt = build_verification_prompt(story, config, files_changed_from_git)
+
+            verify_prompt_chars = len(verify_prompt)
             verify_output = run_claude_session(verify_prompt, project_dir)
+            verify_output_chars = len(verify_output)
 
             state["sessions"]["total"] += 1
             state["sessions"]["verification"] += 1
+            token_est["input"] += verify_prompt_chars // 4
+            token_est["output"] += verify_output_chars // 4
+            log(f"  Session tokens: ~{verify_prompt_chars // 4000}k input, ~{verify_output_chars // 4000}k output")
             save_state(state, config)
 
-            # Parse verification result
-            verdict = parse_verification_result(verify_output)
+            # --- Read verification result from file ---
+            verdict, verify_error = read_verification_result(project_dir)
+
+            if verify_error:
+                # Result file missing or invalid — treat as retryable failure
+                log(f"  Verification result error: {verify_error}")
+                learnings = extract_learnings_from_results(impl_result, None)
+                log_story_failure(story, attempt, config, verify_error, learnings)
+                update_state_story(
+                    state, story["id"], "retrying", attempt,
+                    learnings, verify_error, prd_key=prd_key
+                )
+                save_state(state, config)
+                # Capture diff as retry context, then delete attempt branch
+                attempt_diff = delete_attempt_branch(project_dir, feature_branch, attempt_branch)
+                if prd_key is not None:
+                    state["prds"][prd_key].setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
+                else:
+                    state.setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
+                save_state(state, config)
+                continue
 
             if verdict["verdict"] == "pass":
-                learnings = extract_combined_learnings(impl_output, verify_output)
+                learnings = extract_learnings_from_results(impl_result, verdict)
                 log(f"  {story['id']} PASSED (attempt {attempt})")
+                # Merge attempt branch into feature branch
+                merge_ok = merge_attempt_branch(project_dir, feature_branch, attempt_branch)
+                if not merge_ok:
+                    log(f"  WARNING: Merge failed, attempting manual resolution...")
+                    # Fall through — the code is on the attempt branch but merge failed
                 log_story_success(story, attempt, config, learnings, feature_name=feature_name)
                 update_state_story(
                     state, story["id"], "completed", attempt, learnings, prd_key=prd_key
                 )
                 save_state(state, config)
+                clean_result_files(project_dir)
                 break  # Move to next story
             else:
                 failure_details = verdict.get("recommendations", "Verification failed")
-                learnings = extract_combined_learnings(impl_output, verify_output)
+                learnings = extract_learnings_from_results(impl_result, verdict)
                 log(f"  {story['id']} FAILED verification (attempt {attempt})")
-                log(f"  Reason: {failure_details[:200]}")
-                log_story_failure(story, attempt, config, failure_details, learnings)
+                log(f"  Reason: {str(failure_details)[:200]}")
+                log_story_failure(story, attempt, config, str(failure_details), learnings)
                 update_state_story(
                     state, story["id"], "retrying", attempt,
-                    learnings, failure_details, prd_key=prd_key
+                    learnings, str(failure_details), prd_key=prd_key
                 )
+                save_state(state, config)
+                # Capture diff as retry context, then delete attempt branch
+                attempt_diff = delete_attempt_branch(project_dir, feature_branch, attempt_branch)
+                if prd_key is not None:
+                    state["prds"][prd_key].setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
+                else:
+                    state.setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
                 save_state(state, config)
                 # Loop continues to next attempt
 
@@ -1095,6 +1269,12 @@ def run_single_prd(config: dict) -> None:
         log(f"Validation session error: {validate_output[:200]}")
     else:
         log("Feature validation complete.")
+
+    # Check for pause file (created by validate-feature if critical findings exist)
+    if pause_file_exists(project_dir):
+        log("Critical validation findings detected. Pausing before completion.")
+        wait_for_pause_removal(project_dir)
+        log("Resuming after pause. Proceeding to completion.")
 
     # Commit tracking files (execution log, audit findings)
     feature_name = config.get("feature_name", "feature")
@@ -1179,6 +1359,12 @@ def run_epic(config: dict) -> None:
         if validate_output.startswith("SESSION_ERROR:"):
             log(f"  Validation error: {validate_output[:200]}")
             # Continue anyway — validation is informational
+
+        # Check for pause file (created by validate-feature if critical findings exist)
+        if pause_file_exists(project_dir):
+            log(f"  Critical validation findings for {prd_basename}. Pausing.")
+            wait_for_pause_removal(project_dir)
+            log("  Resuming after pause.")
 
         # Commit tracking files for this PRD
         commit_tracking_files(project_dir, feature_name)

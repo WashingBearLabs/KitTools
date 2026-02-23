@@ -26,11 +26,22 @@ def main():
     if not scratchpad.exists():
         return
 
-    # Count lines - if more than the header (6 lines), there are notes
+    # Check for actual content below the ## Notes header
     content = scratchpad.read_text()
-    lines = content.strip().split("\n")
 
-    if len(lines) > 6:
+    # Find the ## Notes section and check if there's content below it
+    notes_idx = content.find("## Notes")
+    if notes_idx == -1:
+        return
+
+    notes_content = content[notes_idx + len("## Notes"):].strip()
+    # Filter out compaction markers and blank lines
+    meaningful_lines = [
+        line for line in notes_content.split("\n")
+        if line.strip() and "Context compacted" not in line
+    ]
+
+    if meaningful_lines:
         print(json.dumps({
             "message": "SESSION_SCRATCH.md has notes. Run /kit-tools:close-session when done."
         }))

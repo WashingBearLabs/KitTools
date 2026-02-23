@@ -1,4 +1,4 @@
-<!-- Template Version: 1.2.0 -->
+<!-- Template Version: 1.3.0 -->
 ---
 feature: {{FEATURE_NAME}}
 status: active
@@ -43,30 +43,46 @@ SESSION-FIT GUIDELINES:
 - 3-5 acceptance criteria per story (clear, verifiable)
 - Order by dependency: schema → backend → UI
 - Stories are refined during planning to ensure session-fit
+- Implementation Hints give the implementing agent a head start (key files, patterns, gotchas)
 
 Story count is not a target — what matters is that each story:
 - Has single responsibility (one concern)
 - Is session-fit (completable in one context window)
 - Has clear, verifiable acceptance criteria
+- Has implementation hints (3-5 bullet points of guidance)
 -->
 
 ### US-001: {{Story Title}}
 
 **Description:** As a {{user type}}, I want {{feature/capability}} so that {{benefit/outcome}}.
 
+**Implementation Hints:**
+- {{Key file path or module to modify}}
+- {{Existing pattern or function to follow/use}}
+- {{Relevant gotcha or constraint}}
+
 **Acceptance Criteria:**
 - [ ] {{Specific, verifiable criterion}}
 - [ ] {{Another criterion}}
+- [ ] Tests written/updated for new functionality
+- [ ] Full test suite passes
 - [ ] Typecheck/lint passes
 <!-- For UI stories, add: -->
 <!-- - [ ] Verify in browser -->
+<!-- For doc/config-only stories, remove the test criteria above -->
 
 ### US-002: {{Story Title}}
 
 **Description:** As a {{user type}}, I want {{feature/capability}} so that {{benefit/outcome}}.
 
+**Implementation Hints:**
+- {{Key file path or module to modify}}
+- {{Existing pattern to follow}}
+
 **Acceptance Criteria:**
 - [ ] {{Criterion}}
+- [ ] Tests written/updated for new functionality
+- [ ] Full test suite passes
 - [ ] Typecheck/lint passes
 
 <!-- Add more user stories as needed -->

@@ -22,14 +22,12 @@ You are a code quality validator. Review the provided code changes against the p
 {{GIT_DIFF}}
 ```
 
-### Project Conventions
-{{CONVENTIONS}}
+### Project Context (read these files for conventions and architecture)
+- **Conventions:** `{{CONVENTIONS_PATH}}`
+- **Known Gotchas:** `{{GOTCHAS_PATH}}`
+- **Code Architecture:** `{{CODE_ARCH_PATH}}`
 
-### Known Gotchas
-{{GOTCHAS}}
-
-### Code Architecture
-{{CODE_ARCH}}
+Read these files using the Read tool to understand project patterns before reviewing.
 
 ---
 
