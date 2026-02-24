@@ -5,6 +5,31 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.4] - 2026-02-23
+
+### Added
+- **Execution Notification System** — Two-pronged notifications for autonomous/guarded execution
+  - **macOS native alerts** via `osascript` for immediate awareness on completions, failures, crashes, and pauses
+  - **`UserPromptSubmit` hook** surfaces batched notifications the next time the user interacts with Claude
+  - Nine notification points: story pass, story failure (max retries), single-PRD complete, validation pause, epic PRD complete, between-PRD pause, all epic PRDs complete, dependency blocked, crash
+  - **Crash handler** (`atexit` + `SIGTERM`) detects unexpected orchestrator exits, sets state to `crashed`, writes notification, and sends OS alert
+- **Crashed status** — `/kit-tools:execution-status` now recognizes `crashed` state with resume/reset actions
+
+### Changed
+- **Repo distribution hygiene** — Removed test files and dev dependencies from the distributed plugin
+  - `tests/` directory and `.pytest_cache/` no longer tracked by git
+  - `pytest` removed from `requirements.txt` (dev-only dependency)
+  - Added `tests/` and `kit_tools/.execution-notifications` to `.gitignore`
+
+## [1.6.3] - 2026-02-23
+
+### Fixed
+- **Unique tmux session names** — Autonomous execution now uses `kit-exec-{feature_name}` instead of a hardcoded `kit-execute` session name
+  - Prevents collisions when running multiple projects concurrently
+  - Never kills existing tmux sessions — checks for name conflicts and appends a suffix if needed
+  - Session name stored in `.execution-config.json` so `execution-status` can find it
+  - Falls back to `kit-execute` for older runs missing the field
+
 ## [1.6.2] - 2026-02-23
 
 ### Added

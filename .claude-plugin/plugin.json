@@ -1,7 +1,7 @@
 {
   "name": "kit-tools",
   "description": "Documentation framework for AI-assisted development. Provides session management, documentation templates, and automation hooks.",
-  "version": "1.6.2",
+  "version": "1.6.4",
   "author": {
     "name": "WashingBearLabs",
     "email": "contact@washingbearlabs.com",
@@ -76,6 +76,17 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/remind_scratchpad_before_compact.py"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/check_execution_notifications.py"
           }
         ]
       }

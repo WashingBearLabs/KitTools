@@ -16,11 +16,13 @@ Read `kit_tools/prd/.execution-state.json`:
 - **Not found:** Report "No execution state found. Run `/kit-tools:execute-feature` to start." and stop.
 - **Found:** Continue to Step 2.
 
-Also check if the tmux session is alive:
+Also read `kit_tools/prd/.execution-config.json` to get the `tmux_session` field (the session name used at launch). Check if it's alive:
 
 ```bash
-tmux has-session -t kit-execute 2>/dev/null
+tmux has-session -t {tmux_session} 2>/dev/null
 ```
+
+If `tmux_session` is missing from the config (older runs), fall back to `kit-execute`.
 
 Record whether the session is running or not — this affects the status report.
 
@@ -38,11 +40,14 @@ Determine the effective status:
 |---------------------|-------------|------------------|
 | `running` | Yes | **Running** |
 | `running` | No | **Stale** (orchestrator not running) |
+| `crashed` | — | **Crashed** |
 | `completed` | — | **Completed** |
 | `failed` | — | **Failed** |
 | `paused` | — | **Paused** |
 
 Check for pause file: `kit_tools/.pause_execution` — if present, status is **Paused** regardless of state JSON.
+
+> **Note:** Execution notifications are now surfaced automatically via a `UserPromptSubmit` hook. When the orchestrator completes, fails, crashes, or pauses, you will see a summary the next time you send a message. This skill provides full details on demand.
 
 ### Progress
 
@@ -115,8 +120,16 @@ Present available actions based on current state using AskUserQuestion:
 ### If Running (tmux alive)
 
 - **Pause** — `touch kit_tools/.pause_execution` (pauses after current story completes)
-- **Attach to tmux** — Print `tmux attach -t kit-execute` for user to run
+- **Attach to tmux** — Print `tmux attach -t {tmux_session}` for user to run
 - **Refresh** — Re-read state and show updated status
+
+### If Crashed (status is `crashed`)
+
+Warn: "The orchestrator crashed. The process exited unexpectedly."
+
+- **Resume execution** — Suggest running `/kit-tools:execute-feature` (it will detect the existing state and resume)
+- **Reset state** — Delete `.execution-state.json` to start fresh
+- **View log** — Show full `EXECUTION_LOG.md`
 
 ### If Stale (tmux dead but status is `running`)
 
@@ -129,7 +142,7 @@ Warn: "The orchestrator is not running but state shows `running`. The process ma
 ### If Paused
 
 - **Resume** — `rm kit_tools/.pause_execution`
-- **Attach to tmux** — Print `tmux attach -t kit-execute` for user to run
+- **Attach to tmux** — Print `tmux attach -t {tmux_session}` for user to run
 - **View findings** — If `.pause_execution` references `AUDIT_FINDINGS.md`, suggest reading it
 
 ### If Completed

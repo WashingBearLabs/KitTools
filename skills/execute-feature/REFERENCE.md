@@ -16,6 +16,7 @@ Detailed formats, schemas, and examples for the execute-feature workflow. Read t
   "feature_name": "auth",
   "mode": "autonomous",
   "max_retries": null,
+  "tmux_session": "kit-exec-auth",
   "implementer_template": "... raw story-implementer.md content ...",
   "verifier_template": "... raw story-verifier.md content ...",
   "project_context": {
@@ -36,6 +37,7 @@ Detailed formats, schemas, and examples for the execute-feature workflow. Read t
   "branch_name": "epic/arxiv",
   "mode": "autonomous",
   "max_retries": null,
+  "tmux_session": "kit-exec-arxiv",
   "implementer_template": "... raw story-implementer.md content ...",
   "verifier_template": "... raw story-verifier.md content ...",
   "project_context": {
@@ -217,17 +219,18 @@ For each uncompleted story (in PRD order):
 
 Claude Code prevents running `claude -p` from within an existing Claude session to avoid infinite recursion. Since the orchestrator spawns `claude -p` subprocesses, launching it via `run_in_background` from inside a skill fails. A detached tmux session runs in a completely separate process tree, bypassing this restriction.
 
-### tmux session convention
+### tmux session naming
 
-- **Session name:** `kit-execute` (fixed name, one execution at a time)
-- Any existing `kit-execute` session is killed before launching to avoid conflicts
-- The `; echo ...; read` suffix keeps the tmux window open after the orchestrator exits so the user can review final output
+- **Session name pattern:** `kit-exec-{feature_name}` (e.g., `kit-exec-auth`, `kit-exec-processing-pipeline`). For epics: `kit-exec-{epic_name}`.
+- The session name is stored in `.execution-config.json` as `tmux_session` so that `execution-status` can find it.
+- **Never kill existing tmux sessions.** Multiple projects may be executing concurrently under different session names.
+- If the derived session name already exists (`tmux has-session -t {name}`), append a suffix (e.g., `-2`) or ask the user.
+- The `; echo ...; read` suffix keeps the tmux window open after the orchestrator exits so the user can review final output.
 
 ### Launch command
 
 ```bash
-tmux kill-session -t kit-execute 2>/dev/null; \
-tmux new-session -d -s kit-execute \
+tmux new-session -d -s {session_name} \
   "python3 \"$CLAUDE_PLUGIN_ROOT/scripts/execute_orchestrator.py\" \
   --config \"$(pwd)/kit_tools/prd/.execution-config.json\"; \
   echo ''; echo 'Orchestrator finished. Press Enter to close.'; read"
@@ -244,12 +247,12 @@ python3 "/resolved/plugin/root/scripts/execute_orchestrator.py" \
 
 ### Monitoring commands
 
-After launching, report these to the user:
+After launching, report these to the user (using the actual session name):
 
 | Command | Purpose |
 |---------|---------|
 | `/kit-tools:execution-status` | Full status report with progress, errors, and actions |
-| `tmux attach -t kit-execute` | Attach to watch live output |
+| `tmux attach -t {session_name}` | Attach to watch live output |
 | `tail -f kit_tools/EXECUTION_LOG.md` | Follow the execution log |
 | `cat kit_tools/prd/.execution-state.json` | Check current state |
 | `touch kit_tools/.pause_execution` | Pause after current story |

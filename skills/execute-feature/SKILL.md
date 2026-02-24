@@ -115,24 +115,26 @@ For each uncompleted story:
 
 1. Write `.execution-config.json` (see REFERENCE.md for schema)
 2. Check for tmux: `which tmux`
-3. **If tmux available:** Launch orchestrator in a detached tmux session:
+3. **Derive tmux session name:** `kit-exec-{feature_name}` (e.g., `kit-exec-auth`, `kit-exec-oauth`). For epics: `kit-exec-{epic_name}`. Store as `tmux_session` in `.execution-config.json`.
+4. **Check for name collision:** Run `tmux has-session -t {session_name} 2>/dev/null`. If it exists, **do NOT kill it** — warn the user and append a short suffix (e.g., `-2`) or ask them to choose a name.
+5. **If tmux available:** Launch orchestrator in a detached tmux session:
    ```bash
-   tmux kill-session -t kit-execute 2>/dev/null; \
-   tmux new-session -d -s kit-execute \
+   tmux new-session -d -s {session_name} \
      "python3 \"$CLAUDE_PLUGIN_ROOT/scripts/execute_orchestrator.py\" \
      --config \"$(pwd)/kit_tools/prd/.execution-config.json\"; \
      echo ''; echo 'Orchestrator finished. Press Enter to close.'; read"
    ```
-4. **If no tmux:** Print the command for the user to run in a separate terminal:
+   **IMPORTANT:** Never `tmux kill-session` — other projects may be running under different session names.
+6. **If no tmux:** Print the command for the user to run in a separate terminal:
    ```
    Run this in a separate terminal window:
 
    python3 "<plugin_root>/scripts/execute_orchestrator.py" \
      --config "<project_dir>/kit_tools/prd/.execution-config.json"
    ```
-5. Report monitoring commands:
+7. Report monitoring commands (using the actual session name):
    - `/kit-tools:execution-status` — check progress, errors, and available actions
-   - `tmux attach -t kit-execute` — attach to watch live output
+   - `tmux attach -t {session_name}` — attach to watch live output
    - `tail -f kit_tools/EXECUTION_LOG.md` — follow the execution log
    - `cat kit_tools/prd/.execution-state.json` — check current state
    - `touch kit_tools/.pause_execution` — pause after current story

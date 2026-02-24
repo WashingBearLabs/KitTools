@@ -16,9 +16,12 @@ Usage:
 """
 
 import argparse
+import atexit
 import json
 import os
+import platform
 import re
+import signal
 import shutil
 import subprocess
 import sys
@@ -39,6 +42,94 @@ NETWORK_MAX_RETRIES = 3
 # File-based result paths (relative to project_dir)
 IMPL_RESULT_FILE = os.path.join("kit_tools", ".story-impl-result.json")
 VERIFY_RESULT_FILE = os.path.join("kit_tools", ".story-verify-result.json")
+NOTIFICATION_FILE = os.path.join("kit_tools", ".execution-notifications")
+
+
+# --- Notifications ---
+
+
+def get_notification_path(config: dict) -> str:
+    """Return absolute path to the notification file."""
+    return os.path.join(config["project_dir"], NOTIFICATION_FILE)
+
+
+def write_notification(
+    config: dict, ntype: str, title: str, details: str, severity: str = "info"
+) -> None:
+    """Append a JSON Lines notification entry. Best-effort — swallows OSError."""
+    try:
+        path = get_notification_path(config)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        entry = {
+            "type": ntype,
+            "title": title,
+            "details": details,
+            "severity": severity,
+            "feature": config.get("feature_name") or config.get("epic_name", ""),
+            "timestamp": now_iso(),
+        }
+        with open(path, "a") as f:
+            f.write(json.dumps(entry) + "\n")
+    except OSError:
+        pass
+
+
+def send_os_notification(title: str, message: str) -> None:
+    """Send a macOS notification via osascript. Fire-and-forget, non-blocking."""
+    if platform.system() != "Darwin":
+        return
+    safe_title = title.replace('"', '\\"')
+    safe_message = message.replace('"', '\\"')
+    try:
+        subprocess.Popen(
+            [
+                "osascript", "-e",
+                f'display notification "{safe_message}" with title "{safe_title}"',
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        pass
+
+
+def register_crash_handler(config: dict) -> None:
+    """Register atexit + SIGTERM handlers to detect orchestrator crashes."""
+    state_path = get_state_path(config)
+
+    def _on_exit():
+        try:
+            if not os.path.exists(state_path):
+                return
+            with open(state_path, "r") as f:
+                state = json.load(f)
+            if state.get("status") != "running":
+                return
+            state["status"] = "crashed"
+            state["updated_at"] = now_iso()
+            with open(state_path, "w") as f:
+                json.dump(state, f, indent=2)
+            feature = config.get("feature_name") or config.get("epic_name", "unknown")
+            write_notification(
+                config, "execution_crashed",
+                "Execution crashed",
+                f"Orchestrator exited unexpectedly for {feature}",
+                severity="critical",
+            )
+            send_os_notification(
+                "KitTools: Execution Crashed",
+                f"Orchestrator exited unexpectedly for {feature}",
+            )
+        except Exception:
+            pass
+
+    atexit.register(_on_exit)
+
+    def _on_sigterm(signum, frame):
+        _on_exit()
+        sys.exit(1)
+
+    signal.signal(signal.SIGTERM, _on_sigterm)
 
 
 # --- State Management ---
@@ -1074,6 +1165,16 @@ def execute_prd_stories(
                         prd_key=prd_key
                     )
                     save_state(state, config)
+                    write_notification(
+                        config, "story_failed",
+                        f"Story {story['id']} failed",
+                        f"{story['id']}: {story['title']} exceeded {max_retries} retries",
+                        severity="critical",
+                    )
+                    send_os_notification(
+                        "KitTools: Story Failed",
+                        f"{story['id']} exceeded {max_retries} retries",
+                    )
                     sys.exit(1)
 
             # Clean result files before each attempt
@@ -1184,6 +1285,12 @@ def execute_prd_stories(
                     state, story["id"], "completed", attempt, learnings, prd_key=prd_key
                 )
                 save_state(state, config)
+                write_notification(
+                    config, "story_complete",
+                    f"Story {story['id']} passed",
+                    f"{story['id']}: {story['title']} (attempt {attempt})",
+                    severity="info",
+                )
                 clean_result_files(project_dir)
                 break  # Move to next story
             else:
@@ -1254,6 +1361,17 @@ def run_single_prd(config: dict) -> None:
     state["status"] = "completed"
     save_state(state, config)
     log_completion(config, state)
+    feature_label = config.get("feature_name", "feature")
+    write_notification(
+        config, "execution_complete",
+        "Execution complete",
+        f"All stories passed for {feature_label}",
+        severity="info",
+    )
+    send_os_notification(
+        "KitTools: Execution Complete",
+        f"All stories passed for {feature_label}",
+    )
 
     # Run feature validation (may auto-invoke complete-feature)
     prd_basename = os.path.basename(prd_path)
@@ -1273,6 +1391,16 @@ def run_single_prd(config: dict) -> None:
     # Check for pause file (created by validate-feature if critical findings exist)
     if pause_file_exists(project_dir):
         log("Critical validation findings detected. Pausing before completion.")
+        write_notification(
+            config, "execution_paused",
+            "Execution paused",
+            f"Critical validation findings for {feature_label}. Review AUDIT_FINDINGS.md.",
+            severity="warning",
+        )
+        send_os_notification(
+            "KitTools: Execution Paused",
+            f"Critical findings for {feature_label}. Review needed.",
+        )
         wait_for_pause_removal(project_dir)
         log("Resuming after pause. Proceeding to completion.")
 
@@ -1327,6 +1455,16 @@ def run_epic(config: dict) -> None:
             log("Cannot continue epic execution.")
             state["status"] = "blocked"
             save_state(state, config)
+            write_notification(
+                config, "execution_paused",
+                "Epic blocked on dependencies",
+                f"{prd_basename} blocked — missing: {', '.join(missing)}",
+                severity="critical",
+            )
+            send_os_notification(
+                "KitTools: Epic Blocked",
+                f"{prd_basename} has unmet dependencies",
+            )
             sys.exit(1)
 
         log(f"--- PRD {i+1}/{len(epic_prds)}: {prd_basename} ---")
@@ -1388,6 +1526,16 @@ def run_epic(config: dict) -> None:
         save_state(state, config)
 
         log(f"  {prd_basename} complete. Tagged: {epic_name}/{feature_name}-complete")
+        write_notification(
+            config, "prd_complete",
+            f"PRD complete: {feature_name}",
+            f"{prd_basename} ({i+1}/{len(epic_prds)}) complete in epic {epic_name}",
+            severity="info",
+        )
+        send_os_notification(
+            "KitTools: PRD Complete",
+            f"{feature_name} ({i+1}/{len(epic_prds)}) done",
+        )
 
         # Pause between PRDs if configured
         if config.get("epic_pause_between_prds") and not is_final:
@@ -1396,6 +1544,16 @@ def run_epic(config: dict) -> None:
                 f.write(f"Epic paused after {prd_basename}. Remove this file to continue.\n")
             log(f"  Pausing between PRDs. Review {prd_basename} results, then:")
             log(f"    rm kit_tools/.pause_execution")
+            write_notification(
+                config, "execution_paused",
+                "Epic paused between PRDs",
+                f"Paused after {prd_basename}. Remove pause file to continue.",
+                severity="warning",
+            )
+            send_os_notification(
+                "KitTools: Epic Paused",
+                f"Review {feature_name} results, then remove pause file",
+            )
             wait_for_pause_removal(project_dir)
 
     # All PRDs complete
@@ -1403,6 +1561,16 @@ def run_epic(config: dict) -> None:
     state["status"] = "completed"
     save_state(state, config)
     log_completion(config, state)
+    write_notification(
+        config, "execution_complete",
+        "Epic complete",
+        f"All {len(epic_prds)} PRDs complete for epic {epic_name}",
+        severity="info",
+    )
+    send_os_notification(
+        "KitTools: Epic Complete",
+        f"All {len(epic_prds)} PRDs done for {epic_name}",
+    )
 
     # Final: run complete-feature for the epic
     # (This handles PR creation for the epic branch)
@@ -1431,6 +1599,7 @@ def main():
     args = parser.parse_args()
 
     config = load_config(args.config)
+    register_crash_handler(config)
 
     if config.get("epic_prds"):
         run_epic(config)

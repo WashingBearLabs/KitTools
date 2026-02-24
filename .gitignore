@@ -42,5 +42,11 @@ kit_tools/.pause_execution
 # Internal planning (not part of plugin distribution)
 ROADMAP.md
 
+# Tests (development only, not shipped to users)
+tests/
+
+# Execution notifications (transient)
+kit_tools/.execution-notifications
+
 # Local-only skills (plugin maintenance, not shipped to users)
 .claude/skills/
