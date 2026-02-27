@@ -223,17 +223,15 @@ Claude Code prevents running `claude -p` from within an existing Claude session 
 
 - **Session name pattern:** `kit-exec-{feature_name}` (e.g., `kit-exec-auth`, `kit-exec-processing-pipeline`). For epics: `kit-exec-{epic_name}`.
 - The session name is stored in `.execution-config.json` as `tmux_session` so that `execution-status` can find it.
-- **Never kill existing tmux sessions.** Multiple projects may be executing concurrently under different session names.
 - If the derived session name already exists (`tmux has-session -t {name}`), append a suffix (e.g., `-2`) or ask the user.
-- The `; echo ...; read` suffix keeps the tmux window open after the orchestrator exits so the user can review final output.
+- The orchestrator kills its own tmux session on completion via `kill_tmux_session()`, so no manual cleanup is needed.
 
 ### Launch command
 
 ```bash
 tmux new-session -d -s {session_name} \
-  "python3 \"$CLAUDE_PLUGIN_ROOT/scripts/execute_orchestrator.py\" \
-  --config \"$(pwd)/kit_tools/prd/.execution-config.json\"; \
-  echo ''; echo 'Orchestrator finished. Press Enter to close.'; read"
+  "unset CLAUDECODE; python3 \"$CLAUDE_PLUGIN_ROOT/scripts/execute_orchestrator.py\" \
+  --config \"$(pwd)/kit_tools/prd/.execution-config.json\""
 ```
 
 ### Fallback (no tmux)

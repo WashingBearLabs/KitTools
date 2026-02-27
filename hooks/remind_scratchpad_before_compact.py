@@ -31,12 +31,19 @@ def main():
 
     # If scratchpad exists, append compaction marker
     if scratchpad.exists():
-        content = scratchpad.read_text()
+        try:
+            content = scratchpad.read_text()
+        except (OSError, UnicodeDecodeError):
+            content = ""
+
         marker = f"\n[{now}] --- Context compacted, session continuing ---\n"
 
         # Only add marker if not already the last thing added
-        if "Context compacted" not in content.strip().split("\n")[-3:]:
-            scratchpad.write_text(content + marker)
+        if content and "Context compacted" not in content.strip().split("\n")[-3:]:
+            try:
+                scratchpad.write_text(content + marker)
+            except OSError:
+                pass
 
     # Always remind before compaction
     print(json.dumps({

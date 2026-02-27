@@ -40,8 +40,11 @@ def main():
 ## Notes
 
 """
-        scratchpad.write_text(content)
-        print(json.dumps({"message": "Created SESSION_SCRATCH.md - ready to capture notes"}))
+        try:
+            scratchpad.write_text(content)
+            print(json.dumps({"message": "Created SESSION_SCRATCH.md - ready to capture notes"}))
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":

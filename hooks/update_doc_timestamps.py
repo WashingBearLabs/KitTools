@@ -37,7 +37,11 @@ def main():
     if not path.exists():
         return
 
-    content = path.read_text()
+    try:
+        content = path.read_text()
+    except (OSError, UnicodeDecodeError):
+        return
+
     today = date.today().isoformat()
 
     # Replace "Last updated: YYYY-MM-DD" or similar
@@ -50,7 +54,10 @@ def main():
     )
 
     if count > 0 and new_content != content:
-        path.write_text(new_content)
+        try:
+            path.write_text(new_content)
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":

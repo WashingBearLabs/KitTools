@@ -86,11 +86,14 @@ def get_plugin_skill_names(skills_dir: Path) -> set[str]:
     """Get all skill names from the plugin's skills directory."""
     skill_names = set()
 
-    for item in skills_dir.iterdir():
-        if item.is_dir():
-            skill_file = item / "SKILL.md"
-            if skill_file.exists():
-                skill_names.add(item.name)
+    try:
+        for item in skills_dir.iterdir():
+            if item.is_dir():
+                skill_file = item / "SKILL.md"
+                if skill_file.exists():
+                    skill_names.add(item.name)
+    except OSError:
+        pass
 
     return skill_names
 
@@ -99,11 +102,14 @@ def get_existing_kit_tools_symlinks(user_skills_dir: Path) -> dict[str, Path]:
     """Get existing kit-tools-* symlinks and their targets."""
     symlinks = {}
 
-    for item in user_skills_dir.iterdir():
-        if item.name.startswith(SYMLINK_PREFIX) and item.is_symlink():
-            # Extract skill name from symlink name
-            skill_name = item.name[len(SYMLINK_PREFIX):]
-            symlinks[skill_name] = item
+    try:
+        for item in user_skills_dir.iterdir():
+            if item.name.startswith(SYMLINK_PREFIX) and item.is_symlink():
+                # Extract skill name from symlink name
+                skill_name = item.name[len(SYMLINK_PREFIX):]
+                symlinks[skill_name] = item
+    except OSError:
+        pass
 
     return symlinks
 
@@ -151,14 +157,20 @@ def sync_symlinks(plugin_skills_dir: Path, user_skills_dir: Path) -> dict:
                 actions["updated"].append(skill_name)
         else:
             # Create new symlink
-            symlink_path.symlink_to(target_path)
-            actions["created"].append(skill_name)
+            try:
+                symlink_path.symlink_to(target_path)
+                actions["created"].append(skill_name)
+            except OSError:
+                pass
 
     # Remove orphaned symlinks for skills that no longer exist
     for skill_name, symlink_path in existing_symlinks.items():
         if skill_name not in plugin_skills:
-            symlink_path.unlink()
-            actions["removed"].append(skill_name)
+            try:
+                symlink_path.unlink()
+                actions["removed"].append(skill_name)
+            except OSError:
+                pass
 
     return actions
 

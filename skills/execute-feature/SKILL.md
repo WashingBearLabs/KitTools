@@ -120,11 +120,10 @@ For each uncompleted story:
 5. **If tmux available:** Launch orchestrator in a detached tmux session:
    ```bash
    tmux new-session -d -s {session_name} \
-     "python3 \"$CLAUDE_PLUGIN_ROOT/scripts/execute_orchestrator.py\" \
-     --config \"$(pwd)/kit_tools/prd/.execution-config.json\"; \
-     echo ''; echo 'Orchestrator finished. Press Enter to close.'; read"
+     "unset CLAUDECODE; python3 \"$CLAUDE_PLUGIN_ROOT/scripts/execute_orchestrator.py\" \
+     --config \"$(pwd)/kit_tools/prd/.execution-config.json\""
    ```
-   **IMPORTANT:** Never `tmux kill-session` — other projects may be running under different session names.
+   The orchestrator kills its own tmux session on completion. Progress is reported to the parent Claude session via file-based notifications (surfaced on the user's next prompt).
 6. **If no tmux:** Print the command for the user to run in a separate terminal:
    ```
    Run this in a separate terminal window:

@@ -19,7 +19,6 @@ import argparse
 import atexit
 import json
 import os
-import platform
 import re
 import signal
 import shutil
@@ -74,18 +73,14 @@ def write_notification(
         pass
 
 
-def send_os_notification(title: str, message: str) -> None:
-    """Send a macOS notification via osascript. Fire-and-forget, non-blocking."""
-    if platform.system() != "Darwin":
+def kill_tmux_session(config: dict) -> None:
+    """Kill the tmux session used to run this orchestrator. Best-effort."""
+    session_name = config.get("tmux_session")
+    if not session_name:
         return
-    safe_title = title.replace('"', '\\"')
-    safe_message = message.replace('"', '\\"')
     try:
-        subprocess.Popen(
-            [
-                "osascript", "-e",
-                f'display notification "{safe_message}" with title "{safe_title}"',
-            ],
+        subprocess.run(
+            ["tmux", "kill-session", "-t", session_name],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -99,6 +94,7 @@ def register_crash_handler(config: dict) -> None:
 
     def _on_exit():
         try:
+            kill_tmux_session(config)
             if not os.path.exists(state_path):
                 return
             with open(state_path, "r") as f:
@@ -115,10 +111,6 @@ def register_crash_handler(config: dict) -> None:
                 "Execution crashed",
                 f"Orchestrator exited unexpectedly for {feature}",
                 severity="critical",
-            )
-            send_os_notification(
-                "KitTools: Execution Crashed",
-                f"Orchestrator exited unexpectedly for {feature}",
             )
         except Exception:
             pass
@@ -578,6 +570,9 @@ def build_verification_prompt(
 
 def run_claude_session(prompt: str, project_dir: str) -> str:
     """Execute a claude -p session and capture output."""
+    # Build a clean environment without CLAUDECODE to prevent
+    # "cannot be launched inside another Claude Code session" errors.
+    clean_env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
     for network_attempt in range(1, NETWORK_MAX_RETRIES + 1):
         try:
             result = subprocess.run(
@@ -589,6 +584,7 @@ def run_claude_session(prompt: str, project_dir: str) -> str:
                 text=True,
                 timeout=SESSION_TIMEOUT,
                 cwd=project_dir,
+                env=clean_env,
             )
             if result.returncode != 0:
                 stderr = result.stderr.strip()
@@ -1153,6 +1149,8 @@ def execute_prd_stories(
                         log("User stopped execution.")
                         state["status"] = "paused"
                         save_state(state, config)
+                        commit_tracking_files(project_dir, feature_name)
+                        clean_result_files(project_dir)
                         sys.exit(0)
                     attempt = 1  # Reset for new round
                     continue
@@ -1171,10 +1169,8 @@ def execute_prd_stories(
                         f"{story['id']}: {story['title']} exceeded {max_retries} retries",
                         severity="critical",
                     )
-                    send_os_notification(
-                        "KitTools: Story Failed",
-                        f"{story['id']} exceeded {max_retries} retries",
-                    )
+                    commit_tracking_files(project_dir, feature_name)
+                    clean_result_files(project_dir)
                     sys.exit(1)
 
             # Clean result files before each attempt
@@ -1221,6 +1217,7 @@ def execute_prd_stories(
                 save_state(state, config)
                 # Delete the failed attempt branch (no diff to capture on session error)
                 delete_attempt_branch(project_dir, feature_branch, attempt_branch)
+                clean_result_files(project_dir)
                 continue
 
             # --- Read implementation result from file ---
@@ -1270,6 +1267,7 @@ def execute_prd_stories(
                 else:
                     state.setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
                 save_state(state, config)
+                clean_result_files(project_dir)
                 continue
 
             if verdict["verdict"] == "pass":
@@ -1278,8 +1276,26 @@ def execute_prd_stories(
                 # Merge attempt branch into feature branch
                 merge_ok = merge_attempt_branch(project_dir, feature_branch, attempt_branch)
                 if not merge_ok:
-                    log(f"  WARNING: Merge failed, attempting manual resolution...")
-                    # Fall through — the code is on the attempt branch but merge failed
+                    log(f"  Merge conflict — aborting merge, will retry implementation.")
+                    subprocess.run(
+                        ["git", "merge", "--abort"],
+                        cwd=project_dir, capture_output=True
+                    )
+                    learnings.append("Merge conflict on attempt branch — retry with fresh approach")
+                    log_story_failure(story, attempt, config, "Merge conflict", learnings)
+                    update_state_story(
+                        state, story["id"], "retrying", attempt,
+                        learnings, "Merge conflict", prd_key=prd_key
+                    )
+                    save_state(state, config)
+                    attempt_diff = delete_attempt_branch(project_dir, feature_branch, attempt_branch)
+                    if prd_key is not None:
+                        state["prds"][prd_key].setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
+                    else:
+                        state.setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
+                    save_state(state, config)
+                    clean_result_files(project_dir)
+                    continue
                 log_story_success(story, attempt, config, learnings, feature_name=feature_name)
                 update_state_story(
                     state, story["id"], "completed", attempt, learnings, prd_key=prd_key
@@ -1311,6 +1327,7 @@ def execute_prd_stories(
                 else:
                     state.setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
                 save_state(state, config)
+                clean_result_files(project_dir)
                 # Loop continues to next attempt
 
     return state
@@ -1368,10 +1385,6 @@ def run_single_prd(config: dict) -> None:
         f"All stories passed for {feature_label}",
         severity="info",
     )
-    send_os_notification(
-        "KitTools: Execution Complete",
-        f"All stories passed for {feature_label}",
-    )
 
     # Run feature validation (may auto-invoke complete-feature)
     prd_basename = os.path.basename(prd_path)
@@ -1397,16 +1410,15 @@ def run_single_prd(config: dict) -> None:
             f"Critical validation findings for {feature_label}. Review AUDIT_FINDINGS.md.",
             severity="warning",
         )
-        send_os_notification(
-            "KitTools: Execution Paused",
-            f"Critical findings for {feature_label}. Review needed.",
-        )
         wait_for_pause_removal(project_dir)
         log("Resuming after pause. Proceeding to completion.")
 
     # Commit tracking files (execution log, audit findings)
     feature_name = config.get("feature_name", "feature")
     commit_tracking_files(project_dir, feature_name)
+
+    # Clean up tmux session
+    kill_tmux_session(config)
 
 
 # --- Epic Mode ---
@@ -1461,10 +1473,8 @@ def run_epic(config: dict) -> None:
                 f"{prd_basename} blocked — missing: {', '.join(missing)}",
                 severity="critical",
             )
-            send_os_notification(
-                "KitTools: Epic Blocked",
-                f"{prd_basename} has unmet dependencies",
-            )
+            commit_tracking_files(project_dir, epic_name)
+            clean_result_files(project_dir)
             sys.exit(1)
 
         log(f"--- PRD {i+1}/{len(epic_prds)}: {prd_basename} ---")
@@ -1532,10 +1542,6 @@ def run_epic(config: dict) -> None:
             f"{prd_basename} ({i+1}/{len(epic_prds)}) complete in epic {epic_name}",
             severity="info",
         )
-        send_os_notification(
-            "KitTools: PRD Complete",
-            f"{feature_name} ({i+1}/{len(epic_prds)}) done",
-        )
 
         # Pause between PRDs if configured
         if config.get("epic_pause_between_prds") and not is_final:
@@ -1550,10 +1556,6 @@ def run_epic(config: dict) -> None:
                 f"Paused after {prd_basename}. Remove pause file to continue.",
                 severity="warning",
             )
-            send_os_notification(
-                "KitTools: Epic Paused",
-                f"Review {feature_name} results, then remove pause file",
-            )
             wait_for_pause_removal(project_dir)
 
     # All PRDs complete
@@ -1566,10 +1568,6 @@ def run_epic(config: dict) -> None:
         "Epic complete",
         f"All {len(epic_prds)} PRDs complete for epic {epic_name}",
         severity="info",
-    )
-    send_os_notification(
-        "KitTools: Epic Complete",
-        f"All {len(epic_prds)} PRDs done for {epic_name}",
     )
 
     # Final: run complete-feature for the epic
@@ -1585,6 +1583,9 @@ def run_epic(config: dict) -> None:
         log(f"Completion session error: {complete_output[:200]}")
     else:
         log("Epic completion done.")
+
+    # Clean up tmux session
+    kill_tmux_session(config)
 
 
 # --- Main ---

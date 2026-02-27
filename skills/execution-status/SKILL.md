@@ -22,7 +22,7 @@ Also read `kit_tools/prd/.execution-config.json` to get the `tmux_session` field
 tmux has-session -t {tmux_session} 2>/dev/null
 ```
 
-If `tmux_session` is missing from the config (older runs), fall back to `kit-execute`.
+If `tmux_session` is missing from the config (older runs), fall back to `kit-exec-{feature_name}` derived from the state file's `prd` field (strip the `prd-` prefix and `.md` suffix).
 
 Record whether the session is running or not — this affects the status report.
 
@@ -47,7 +47,7 @@ Determine the effective status:
 
 Check for pause file: `kit_tools/.pause_execution` — if present, status is **Paused** regardless of state JSON.
 
-> **Note:** Execution notifications are now surfaced automatically via a `UserPromptSubmit` hook. When the orchestrator completes, fails, crashes, or pauses, you will see a summary the next time you send a message. This skill provides full details on demand.
+> **Note:** Execution notifications are surfaced automatically via a `UserPromptSubmit` hook — when the orchestrator completes, fails, crashes, or pauses, you will see a summary the next time the user sends a message. The tmux session is cleaned up automatically on completion. This skill provides full details on demand.
 
 ### Progress
 

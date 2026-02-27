@@ -39,7 +39,41 @@ This skill requires the following project files:
   4. Delete the scratchpad file
   5. Let the user know what was recovered before continuing
 
-## Step 1: Create fresh scratchpad
+## Step 1: Git health check
+
+Run the following git commands and report a concise summary:
+
+1. **Branch info:** `git branch --show-current` — report the current branch name.
+2. **Uncommitted changes:** `git status --short` — report modified, staged, and untracked file counts. If there are changes, list them briefly.
+3. **Stash:** `git stash list` — note if there are stashed changes the user may have forgotten about.
+4. **Remote sync:** `git fetch --quiet` then `git status --short --branch` — check if the branch is behind, ahead, or diverged from its upstream.
+5. **Recent commits:** `git log --oneline -5` — show the last 5 commits for context on where things left off.
+
+### Reporting
+
+Present the findings as a compact status block, for example:
+
+```
+Git Status:
+  Branch:      feature/auth (3 ahead, 1 behind origin/feature/auth)
+  Uncommitted: 2 modified, 1 untracked
+  Stash:       1 entry
+  Last commit: a1b2c3d "Add login endpoint" (2 hours ago)
+```
+
+### If issues are found
+
+Flag any of these to the user and let them decide how to proceed:
+
+- **Behind remote** — suggest `git pull` or `git pull --rebase` before starting work
+- **Uncommitted changes** — note them and ask if the user wants to commit, stash, or continue as-is
+- **Diverged from upstream** — warn that a merge/rebase will be needed
+- **Detached HEAD** — warn and suggest checking out a branch
+- **Stashed changes** — mention them in case the user forgot about prior work
+
+Do not take any git actions automatically — just report and let the user choose. If everything is clean, say so and move on.
+
+## Step 2: Create fresh scratchpad
 
 Create `kit_tools/SESSION_SCRATCH.md` with this content:
 
@@ -61,15 +95,15 @@ Create `kit_tools/SESSION_SCRATCH.md` with this content:
 
 This file will be used to capture work throughout the session.
 
-## Step 2: Read the navigation guide
+## Step 3: Read the navigation guide
 
 Read `kit_tools/AGENT_README.md` — this tells you how to navigate this repo and what patterns to follow.
 
-## Step 3: Read project status
+## Step 4: Read project status
 
 Read `kit_tools/SYNOPSIS.md` to understand the current project state.
 
-## Step 4: Check active work
+## Step 5: Check active work
 
 ### PRDs (Product Requirements Documents)
 
@@ -90,15 +124,15 @@ Review `kit_tools/roadmap/`:
 
 List any active PRDs and their progress so we know what's being worked on.
 
-## Step 5: Architecture refresh
+## Step 6: Architecture refresh
 
 Skim `kit_tools/arch/CODE_ARCH.md` and `kit_tools/arch/INFRA_ARCH.md` to refresh on the structure.
 
-## Step 6: Check gotchas
+## Step 7: Check gotchas
 
 Read `kit_tools/docs/GOTCHAS.md` for any landmines relevant to today's work.
 
-## Step 7: Review open audit findings
+## Step 8: Review open audit findings
 
 - Check if `kit_tools/AUDIT_FINDINGS.md` exists
 - If it exists, read the **Active Findings** section
@@ -116,6 +150,7 @@ Read `kit_tools/docs/GOTCHAS.md` for any landmines relevant to today's work.
 
 Once oriented, provide a quick summary of:
 
+- **Git status** — branch, sync state, uncommitted changes (with any warnings/suggestions)
 - Any recovered notes from orphaned scratchpad (if applicable)
 - Current project status (from SYNOPSIS.md)
 - **Active PRDs and their progress** (list each with story completion count, e.g., "prd-auth.md: 3/5 stories complete")

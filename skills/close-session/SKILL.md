@@ -123,6 +123,8 @@ Add an entry to `kit_tools/SESSION_LOG.md` with:
 
 ## Step 5: Delete scratchpad
 
+> **Note:** Unlike `/kit-tools:checkpoint` (which clears notes but preserves the file and Active Feature), close-session deletes the scratchpad entirely to signal the session ended.
+
 - Delete `kit_tools/SESSION_SCRATCH.md` entirely
 - This signals the session closed cleanly
 

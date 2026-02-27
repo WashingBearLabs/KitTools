@@ -58,6 +58,8 @@ Skip this step if only SESSION_LOG and TODO files were updated.
 
 ## Step 3: Clear the scratchpad (preserve Active Feature)
 
+> **Note:** Unlike `/kit-tools:close-session` (which deletes the scratchpad entirely), checkpoint preserves the file and the Active Feature section — the session is still active.
+
 - Clear the **Notes** section of `kit_tools/SESSION_SCRATCH.md` but keep the file (session is still active)
 - **Preserve the "Active Feature" section** so we remember what we're working on
 - Reset to this structure:

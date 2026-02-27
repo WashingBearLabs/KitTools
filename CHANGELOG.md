@@ -5,6 +5,30 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.5] - 2026-02-26
+
+### Fixed
+- **Nested `claude -p` sessions** — Orchestrator now strips the `CLAUDECODE` environment variable before spawning subprocesses, preventing "cannot be launched inside another Claude Code session" errors
+  - `run_claude_session()` passes a clean `env` dict to `subprocess.run`
+  - tmux launch command also unsets `CLAUDECODE` as defense-in-depth
+- **Orchestrator cleanup on error exits** — All `sys.exit()` paths now properly clean up tmux sessions, commit tracking files, and remove result files
+  - Crash handler (`atexit`) kills the tmux session on unexpected exits
+  - Guarded mode Ctrl+C, max retries exceeded, and epic dependency failure all run cleanup before exiting
+- **Merge conflict handling** — Failed merges of attempt branches now abort cleanly and retry instead of silently marking the story as completed with an orphaned branch
+- **Result file cleanup** — `.story-impl-result.json` and `.story-verify-result.json` are now cleaned on all retry paths, not just on success
+- **Hook error handling** — All hooks now wrap file I/O in try/except to prevent tracebacks on encoding errors or permission issues
+  - `update_doc_timestamps.py`, `create_scratchpad.py`, `remind_scratchpad_before_compact.py`, `sync_skill_symlinks.py`
+- **Execution status tmux fallback** — Fixed session name fallback from hardcoded `kit-execute` to `kit-exec-{feature_name}` pattern
+
+### Changed
+- **Notifications** — Removed macOS `osascript` notifications; all progress is now reported through file-based notifications surfaced by the `UserPromptSubmit` hook in the parent Claude session
+- **tmux lifecycle** — Orchestrator now kills its own tmux session on completion via `kill_tmux_session()`; no more `; echo ...; read` suffix keeping sessions open
+
+### Added
+- **Git health check in start-session** — `/kit-tools:start-session` now runs a git status check (branch, uncommitted changes, stash, remote sync, recent commits) before orienting on docs
+- **Plugin discoverability** — SYNOPSIS template now includes a KitTools install note so new contributors to a project can find and install the plugin
+- **Scratchpad behavior docs** — `checkpoint` and `close-session` skills now document their different scratchpad handling (preserve vs. delete)
+
 ## [1.6.4] - 2026-02-23
 
 ### Added
