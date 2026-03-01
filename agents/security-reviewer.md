@@ -22,6 +22,8 @@ You are a security reviewer. Review the provided code changes for security vulne
 {{GIT_DIFF}}
 ```
 
+> Note: The diff above may be truncated for large branches. If so, use the Read tool to examine individual changed files for full context before reporting findings.
+
 ### Project Context (read these files for architecture and security guidelines)
 - **Code Architecture:** `{{CODE_ARCH_PATH}}`
 - **Security Guidelines:** `{{SECURITY_PATH}}`

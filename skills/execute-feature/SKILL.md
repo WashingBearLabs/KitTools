@@ -19,7 +19,7 @@ Read `REFERENCE.md` in this skill directory for detailed schemas, token tables, 
 | `$CLAUDE_PLUGIN_ROOT/scripts/execute_orchestrator.py` | For autonomous/guarded | Python orchestrator script |
 
 **Creates:** `.execution-state.json`, `.execution-config.json`, `EXECUTION_LOG.md`
-**Modifies:** PRD checkboxes as stories complete
+**Modifies:** PRD checkboxes (updated by orchestrator/skill after verification passes)
 
 ---
 
@@ -105,11 +105,13 @@ Create `.execution-state.json` and append run header to `EXECUTION_LOG.md`.
 For each uncompleted story:
 1. Read + interpolate `story-implementer.md`, spawn via Task tool
 2. Read implementer JSON result file
-3. Get files changed from `git diff --name-only`
-4. Read + interpolate `story-verifier.md`, spawn via Task tool
+3. Get files changed from `git diff --name-only` and `git diff --stat`
+4. Read + interpolate `story-verifier.md` (with diff stat, test command, full context paths), spawn via Task tool
 5. Read verifier JSON result file
-6. **PASS:** Update PRD checkboxes, commit, log success, ask to continue
+6. **PASS:** Update PRD checkboxes (orchestrator/skill handles this), commit, log success, ask to continue
 7. **FAIL:** Log failure, present to user, ask: retry / adjust / stop
+
+> The implementer does NOT self-verify or update PRD checkboxes. The verifier is the sole quality gate. PRD checkboxes are updated by the orchestrator (autonomous/guarded) or this skill (supervised) after verification passes.
 
 ### Autonomous/Guarded Mode
 

@@ -47,6 +47,17 @@ Template: `$CLAUDE_PLUGIN_ROOT/agents/security-reviewer.md`
 | `{{SECURITY_PATH}}` | Path to SECURITY.md (agent reads on-demand) |
 | `{{CODE_ARCH_PATH}}` | Path to CODE_ARCH.md (agent reads on-demand) |
 
+### PRD Compliance Agent
+
+Template: `$CLAUDE_PLUGIN_ROOT/agents/prd-compliance-reviewer.md`
+
+| Token | Source |
+|-------|--------|
+| `{{PRD_PATH}}` | Path to the PRD file |
+| `{{GIT_DIFF}}` | Full branch diff from Step 2 |
+| `{{CHANGED_FILES}}` | File list from Step 2 |
+| `{{CODE_ARCH_PATH}}` | Path to CODE_ARCH.md (agent reads on-demand) |
+
 ### Feature Fixer Agent
 
 Template: `$CLAUDE_PLUGIN_ROOT/agents/feature-fixer.md`
@@ -59,6 +70,19 @@ Template: `$CLAUDE_PLUGIN_ROOT/agents/feature-fixer.md`
 | `{{CONVENTIONS_PATH}}` | Path to CONVENTIONS.md (agent reads on-demand) |
 | `{{CODE_ARCH_PATH}}` | Path to CODE_ARCH.md (agent reads on-demand) |
 | `{{RESULT_FILE_PATH}}` | Path to write fix result JSON (`kit_tools/.fix-result.json`) |
+
+---
+
+## Large Diff Handling
+
+When the branch diff exceeds ~60KB, it must be summarized before interpolating into agent prompts to avoid blowing context windows:
+
+1. Split the diff by `diff --git` headers into per-file chunks
+2. Allocate a character budget per file (~60KB / number of files)
+3. Truncate each file's hunks at the budget limit
+4. Append notice: "Full diff truncated. Read individual files for complete changes."
+
+Always include the full `git diff --stat` output — it fits easily and gives agents a structural overview. The truncated-diff note in each agent template instructs them to use the Read tool for full file context.
 
 ---
 

@@ -27,6 +27,8 @@ You are a targeted code fixer. Your job is to address specific validation findin
 {{GIT_DIFF}}
 ```
 
+> Note: The diff above may be truncated for large branches. If so, use the Read tool to examine individual changed files for full context before reporting findings.
+
 ### Project Context (read these files for conventions and architecture)
 - **Conventions:** `{{CONVENTIONS_PATH}}`
 - **Code Architecture:** `{{CODE_ARCH_PATH}}`

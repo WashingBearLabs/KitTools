@@ -21,17 +21,33 @@ You are independently verifying whether a user story implementation meets its ac
 **ID:** {{STORY_ID}}
 **Title:** {{STORY_TITLE}}
 
+**Description:**
+{{STORY_DESCRIPTION}}
+
+**Implementation Hints:**
+{{IMPLEMENTATION_HINTS}}
+
 **Acceptance Criteria:**
 {{ACCEPTANCE_CRITERIA}}
 
 ## What Changed
 
+### Diff Stat
+{{DIFF_STAT}}
+
 ### Files Changed (from git)
 {{FILES_CHANGED}}
 
 ## Project Context Files
-Read these for conventions and context as needed:
+Read these for conventions, architecture, and context as needed:
+- **Synopsis:** {{SYNOPSIS_PATH}}
+- **Code Architecture:** {{CODE_ARCH_PATH}}
 - **Conventions:** {{CONVENTIONS_PATH}}
+- **Known Gotchas:** {{GOTCHAS_PATH}}
+- **PRD:** {{PRD_PATH}}
+
+## Test Command
+{{TEST_COMMAND}}
 
 ---
 
@@ -46,8 +62,9 @@ Read every file listed in "Files Changed" above. Do NOT trust any claims — ver
 For each acceptance criterion:
 
 - **Does the code actually satisfy this criterion?** Read the relevant code and confirm.
+- **Run the test command** listed above (if available) to check for regressions and passing tests.
 - **Run typecheck/lint commands** if the criteria mention them (e.g., `npx tsc --noEmit`, `npm run lint`).
-- **Run test commands** if the criteria mention tests (e.g., `npm test`, `pytest`).
+- **Cross-reference the PRD** if a criterion is ambiguous — the PRD has the full story description and intent.
 - **Check convention adherence** — does the implementation follow the project's stated conventions?
 
 ### 3. Be Skeptical

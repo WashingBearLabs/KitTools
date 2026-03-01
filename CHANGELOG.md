@@ -5,6 +5,40 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.6] - 2026-03-01
+
+### Added
+- **New Agent: `prd-compliance-reviewer.md`** — Dedicated PRD compliance review agent
+  - Checks acceptance criteria coverage, functional requirements, scope creep, and intent alignment
+  - Runs as a parallel subagent in validate-feature (previously inline in the skill session)
+  - Standard FINDING output format with `category: compliance`
+- **Diff summarization for validators** — Large diffs are now truncated per-file before being passed to validator agents
+  - 60KB budget split across files; truncation notice instructs agents to Read full files
+  - Agents (code-quality, security, fixer, compliance) include a note about truncated diffs
+- **Prompt size guard** — Implementation and verification prompts are trimmed if they exceed 480K chars
+  - Intelligently removes prior learnings and previous attempt diffs first
+  - Hard-truncate fallback prevents context window blowouts
+- **Result schema validation** — Implementation and verification result JSON files are validated on read
+  - Implementation: requires `story_id` and valid `status` (complete/partial/failed)
+  - Verification: requires valid `verdict` (pass/fail) and `criteria` list
+  - Missing optional fields logged as notes instead of causing failures
+
+### Fixed
+- **Permanent error classification** — Context/token limit errors now cause immediate failure instead of infinite retries
+  - New `SESSION_ERROR_PERMANENT:` prefix for errors matching context/token limit patterns
+  - Orchestrator exits with notification instead of wasting retries on unrecoverable errors
+- **PRD checkbox false positives** — `update_prd_checkboxes()` now uses `re.sub` with line-start anchoring instead of `str.replace`
+  - Prevents matching `- [ ]` inside descriptions or hint text
+- **Git operation visibility** — All bare `subprocess.run(["git", ...])` calls replaced with `run_git()` helper
+  - Logs warnings on failures (non-fatal) instead of silently ignoring errors
+- **Pause hang prevention** — `wait_for_pause_removal()` now has a 24-hour timeout with periodic log reminders
+  - Auto-resumes and writes a notification after timeout
+
+### Changed
+- **validate-feature Step 5** — PRD compliance review now runs as a subagent (prd-compliance-reviewer) instead of inline
+  - Steps 3, 4, and 5 can all run in parallel
+- **validate-feature/REFERENCE.md** — Added PRD compliance agent interpolation table and large diff handling section
+
 ## [1.6.5] - 2026-02-26
 
 ### Fixed

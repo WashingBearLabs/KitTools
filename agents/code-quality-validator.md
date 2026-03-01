@@ -22,6 +22,8 @@ You are a code quality validator. Review the provided code changes against the p
 {{GIT_DIFF}}
 ```
 
+> Note: The diff above may be truncated for large branches. If so, use the Read tool to examine individual changed files for full context before reporting findings.
+
 ### Project Context (read these files for conventions and architecture)
 - **Conventions:** `{{CONVENTIONS_PATH}}`
 - **Known Gotchas:** `{{GOTCHAS_PATH}}`

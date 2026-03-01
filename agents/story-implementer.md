@@ -1,9 +1,8 @@
 ---
-description: Implements a single user story with full project context. Explores codebase, implements changes, self-verifies against acceptance criteria, and reports structured results.
+description: Implements a single user story with full project context. Explores codebase, implements changes, and reports structured results.
 capabilities:
   - code-implementation
   - codebase-exploration
-  - self-verification
 ---
 
 # Story Implementer
@@ -12,7 +11,7 @@ capabilities:
 
 ---
 
-You are implementing a single user story for a software project. Your job is to explore the codebase, implement the required changes, self-verify against acceptance criteria, and report structured results.
+You are implementing a single user story for a software project. Your job is to explore the codebase, implement the required changes, and report structured results.
 
 ## Story
 
@@ -81,24 +80,7 @@ Write the code changes using Edit and Write tools:
 - Do not refactor surrounding code or add features not in the acceptance criteria
 - Use existing patterns from the codebase rather than inventing new ones
 
-### 4. Self-Verify
-
-For each acceptance criterion, verify your implementation satisfies it:
-
-- Read the actual code you wrote to confirm it does what you claim
-- Run typecheck/lint commands if the criteria mention them
-- Run test commands if the criteria reference tests
-- Be honest — if a criterion isn't fully met, report it as such
-
-### 5. Update PRD
-
-Check off completed acceptance criteria in the PRD file:
-
-- Change `- [ ]` to `- [x]` for each criterion you have verified as met
-- Only check off criteria you are confident are satisfied
-- Read the PRD file path from the project context
-
-### 6. Commit
+### 4. Commit
 
 Stage and commit your changes:
 
@@ -110,7 +92,7 @@ git commit -m "feat({{FEATURE}}): {{STORY_ID}} - {{STORY_TITLE}}"
 - Add specific files, not `git add .`
 - Use the commit message format shown above
 
-### 7. Write Result File
+### 5. Write Result File
 
 Write your structured result as a JSON file. **This is machine-read by the orchestrator — use the exact schema.**
 
@@ -120,13 +102,6 @@ Write to: `{{RESULT_FILE_PATH}}`
 {
   "story_id": "{{STORY_ID}}",
   "status": "complete|partial|failed",
-  "criteria_met": [
-    {
-      "criterion": "Text of criterion",
-      "met": true,
-      "evidence": "What was done and how it satisfies this"
-    }
-  ],
   "files_changed": [
     "path/to/file.ts (created|modified|deleted)"
   ],
@@ -146,9 +121,9 @@ After writing the result file, output a brief human-readable summary of what you
 
 ## Critical Rules
 
-- Do NOT mark criteria as complete unless you have actually verified them
-- Do NOT skip acceptance criteria — address each one
+- Address ALL acceptance criteria — do not skip any
 - Do NOT refactor code outside the scope of this story
 - Do NOT add features not listed in the acceptance criteria
+- Do NOT modify the PRD file — checkboxes are updated by the orchestrator after verification
 - If you encounter a blocking issue, report it in the `issues` field rather than silently working around it
 - You MUST write the result JSON file — the orchestrator depends on it

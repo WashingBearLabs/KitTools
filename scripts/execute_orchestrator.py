@@ -37,6 +37,10 @@ SESSION_TIMEOUT = 900  # 15 minutes per claude session
 PAUSE_POLL_INTERVAL = 10  # seconds between pause file checks
 NETWORK_RETRY_WAIT = 30  # seconds between network retries
 NETWORK_MAX_RETRIES = 3
+PERMANENT_ERROR_KEYWORDS = ["context", "too long", "token limit", "input.*too.*large", "maximum.*context"]
+MAX_PROMPT_CHARS = 480_000
+PAUSE_MAX_WAIT = 86400  # 24 hours max pause
+PAUSE_LOG_INTERVAL = 60  # log reminder every minute
 
 # File-based result paths (relative to project_dir)
 IMPL_RESULT_FILE = os.path.join("kit_tools", ".story-impl-result.json")
@@ -326,6 +330,38 @@ def parse_stories_from_prd(prd_path: str) -> list[dict]:
     return stories
 
 
+def update_prd_checkboxes(prd_path: str, story_id: str) -> bool:
+    """Mark acceptance criteria as complete for a story in the PRD.
+
+    Finds the story section by its header and replaces `- [ ]` with `- [x]`
+    within that section only.
+
+    Returns True if any checkboxes were updated.
+    """
+    with open(prd_path, "r") as f:
+        content = f.read()
+
+    # Find the story section: ### {story_id}: ...
+    # Section ends at the next ### header or end of file
+    pattern = re.compile(
+        rf"(### {re.escape(story_id)}:.*?)(?=\n### |\Z)",
+        re.DOTALL,
+    )
+    match = pattern.search(content)
+    if not match:
+        return False
+
+    section = match.group(1)
+    updated_section = re.sub(r"^- \[ \] ", "- [x] ", section, flags=re.MULTILINE)
+    if updated_section == section:
+        return False  # Nothing to update
+
+    content = content[:match.start()] + updated_section + content[match.end():]
+    with open(prd_path, "w") as f:
+        f.write(content)
+    return True
+
+
 def find_next_uncompleted_story(prd_path: str, stories_state: dict) -> dict | None:
     """Find the first story with uncompleted acceptance criteria.
 
@@ -371,10 +407,7 @@ def check_dependencies_archived(project_dir: str, prd_path: str) -> tuple[bool, 
 def tag_checkpoint(project_dir: str, epic_name: str, feature_name: str) -> None:
     """Create a git tag marking a PRD checkpoint within an epic."""
     tag_name = f"{epic_name}/{feature_name}-complete"
-    subprocess.run(
-        ["git", "tag", tag_name],
-        cwd=project_dir, capture_output=True
-    )
+    run_git(["tag", tag_name], project_dir, check=True)
     log(f"  Tagged checkpoint: {tag_name}")
 
 
@@ -404,11 +437,106 @@ def archive_prd(project_dir: str, prd_path: str, feature_name: str) -> None:
     # Stage changes
     rel_dest = os.path.relpath(dest, project_dir)
     rel_src = os.path.relpath(prd_path, project_dir)
-    subprocess.run(["git", "add", rel_dest], cwd=project_dir, capture_output=True)
+    run_git(["add", rel_dest], project_dir, check=True)
     # Stage the deletion of the old path
-    subprocess.run(["git", "rm", "--cached", "-f", rel_src], cwd=project_dir, capture_output=True)
+    run_git(["rm", "--cached", "-f", rel_src], project_dir, check=True)
 
     log(f"  Archived: {os.path.basename(prd_path)} -> archive/")
+
+
+# --- Prompt Size Guard ---
+
+
+def _trim_section(prompt: str, section_header: str, replacement: str) -> str:
+    """Replace a markdown section's body with a shorter replacement.
+
+    Finds a heading matching section_header and replaces content up to the
+    next heading at the same or higher level.
+    """
+    # Determine heading level (count leading #)
+    level_match = re.match(r"(#+)", section_header.strip())
+    level = len(level_match.group(1)) if level_match else 3
+    # Escape the header for regex
+    escaped = re.escape(section_header.strip())
+    # Match from header to next heading at same-or-higher level (or end)
+    pattern = re.compile(
+        rf"({escaped}\s*\n)(.*?)(?=\n#{{1,{level}}} |\Z)",
+        re.DOTALL
+    )
+    return pattern.sub(rf"\1{replacement}\n", prompt, count=1)
+
+
+def check_and_trim_prompt(prompt: str, context_type: str) -> str:
+    """Trim oversized prompts to fit within MAX_PROMPT_CHARS.
+
+    Args:
+        context_type: "implementation" or "verification" — determines trim order.
+    """
+    if len(prompt) <= MAX_PROMPT_CHARS:
+        return prompt
+
+    if context_type == "implementation":
+        trim_order = [
+            ("### Prior Learnings", "[Trimmed — prompt too large]"),
+            ("### Previous Attempt Diff", "[Trimmed — prompt too large]"),
+        ]
+    elif context_type == "verification":
+        trim_order = [
+            ("### Files Changed (from git)", "[Trimmed — prompt too large]"),
+            ("### Diff Stat", "[Trimmed — prompt too large]"),
+        ]
+    else:
+        trim_order = []
+
+    for header, replacement in trim_order:
+        prompt = _trim_section(prompt, header, replacement)
+        if len(prompt) <= MAX_PROMPT_CHARS:
+            log(f"  Prompt trimmed (removed {header}) to fit size limit.")
+            return prompt
+
+    # Final fallback: hard-truncate
+    if len(prompt) > MAX_PROMPT_CHARS:
+        log(f"  WARNING: Prompt hard-truncated from {len(prompt)} to {MAX_PROMPT_CHARS} chars.")
+        prompt = prompt[:MAX_PROMPT_CHARS] + "\n\n[PROMPT TRUNCATED — size limit reached]"
+
+    return prompt
+
+
+# --- Diff Summarization ---
+
+
+def summarize_diff_for_prompt(diff_text: str, max_chars: int = 60000) -> str:
+    """Summarize a large diff to fit within a character budget.
+
+    If the diff fits, returns as-is. Otherwise, splits by file and allocates
+    a per-file budget, truncating each file's hunks as needed.
+    """
+    if len(diff_text) <= max_chars:
+        return diff_text
+
+    # Split into per-file chunks by "diff --git" headers
+    file_chunks = re.split(r"(?=^diff --git )", diff_text, flags=re.MULTILINE)
+    file_chunks = [c for c in file_chunks if c.strip()]
+
+    if not file_chunks:
+        return diff_text[:max_chars] + "\n\n[Full diff truncated at size limit]"
+
+    # Reserve space for the truncation notice
+    notice = "\n\nFull diff truncated. Read individual files for complete changes."
+    budget = max_chars - len(notice)
+    per_file = max(budget // len(file_chunks), 500)
+
+    parts = []
+    for chunk in file_chunks:
+        if len(chunk) <= per_file:
+            parts.append(chunk)
+        else:
+            parts.append(chunk[:per_file] + "\n... [file diff truncated] ...\n")
+
+    result = "".join(parts)
+    if len(result) > max_chars:
+        result = result[:max_chars]
+    return result + notice
 
 
 # --- Prompt Building ---
@@ -532,21 +660,24 @@ def build_implementation_prompt(
     prompt += f"\n\n## Additional Instructions (Autonomous Mode)\n"
     prompt += f"- The PRD file is at: {prd}\n"
     prompt += f"- Read the PRD directly for full story context\n"
-    prompt += f"- Update PRD checkboxes when criteria are verified\n"
+    prompt += f"- Do NOT modify the PRD file — checkboxes are updated by the orchestrator after verification\n"
     prompt += f'- Commit with message: feat({feat_name}): {story["id"]} - {story["title"]}\n'
-    prompt += f"- Do NOT mark criteria as complete unless you have verified them\n"
 
     return prompt
 
 
 def build_verification_prompt(
-    story: dict, config: dict, files_changed_from_git: str
+    story: dict, config: dict, files_changed_from_git: str,
+    diff_stat: str = "", test_command: str | None = None, prd_path: str = ""
 ) -> str:
     """Interpolate the story-verifier template with git-sourced context.
 
     Args:
         files_changed_from_git: File list from `git diff --name-only`, sourced
             by the orchestrator — NOT from the implementer's output.
+        diff_stat: Output of `git diff --stat` for the attempt.
+        test_command: Auto-detected test command, or None.
+        prd_path: Path to the PRD file for cross-reference.
     """
     template = strip_frontmatter(config["verifier_template"])
     context = config.get("project_context", {})
@@ -554,10 +685,21 @@ def build_verification_prompt(
     prompt = template
     prompt = prompt.replace("{{STORY_ID}}", story["id"])
     prompt = prompt.replace("{{STORY_TITLE}}", story["title"])
+    prompt = prompt.replace("{{STORY_DESCRIPTION}}", story.get("description") or "No description available.")
+    prompt = prompt.replace("{{IMPLEMENTATION_HINTS}}", story.get("hints") or "No hints provided.")
     prompt = prompt.replace("{{ACCEPTANCE_CRITERIA}}", story["criteria_text"])
+    prompt = prompt.replace("{{DIFF_STAT}}", diff_stat or "No diff stat available.")
     prompt = prompt.replace("{{FILES_CHANGED}}", files_changed_from_git or "No files changed detected")
-    # Reference-based context
+    # Reference-based context paths
+    prompt = prompt.replace("{{SYNOPSIS_PATH}}", context.get("synopsis", "kit_tools/SYNOPSIS.md"))
+    prompt = prompt.replace("{{CODE_ARCH_PATH}}", context.get("code_arch", "kit_tools/arch/CODE_ARCH.md"))
     prompt = prompt.replace("{{CONVENTIONS_PATH}}", context.get("conventions", "kit_tools/docs/CONVENTIONS.md"))
+    prompt = prompt.replace("{{GOTCHAS_PATH}}", context.get("gotchas", "kit_tools/docs/GOTCHAS.md"))
+    prompt = prompt.replace("{{PRD_PATH}}", prd_path or "Not available")
+    prompt = prompt.replace(
+        "{{TEST_COMMAND}}",
+        f"Run: `{test_command}`" if test_command else "No test command detected — skip test step unless criteria explicitly mention tests."
+    )
     # Result file path for the agent to write to
     result_path = os.path.join(config["project_dir"], VERIFY_RESULT_FILE)
     prompt = prompt.replace("{{RESULT_FILE_PATH}}", result_path)
@@ -566,6 +708,17 @@ def build_verification_prompt(
 
 
 # --- Claude Session ---
+
+
+def _is_permanent_error(stderr_text: str) -> bool:
+    """Check if a session error is permanent (not worth retrying)."""
+    lower = stderr_text.lower()
+    return any(re.search(kw, lower) for kw in PERMANENT_ERROR_KEYWORDS)
+
+
+def is_session_error(output: str) -> bool:
+    """Check if output represents any kind of session error."""
+    return output.startswith("SESSION_ERROR:") or output.startswith("SESSION_ERROR_PERMANENT:")
 
 
 def run_claude_session(prompt: str, project_dir: str) -> str:
@@ -595,7 +748,8 @@ def run_claude_session(prompt: str, project_dir: str) -> str:
                         time.sleep(NETWORK_RETRY_WAIT)
                         continue
                 # Non-network error or final network retry
-                return f"SESSION_ERROR: Exit code {result.returncode}\n{stderr}\n{result.stdout}"
+                prefix = "SESSION_ERROR_PERMANENT" if _is_permanent_error(stderr) else "SESSION_ERROR"
+                return f"{prefix}: Exit code {result.returncode}\n{stderr}\n{result.stdout}"
 
             return result.stdout
 
@@ -652,7 +806,16 @@ def read_implementation_result(project_dir: str) -> tuple[dict | None, str]:
 
     Returns (result_dict, error_message).
     """
-    return read_json_result(get_impl_result_path(project_dir))
+    result, error = read_json_result(get_impl_result_path(project_dir))
+    if result is not None:
+        if "story_id" not in result:
+            return None, "Implementation result missing 'story_id' field"
+        if result.get("status") not in ("complete", "partial", "failed"):
+            return None, f"Implementation result has invalid 'status': {result.get('status')}"
+        for optional in ("learnings", "issues", "files_changed"):
+            if optional not in result:
+                log(f"  Note: implementation result missing optional field '{optional}'")
+    return result, error
 
 
 def read_verification_result(project_dir: str) -> tuple[dict | None, str]:
@@ -668,6 +831,13 @@ def read_verification_result(project_dir: str) -> tuple[dict | None, str]:
             result["verdict"] = str(result["verdict"]).lower()
         else:
             return None, "Verification result missing 'verdict' field"
+        if result["verdict"] not in ("pass", "fail"):
+            return None, f"Verification result has invalid 'verdict': {result['verdict']}"
+        if not isinstance(result.get("criteria"), list):
+            return None, "Verification result missing or invalid 'criteria' list"
+        for optional in ("overall_notes", "recommendations"):
+            if optional not in result:
+                log(f"  Note: verification result missing optional field '{optional}'")
     return result, error
 
 
@@ -774,9 +944,11 @@ def log_story_success(
 
 def sanitize_failure_details(details: str) -> str:
     """Sanitize failure details to avoid leaking raw template/session content into the log."""
-    # Strip SESSION_ERROR prefix
-    if details.startswith("SESSION_ERROR:"):
-        details = details[len("SESSION_ERROR:"):].strip()
+    # Strip SESSION_ERROR prefix (permanent or transient)
+    for prefix in ("SESSION_ERROR_PERMANENT:", "SESSION_ERROR:"):
+        if details.startswith(prefix):
+            details = details[len(prefix):].strip()
+            break
     # Take only the first meaningful line (avoid multi-line template dumps)
     first_line = details.split('\n')[0].strip()
     # If the first line is very long or looks like template content, truncate
@@ -853,32 +1025,64 @@ def pause_file_exists(project_dir: str) -> bool:
     return os.path.exists(os.path.join(project_dir, "kit_tools", ".pause_execution"))
 
 
-def wait_for_pause_removal(project_dir: str) -> None:
-    """Poll until the pause file is removed."""
+def wait_for_pause_removal(project_dir: str, config: dict | None = None) -> None:
+    """Poll until the pause file is removed, with timeout."""
     log("Paused. Remove kit_tools/.pause_execution to resume.")
+    elapsed = 0
+    last_reminder = 0
     while pause_file_exists(project_dir):
         time.sleep(PAUSE_POLL_INTERVAL)
+        elapsed += PAUSE_POLL_INTERVAL
+        if elapsed - last_reminder >= PAUSE_LOG_INTERVAL:
+            log(f"  Still paused ({elapsed}s elapsed). Remove kit_tools/.pause_execution to resume.")
+            last_reminder = elapsed
+        if elapsed >= PAUSE_MAX_WAIT:
+            log(f"  WARNING: Pause timeout reached ({PAUSE_MAX_WAIT}s). Auto-resuming.")
+            if config:
+                write_notification(
+                    config, "pause_timeout",
+                    "Pause timeout reached",
+                    f"Auto-resumed after {PAUSE_MAX_WAIT}s pause.",
+                    severity="warning",
+                )
+            pause_path = os.path.join(project_dir, "kit_tools", ".pause_execution")
+            try:
+                os.remove(pause_path)
+            except OSError:
+                pass
+            break
     log("Pause file removed. Resuming execution.")
 
 
 # --- Git ---
 
 
+def run_git(args: list[str], project_dir: str, check: bool = False) -> subprocess.CompletedProcess:
+    """Run a git command with optional error logging.
+
+    Args:
+        args: Git subcommand and arguments (e.g., ["checkout", "main"]).
+        project_dir: Working directory for the command.
+        check: If True, log a warning when the command fails (non-fatal).
+    """
+    result = subprocess.run(
+        ["git"] + args, cwd=project_dir, capture_output=True, text=True
+    )
+    if check and result.returncode != 0:
+        cmd_str = "git " + " ".join(args)
+        log(f"  WARNING: git command failed: {cmd_str}\n    stderr: {result.stderr.strip()[:200]}")
+    return result
+
+
 def get_head_commit(project_dir: str) -> str:
     """Get the current HEAD commit hash."""
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=project_dir, capture_output=True, text=True
-    )
+    result = run_git(["rev-parse", "HEAD"], project_dir)
     return result.stdout.strip()
 
 
 def get_current_branch(project_dir: str) -> str:
     """Get the current branch name."""
-    result = subprocess.run(
-        ["git", "branch", "--show-current"],
-        cwd=project_dir, capture_output=True, text=True
-    )
+    result = run_git(["branch", "--show-current"], project_dir)
     return result.stdout.strip()
 
 
@@ -889,15 +1093,9 @@ def create_attempt_branch(project_dir: str, feature_branch: str, story_id: str, 
     """
     attempt_branch = f"{feature_branch}-{story_id}-attempt-{attempt}"
     # Ensure we're on the feature branch
-    subprocess.run(
-        ["git", "checkout", feature_branch],
-        cwd=project_dir, capture_output=True
-    )
+    run_git(["checkout", feature_branch], project_dir, check=True)
     # Create and switch to the attempt branch
-    subprocess.run(
-        ["git", "checkout", "-b", attempt_branch],
-        cwd=project_dir, capture_output=True
-    )
+    run_git(["checkout", "-b", attempt_branch], project_dir, check=True)
     log(f"  Created attempt branch: {attempt_branch}")
     return attempt_branch
 
@@ -907,15 +1105,21 @@ def get_attempt_diff(project_dir: str, feature_branch: str, attempt_branch: str)
 
     Used to provide patch-based retry context for subsequent attempts.
     """
-    result = subprocess.run(
-        ["git", "diff", f"{feature_branch}...{attempt_branch}"],
-        cwd=project_dir, capture_output=True, text=True
-    )
+    result = run_git(["diff", f"{feature_branch}...{attempt_branch}"], project_dir)
     diff = result.stdout.strip() if result.returncode == 0 else ""
     # Truncate if too large
     if len(diff) > 10000:
         diff = diff[:10000] + "\n\n... [diff truncated at 10KB] ..."
     return diff
+
+
+def get_diff_stat(project_dir: str, feature_branch: str, attempt_branch: str) -> str:
+    """Get a summary of changes between the feature branch and attempt branch.
+
+    Returns the output of `git diff --stat feature...attempt`.
+    """
+    result = run_git(["diff", "--stat", f"{feature_branch}...{attempt_branch}"], project_dir)
+    return result.stdout.strip() if result.returncode == 0 else ""
 
 
 def merge_attempt_branch(project_dir: str, feature_branch: str, attempt_branch: str) -> bool:
@@ -924,23 +1128,14 @@ def merge_attempt_branch(project_dir: str, feature_branch: str, attempt_branch: 
     Returns True if merge succeeded.
     """
     # Switch to the feature branch
-    subprocess.run(
-        ["git", "checkout", feature_branch],
-        cwd=project_dir, capture_output=True
-    )
+    run_git(["checkout", feature_branch], project_dir, check=True)
     # Merge the attempt branch (fast-forward if possible)
-    result = subprocess.run(
-        ["git", "merge", attempt_branch, "--no-edit"],
-        cwd=project_dir, capture_output=True, text=True
-    )
+    result = run_git(["merge", attempt_branch, "--no-edit"], project_dir)
     if result.returncode != 0:
         log(f"  Merge failed: {result.stderr[:200]}")
         return False
     # Delete the attempt branch
-    subprocess.run(
-        ["git", "branch", "-d", attempt_branch],
-        cwd=project_dir, capture_output=True
-    )
+    run_git(["branch", "-d", attempt_branch], project_dir, check=True)
     log(f"  Merged {attempt_branch} into {feature_branch}")
     return True
 
@@ -953,25 +1148,16 @@ def delete_attempt_branch(project_dir: str, feature_branch: str, attempt_branch:
     # Capture the diff before deleting
     diff = get_attempt_diff(project_dir, feature_branch, attempt_branch)
     # Switch back to feature branch
-    subprocess.run(
-        ["git", "checkout", feature_branch],
-        cwd=project_dir, capture_output=True
-    )
+    run_git(["checkout", feature_branch], project_dir, check=True)
     # Force-delete the attempt branch
-    subprocess.run(
-        ["git", "branch", "-D", attempt_branch],
-        cwd=project_dir, capture_output=True
-    )
+    run_git(["branch", "-D", attempt_branch], project_dir, check=True)
     log(f"  Deleted failed attempt branch: {attempt_branch}")
     return diff
 
 
 def verify_branch_base(project_dir: str) -> bool:
     """Verify the feature branch is based on main."""
-    result = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", "main", "HEAD"],
-        cwd=project_dir, capture_output=True
-    )
+    result = run_git(["merge-base", "--is-ancestor", "main", "HEAD"], project_dir)
     return result.returncode == 0
 
 
@@ -989,13 +1175,10 @@ def commit_tracking_files(project_dir: str, feature_name: str) -> None:
     if not files_to_commit:
         return
 
-    subprocess.run(
-        ["git", "add"] + files_to_commit,
-        cwd=project_dir, capture_output=True
-    )
-    subprocess.run(
-        ["git", "commit", "-m", f"chore({feature_name}): execution log and audit findings"],
-        cwd=project_dir, capture_output=True
+    run_git(["add"] + files_to_commit, project_dir, check=True)
+    run_git(
+        ["commit", "-m", f"chore({feature_name}): execution log and audit findings"],
+        project_dir, check=True
     )
 
 
@@ -1115,6 +1298,11 @@ def execute_prd_stories(
     mode = config["mode"]
     max_retries = config.get("max_retries")
 
+    # Auto-detect test command once per PRD execution
+    test_command = detect_test_command(project_dir)
+    if test_command:
+        log(f"  Detected test command: {test_command}")
+
     # Determine which stories_state dict to use for find_next_uncompleted_story
     if prd_key is not None:
         stories_state = state["prds"][prd_key]
@@ -1124,7 +1312,7 @@ def execute_prd_stories(
     while True:
         # Check pause file between stories
         if pause_file_exists(project_dir):
-            wait_for_pause_removal(project_dir)
+            wait_for_pause_removal(project_dir, config=config)
 
         # Find next uncompleted story
         story = find_next_uncompleted_story(prd_path, stories_state)
@@ -1190,6 +1378,7 @@ def execute_prd_stories(
                 story, config, state, attempt,
                 feature_name=feature_name, prd_path=prd_path, prd_key=prd_key
             )
+            prompt = check_and_trim_prompt(prompt, "implementation")
 
             # Estimate input tokens
             prompt_chars = len(prompt)
@@ -1206,6 +1395,26 @@ def execute_prd_stories(
             save_state(state, config)
 
             # Check for session errors
+            if impl_output.startswith("SESSION_ERROR_PERMANENT:"):
+                log(f"  Permanent session error: {impl_output[:200]}")
+                learnings = [f"Permanent error: {impl_output[:200]}"]
+                log_story_failure(story, attempt, config, impl_output[:500], learnings)
+                update_state_story(
+                    state, story["id"], "failed", attempt, learnings, impl_output[:500],
+                    prd_key=prd_key
+                )
+                state["status"] = "failed"
+                save_state(state, config)
+                write_notification(
+                    config, "story_failed",
+                    f"Story {story['id']} permanent error",
+                    f"{story['id']}: {impl_output[:200]}",
+                    severity="critical",
+                )
+                delete_attempt_branch(project_dir, feature_branch, attempt_branch)
+                clean_result_files(project_dir)
+                sys.exit(1)
+
             if impl_output.startswith("SESSION_ERROR:"):
                 log(f"  Implementation session error: {impl_output[:200]}")
                 learnings = [f"Session error: {impl_output[:200]}"]
@@ -1226,15 +1435,21 @@ def execute_prd_stories(
                 log(f"  Implementation result: {impl_error}")
 
             # --- Get files changed from git (for verifier) ---
-            git_files_result = subprocess.run(
-                ["git", "diff", "--name-only", f"{feature_branch}...{attempt_branch}"],
-                cwd=project_dir, capture_output=True, text=True
+            git_files_result = run_git(
+                ["diff", "--name-only", f"{feature_branch}...{attempt_branch}"], project_dir
             )
             files_changed_from_git = git_files_result.stdout.strip() if git_files_result.returncode == 0 else ""
 
+            # --- Get diff stat (for verifier) ---
+            diff_stat = get_diff_stat(project_dir, feature_branch, attempt_branch)
+
             # --- Verification session ---
             log(f"  Verifying {story['id']}...")
-            verify_prompt = build_verification_prompt(story, config, files_changed_from_git)
+            verify_prompt = build_verification_prompt(
+                story, config, files_changed_from_git,
+                diff_stat=diff_stat, test_command=test_command, prd_path=prd_path
+            )
+            verify_prompt = check_and_trim_prompt(verify_prompt, "verification")
 
             verify_prompt_chars = len(verify_prompt)
             verify_output = run_claude_session(verify_prompt, project_dir)
@@ -1277,10 +1492,7 @@ def execute_prd_stories(
                 merge_ok = merge_attempt_branch(project_dir, feature_branch, attempt_branch)
                 if not merge_ok:
                     log(f"  Merge conflict — aborting merge, will retry implementation.")
-                    subprocess.run(
-                        ["git", "merge", "--abort"],
-                        cwd=project_dir, capture_output=True
-                    )
+                    run_git(["merge", "--abort"], project_dir, check=True)
                     learnings.append("Merge conflict on attempt branch — retry with fresh approach")
                     log_story_failure(story, attempt, config, "Merge conflict", learnings)
                     update_state_story(
@@ -1296,6 +1508,14 @@ def execute_prd_stories(
                     save_state(state, config)
                     clean_result_files(project_dir)
                     continue
+                # Update PRD checkboxes on the feature branch
+                if update_prd_checkboxes(prd_path, story["id"]):
+                    log(f"  Updated PRD checkboxes for {story['id']}")
+                    run_git(["add", prd_path], project_dir, check=True)
+                    run_git(
+                        ["commit", "-m", f"chore({feature_name}): mark {story['id']} criteria complete"],
+                        project_dir, check=True
+                    )
                 log_story_success(story, attempt, config, learnings, feature_name=feature_name)
                 update_state_story(
                     state, story["id"], "completed", attempt, learnings, prd_key=prd_key
@@ -1396,7 +1616,7 @@ def run_single_prd(config: dict) -> None:
     )
     validate_output = run_claude_session(validate_prompt, project_dir)
 
-    if validate_output.startswith("SESSION_ERROR:"):
+    if is_session_error(validate_output):
         log(f"Validation session error: {validate_output[:200]}")
     else:
         log("Feature validation complete.")
@@ -1410,7 +1630,7 @@ def run_single_prd(config: dict) -> None:
             f"Critical validation findings for {feature_label}. Review AUDIT_FINDINGS.md.",
             severity="warning",
         )
-        wait_for_pause_removal(project_dir)
+        wait_for_pause_removal(project_dir, config=config)
         log("Resuming after pause. Proceeding to completion.")
 
     # Commit tracking files (execution log, audit findings)
@@ -1504,14 +1724,14 @@ def run_epic(config: dict) -> None:
         state["sessions"]["total"] += 1
         state["sessions"]["validation"] += 1
 
-        if validate_output.startswith("SESSION_ERROR:"):
+        if is_session_error(validate_output):
             log(f"  Validation error: {validate_output[:200]}")
             # Continue anyway — validation is informational
 
         # Check for pause file (created by validate-feature if critical findings exist)
         if pause_file_exists(project_dir):
             log(f"  Critical validation findings for {prd_basename}. Pausing.")
-            wait_for_pause_removal(project_dir)
+            wait_for_pause_removal(project_dir, config=config)
             log("  Resuming after pause.")
 
         # Commit tracking files for this PRD
@@ -1524,10 +1744,9 @@ def run_epic(config: dict) -> None:
         archive_prd(project_dir, prd_path, feature_name)
 
         # Commit archive + tag
-        subprocess.run(
-            ["git", "commit", "-m", f"chore({epic_name}): complete {feature_name}",
-             "--allow-empty"],
-            cwd=project_dir, capture_output=True
+        run_git(
+            ["commit", "-m", f"chore({epic_name}): complete {feature_name}", "--allow-empty"],
+            project_dir, check=True
         )
 
         # Update state
@@ -1556,7 +1775,7 @@ def run_epic(config: dict) -> None:
                 f"Paused after {prd_basename}. Remove pause file to continue.",
                 severity="warning",
             )
-            wait_for_pause_removal(project_dir)
+            wait_for_pause_removal(project_dir, config=config)
 
     # All PRDs complete
     log("All epic PRDs complete!")
@@ -1579,7 +1798,7 @@ def run_epic(config: dict) -> None:
     )
     complete_output = run_claude_session(complete_prompt, project_dir)
 
-    if complete_output.startswith("SESSION_ERROR:"):
+    if is_session_error(complete_output):
         log(f"Completion session error: {complete_output[:200]}")
     else:
         log("Epic completion done.")

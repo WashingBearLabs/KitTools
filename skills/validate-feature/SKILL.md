@@ -15,6 +15,7 @@ Read `REFERENCE.md` in this skill directory for detailed finding formats, agent 
 |-----------|----------|----------|
 | Quality agent | `$CLAUDE_PLUGIN_ROOT/agents/code-quality-validator.md` | Yes |
 | Security agent | `$CLAUDE_PLUGIN_ROOT/agents/security-reviewer.md` | Yes |
+| Compliance agent | `$CLAUDE_PLUGIN_ROOT/agents/prd-compliance-reviewer.md` | Yes |
 | Fixer agent | `$CLAUDE_PLUGIN_ROOT/agents/feature-fixer.md` | For autonomous |
 | Findings template | `$CLAUDE_PLUGIN_ROOT/templates/AUDIT_FINDINGS.md` | Yes |
 
@@ -44,6 +45,14 @@ git diff main...HEAD --name-only  # File list
 
 If diff is empty, report and stop.
 
+### Large Diff Handling
+
+If the full diff exceeds ~60KB, summarize before interpolating into agent prompts:
+- Include the full `--stat` output (always fits)
+- Include the first ~500 characters of each file's diff
+- Append a truncation notice: "Full diff truncated. Read individual files for complete changes."
+- Agents will use the Read tool to examine full files as needed
+
 ---
 
 ## Step 3: Code Quality Review
@@ -57,8 +66,6 @@ Spawn via Task tool. Parse `FINDING:` / `END_FINDING` blocks.
 
 Interpolate `security-reviewer.md` with diff, file list, and security context.
 Spawn via Task tool. Parse findings.
-
-**Steps 3 and 4 can run in parallel.**
 
 ---
 
@@ -75,14 +82,16 @@ Spawn via Task tool. Parse findings.
 
 ## Step 5: PRD Compliance Review
 
-Performed directly (not subagent). Compare diff against PRD:
+Interpolate `prd-compliance-reviewer.md` with PRD path, diff, file list, and architecture context.
+Spawn via Task tool. Parse `FINDING:` / `END_FINDING` blocks.
 
+Reviews:
 - **5a: Acceptance criteria** — Is each criterion addressed?
 - **5b: Functional requirements** — Is each FR-X implemented?
 - **5c: Scope creep** — Changes outside PRD scope? (warning)
 - **5d: Intent alignment** — Do changes match PRD goals?
 
-Output compliance findings in standard format.
+**Steps 3, 4, and 5 can all run in parallel.**
 
 ---
 

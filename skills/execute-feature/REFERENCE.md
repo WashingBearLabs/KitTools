@@ -123,7 +123,10 @@ These tokens are used in the agent templates and interpolated by this skill (sup
 | `{{PRIOR_LEARNINGS}}` | Learnings from completed stories (pruned) |
 | `{{RETRY_CONTEXT}}` | Empty on first attempt; failure details on retry |
 | `{{PREVIOUS_ATTEMPT_DIFF}}` | Git diff from last failed attempt (for retries) |
+| `{{DIFF_STAT}}` | `git diff --stat` output showing scale of changes (verifier only) |
 | `{{FILES_CHANGED}}` | Files changed from git diff (verifier only) |
+| `{{PRD_PATH}}` | Path to the PRD file for cross-reference (verifier only) |
+| `{{TEST_COMMAND}}` | Auto-detected test command or skip instruction (verifier only) |
 | `{{RESULT_FILE_PATH}}` | Path where agent should write its JSON result |
 
 ---
@@ -206,10 +209,13 @@ For each uncompleted story (in PRD order):
 
 1. **Read agent templates:** Read `$CLAUDE_PLUGIN_ROOT/agents/story-implementer.md`, interpolate placeholders
 2. **Spawn implementer:** Task tool with `subagent_type: "general-purpose"`, read JSON result file
-3. **Read verifier template:** Interpolate with git-sourced file list
-4. **Spawn verifier:** Task tool, read JSON result file
-5. **If PASS:** Update PRD checkboxes, update state, log success, commit
-6. **If FAIL:** Log failure, present to user with verifier's notes, ask: retry, adjust, or stop?
+3. **Gather verifier context:** `git diff --name-only` + `git diff --stat`, detect test command
+4. **Read verifier template:** Interpolate with git-sourced file list, diff stat, test command, context paths, and PRD path
+5. **Spawn verifier:** Task tool, read JSON result file
+6. **If PASS:** Update PRD checkboxes (skill/orchestrator handles this after verification), update state, log success, commit
+7. **If FAIL:** Log failure, present to user with verifier's notes, ask: retry, adjust, or stop?
+
+> The implementer does NOT self-verify or update PRD checkboxes. The verifier is the sole quality gate.
 
 ---
 
