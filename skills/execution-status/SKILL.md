@@ -11,18 +11,18 @@ Check on the progress of an autonomous or guarded execution launched by `/kit-to
 
 ## Step 1: Check for Active Execution
 
-Read `kit_tools/prd/.execution-state.json`:
+Read `kit_tools/specs/.execution-state.json`:
 
 - **Not found:** Report "No execution state found. Run `/kit-tools:execute-feature` to start." and stop.
 - **Found:** Continue to Step 2.
 
-Also read `kit_tools/prd/.execution-config.json` to get the `tmux_session` field (the session name used at launch). Check if it's alive:
+Also read `kit_tools/specs/.execution-config.json` to get the `tmux_session` field (the session name used at launch). Check if it's alive:
 
 ```bash
 tmux has-session -t {tmux_session} 2>/dev/null
 ```
 
-If `tmux_session` is missing from the config (older runs), fall back to `kit-exec-{feature_name}` derived from the state file's `prd` field (strip the `prd-` prefix and `.md` suffix).
+If `tmux_session` is missing from the config (older runs), fall back to `kit-exec-{feature_name}` derived from the state file's `spec` field (strip the `feature-` or `prd-` prefix and `.md` suffix).
 
 Record whether the session is running or not — this affects the status report.
 
@@ -51,9 +51,9 @@ Check for pause file: `kit_tools/.pause_execution` — if present, status is **P
 
 ### Progress
 
-Parse the PRD file referenced in the state (`state.prd`) to get the total story count using the same `### US-XXX:` pattern the orchestrator uses.
+Parse the feature spec file referenced in the state (`state.spec`) to get the total story count using the same `### US-XXX:` pattern the orchestrator uses.
 
-Count from `state.stories` (or `state.prds[current_prd].stories` in epic mode):
+Count from `state.stories` (or `state.specs[current_spec].stories` in epic mode):
 - **Completed:** stories with `status: "completed"`
 - **Failed/Retrying:** stories with `status: "retrying"` or `status: "failed"`
 - **In Progress:** stories with `status: "in_progress"`
@@ -74,7 +74,7 @@ Show the current story (the one with `status: "in_progress"` or `"retrying"`).
 | US-004 | pending | 0 | — |
 ```
 
-For each story from the PRD (in order):
+For each story from the feature spec (in order):
 - Look up the story in the state dict
 - **Status:** from state, or `pending` if not present
 - **Attempts:** from `entry.attempts`, or `0` if not present
@@ -90,18 +90,18 @@ From the state file:
 
 ### Epic Mode
 
-If `state.prds` exists (epic mode), show a per-PRD progress table:
+If `state.specs` exists (epic mode), show a per-feature-spec progress table:
 
 ```
-| PRD | Status | Stories | Progress |
-|-----|--------|---------|----------|
-| prd-oauth-schema.md | completed | 3/3 | 100% |
-| prd-oauth-provider.md | in_progress | 1/4 | 25% |
-| prd-oauth-api.md | pending | 0/5 | 0% |
+| Feature Spec | Status | Stories | Progress |
+|--------------|--------|---------|----------|
+| feature-oauth-schema.md | completed | 3/3 | 100% |
+| feature-oauth-provider.md | in_progress | 1/4 | 25% |
+| feature-oauth-api.md | pending | 0/5 | 0% |
 ```
 
-- **Current PRD:** `state.current_prd`
-- For each PRD in `state.prds`: count completed vs total stories
+- **Current feature spec:** `state.current_spec`
+- For each feature spec in `state.specs`: count completed vs total stories
 
 ---
 
@@ -167,4 +167,4 @@ Ask the user which action to take, then execute it.
 |-------|-------------|
 | `/kit-tools:execute-feature` | To start or resume autonomous execution |
 | `/kit-tools:validate-feature` | To validate the full feature branch after execution |
-| `/kit-tools:complete-feature` | To archive PRD after all stories pass |
+| `/kit-tools:complete-feature` | To archive feature spec after all stories pass |

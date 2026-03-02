@@ -15,8 +15,8 @@ This skill requires the following project files:
 |------|----------|---------|
 | `kit_tools/SESSION_SCRATCH.md` | Yes | Notes captured during session |
 | `kit_tools/SESSION_LOG.md` | Yes | Session history to update |
-| `kit_tools/prd/*.md` | Yes | PRDs to update with progress |
-| `kit_tools/roadmap/MVP_TODO.md` | Yes | Milestone tracking |
+| `kit_tools/specs/*.md` | Yes | Feature specs to update with progress |
+| `kit_tools/roadmap/MILESTONES.md` | Yes | Milestone tracking |
 | `kit_tools/AGENT_README.md` | Yes | Documentation checklist reference |
 | `kit_tools/AUDIT_FINDINGS.md` | Optional | Created if code quality check runs |
 
@@ -33,33 +33,33 @@ This skill requires the following project files:
 ## Step 0: Process scratchpad
 
 - Read `kit_tools/SESSION_SCRATCH.md`
-- **Identify which feature/PRD was being worked on** from the "Active Feature" section
+- **Identify which feature spec was being worked on** from the "Active Feature" section
 - Use these notes to inform the documentation updates below
 - If the scratchpad is empty, that's okay — proceed with what you remember from this session
 
-## Step 1: Update PRD and tracking files
+## Step 1: Update feature spec and tracking files
 
 Based on the scratchpad's "Active Feature" section and the work done:
 
-### 1a: Update the active PRD
+### 1a: Update the active feature spec
 
-If working on a feature with a PRD (`kit_tools/prd/prd-*.md`):
+If working on a feature with a feature spec (`kit_tools/specs/feature-*.md`):
 
 - Mark completed acceptance criteria with `[x]`
 - Update the `updated:` date in the frontmatter
 - **Capture Implementation Notes** — Ask the user:
-  > "Any learnings or gotchas from today's work that should be captured in the PRD's Implementation Notes section?"
+  > "Any learnings or gotchas from today's work that should be captured in the feature spec's Implementation Notes section?"
 - Add any discovered learnings to the `## Implementation Notes` section
-- If all user stories are complete, note that the PRD may be ready for `/kit-tools:complete-feature`
+- If all user stories are complete, note that the feature spec may be ready for `/kit-tools:complete-feature`
 
 ### 1b: Update milestone tracking
 
-- `kit_tools/roadmap/MVP_TODO.md` — Update milestone progress if applicable
+- `kit_tools/roadmap/MILESTONES.md` — Update milestone progress if applicable
 - `kit_tools/roadmap/BACKLOG.md` — Add any new feature ideas discovered
 
 ### 1c: Multiple features
 
-If work touched multiple PRDs, update each relevant one
+If work touched multiple feature specs, update each relevant one
 
 ## Step 2: Documentation sweep
 
@@ -116,7 +116,7 @@ Run a lightweight quality check on the session's code changes. This is NOT the f
 Add an entry to `kit_tools/SESSION_LOG.md` with:
 
 - Today's date
-- **Which PRD(s)/feature(s) were worked on**
+- **Which feature spec(s) were worked on**
 - What was accomplished (use scratchpad notes as reference)
 - Which docs were updated
 - Open items for next session
@@ -133,9 +133,9 @@ Add an entry to `kit_tools/SESSION_LOG.md` with:
 Provide a brief summary of:
 
 - What was accomplished today
-- **Which PRD(s) were updated** and their progress (e.g., "prd-auth.md: 4/5 stories complete")
+- **Which feature spec(s) were updated** and their progress (e.g., "feature-auth.md: 4/5 stories complete")
 - Implementation Notes captured (if any)
 - What documentation was updated
 - Audit findings summary (N critical, N warning, N info) — if validator was run
 - Any open items or recommended next steps
-- If a PRD is complete, remind user about `/kit-tools:complete-feature`
+- If a feature spec is complete, remind user about `/kit-tools:complete-feature`

@@ -39,7 +39,7 @@
 
 ### What's In Progress
 - [Feature/task currently being built]
-- See `roadmap/*_TODO.md` for details
+- See `roadmap/MILESTONES.md` for details
 
 ### What's Broken / Known Issues
 - [Issue 1 — brief description, or "None currently"]

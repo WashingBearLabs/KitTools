@@ -3,16 +3,16 @@
 KitTools Execute Orchestrator
 
 Spawns independent Claude sessions to implement and verify user stories
-from a PRD. Manages execution state, retries, and logging.
+from a feature spec. Manages execution state, retries, and logging.
 
 Supports two modes:
-- Single-PRD mode: executes stories from one PRD on a feature/[name] branch
-- Epic mode: chains multiple PRDs on a shared epic/[name] branch
+- Single mode: executes stories from one feature spec on a feature/[name] branch
+- Epic mode: chains multiple feature specs on a shared epic/[name] branch
 
 Launched by the /kit-tools:execute-feature skill for autonomous/guarded modes.
 
 Usage:
-    python3 execute_orchestrator.py --config kit_tools/prd/.execution-config.json
+    python3 execute_orchestrator.py --config kit_tools/specs/.execution-config.json
 """
 
 import argparse
@@ -138,7 +138,7 @@ def load_config(config_path: str) -> dict:
 
 
 def load_or_create_state(config: dict) -> tuple[dict, bool]:
-    """Read or create .execution-state.json for single-PRD mode. Returns (state, is_rerun)."""
+    """Read or create .execution-state.json for single mode. Returns (state, is_rerun)."""
     state_path = get_state_path(config)
     if os.path.exists(state_path):
         with open(state_path, "r") as f:
@@ -150,7 +150,7 @@ def load_or_create_state(config: dict) -> tuple[dict, bool]:
         return state, False
 
     return {
-        "prd": os.path.basename(config["prd_path"]),
+        "spec": os.path.basename(config["spec_path"]),
         "branch": config["branch_name"],
         "mode": config["mode"],
         "max_retries": config.get("max_retries"),
@@ -181,8 +181,8 @@ def load_or_create_epic_state(config: dict) -> tuple[dict, bool]:
         "started_at": now_iso(),
         "updated_at": now_iso(),
         "status": "running",
-        "current_prd": None,
-        "prds": {},
+        "current_spec": None,
+        "specs": {},
         "sessions": {"total": 0, "implementation": 0, "verification": 0, "validation": 0},
     }, False
 
@@ -198,22 +198,22 @@ def save_state(state: dict, config: dict) -> None:
 
 def get_state_path(config: dict) -> str:
     """Return path to .execution-state.json in the project."""
-    return os.path.join(config["project_dir"], "kit_tools", "prd", ".execution-state.json")
+    return os.path.join(config["project_dir"], "kit_tools", "specs", ".execution-state.json")
 
 
 def update_state_story(
     state: dict, story_id: str, status: str, attempt: int,
     learnings: list | None = None, failure: str | None = None,
-    prd_key: str | None = None
+    spec_key: str | None = None
 ) -> None:
     """Update a story's entry in the execution state.
 
     Args:
-        prd_key: If set, update state["prds"][prd_key]["stories"][story_id] (epic mode).
-                 If None, update state["stories"][story_id] (single-PRD mode).
+        spec_key: If set, update state["specs"][spec_key]["stories"][story_id] (epic mode).
+                 If None, update state["stories"][story_id] (single mode).
     """
-    if prd_key is not None:
-        stories_dict = state["prds"][prd_key].setdefault("stories", {})
+    if spec_key is not None:
+        stories_dict = state["specs"][spec_key].setdefault("stories", {})
     else:
         stories_dict = state.setdefault("stories", {})
 
@@ -231,12 +231,12 @@ def update_state_story(
     stories_dict[story_id] = entry
 
 
-# --- PRD Parsing ---
+# --- Feature Spec Parsing ---
 
 
-def parse_prd_frontmatter(prd_path: str) -> dict:
-    """Parse YAML frontmatter from a PRD markdown file using PyYAML."""
-    with open(prd_path, "r") as f:
+def parse_spec_frontmatter(spec_path: str) -> dict:
+    """Parse YAML frontmatter from a feature spec markdown file using PyYAML."""
+    with open(spec_path, "r") as f:
         content = f.read()
     match = re.match(r'^---\s*\n(.*?)\n---', content, re.DOTALL)
     if not match:
@@ -261,12 +261,12 @@ def parse_prd_frontmatter(prd_path: str) -> dict:
     return result
 
 
-def parse_stories_from_prd(prd_path: str) -> list[dict]:
-    """Parse user stories from a PRD markdown file.
+def parse_stories_from_spec(spec_path: str) -> list[dict]:
+    """Parse user stories from a feature spec markdown file.
 
     Returns a list of dicts with keys: id, title, description, criteria, criteria_text
     """
-    with open(prd_path, "r") as f:
+    with open(spec_path, "r") as f:
         content = f.read()
 
     stories = []
@@ -330,15 +330,15 @@ def parse_stories_from_prd(prd_path: str) -> list[dict]:
     return stories
 
 
-def update_prd_checkboxes(prd_path: str, story_id: str) -> bool:
-    """Mark acceptance criteria as complete for a story in the PRD.
+def update_spec_checkboxes(spec_path: str, story_id: str) -> bool:
+    """Mark acceptance criteria as complete for a story in the feature spec.
 
     Finds the story section by its header and replaces `- [ ]` with `- [x]`
     within that section only.
 
     Returns True if any checkboxes were updated.
     """
-    with open(prd_path, "r") as f:
+    with open(spec_path, "r") as f:
         content = f.read()
 
     # Find the story section: ### {story_id}: ...
@@ -357,23 +357,23 @@ def update_prd_checkboxes(prd_path: str, story_id: str) -> bool:
         return False  # Nothing to update
 
     content = content[:match.start()] + updated_section + content[match.end():]
-    with open(prd_path, "w") as f:
+    with open(spec_path, "w") as f:
         f.write(content)
     return True
 
 
-def find_next_uncompleted_story(prd_path: str, stories_state: dict) -> dict | None:
+def find_next_uncompleted_story(spec_path: str, stories_state: dict) -> dict | None:
     """Find the first story with uncompleted acceptance criteria.
 
     Args:
-        prd_path: Path to the PRD file.
+        spec_path: Path to the feature spec file.
         stories_state: Dict with a "stories" key mapping story IDs to their state.
-                       For single-PRD mode: the top-level state.
-                       For epic mode: state["prds"][prd_key].
+                       For single mode: the top-level state.
+                       For epic mode: state["specs"][spec_key].
     """
-    stories = parse_stories_from_prd(prd_path)
+    stories = parse_stories_from_spec(spec_path)
     for story in stories:
-        # Check PRD checkboxes first (source of truth)
+        # Check feature spec checkboxes first (source of truth)
         if story["completed"]:
             continue
         # Cross-reference with state JSON
@@ -387,17 +387,17 @@ def find_next_uncompleted_story(prd_path: str, stories_state: dict) -> dict | No
 # --- Epic Helpers ---
 
 
-def check_dependencies_archived(project_dir: str, prd_path: str) -> tuple[bool, list[str]]:
-    """Check that all depends_on PRDs are archived. Returns (ok, missing_deps)."""
-    fm = parse_prd_frontmatter(prd_path)
+def check_dependencies_archived(project_dir: str, spec_path: str) -> tuple[bool, list[str]]:
+    """Check that all depends_on feature specs are archived. Returns (ok, missing_deps)."""
+    fm = parse_spec_frontmatter(spec_path)
     deps = fm.get("depends_on", [])
     if not deps:
         return True, []
-    archive_dir = os.path.join(project_dir, "kit_tools", "prd", "archive")
+    archive_dir = os.path.join(project_dir, "kit_tools", "specs", "archive")
     missing = []
     for dep in deps:
-        # Check for prd-{dep}.md in archive
-        candidates = [f"prd-{dep}.md", f"{dep}.md"]
+        # Check for feature-{dep}.md or prd-{dep}.md in archive (backwards compat)
+        candidates = [f"feature-{dep}.md", f"prd-{dep}.md", f"{dep}.md"]
         found = any(os.path.exists(os.path.join(archive_dir, c)) for c in candidates)
         if not found:
             missing.append(dep)
@@ -405,16 +405,16 @@ def check_dependencies_archived(project_dir: str, prd_path: str) -> tuple[bool, 
 
 
 def tag_checkpoint(project_dir: str, epic_name: str, feature_name: str) -> None:
-    """Create a git tag marking a PRD checkpoint within an epic."""
+    """Create a git tag marking a feature spec checkpoint within an epic."""
     tag_name = f"{epic_name}/{feature_name}-complete"
     run_git(["tag", tag_name], project_dir, check=True)
     log(f"  Tagged checkpoint: {tag_name}")
 
 
-def archive_prd(project_dir: str, prd_path: str, feature_name: str) -> None:
-    """Update PRD frontmatter and move to archive directory."""
+def archive_spec(project_dir: str, spec_path: str, feature_name: str) -> None:
+    """Update feature spec frontmatter and move to archive directory."""
     # Update frontmatter
-    with open(prd_path, "r") as f:
+    with open(spec_path, "r") as f:
         content = f.read()
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     content = content.replace("status: active", "status: completed")
@@ -425,23 +425,23 @@ def archive_prd(project_dir: str, prd_path: str, feature_name: str) -> None:
             f"\\1\ncompleted: {today}",
             content
         )
-    with open(prd_path, "w") as f:
+    with open(spec_path, "w") as f:
         f.write(content)
 
     # Move to archive
-    archive_dir = os.path.join(os.path.dirname(prd_path), "archive")
+    archive_dir = os.path.join(os.path.dirname(spec_path), "archive")
     os.makedirs(archive_dir, exist_ok=True)
-    dest = os.path.join(archive_dir, os.path.basename(prd_path))
-    shutil.move(prd_path, dest)
+    dest = os.path.join(archive_dir, os.path.basename(spec_path))
+    shutil.move(spec_path, dest)
 
     # Stage changes
     rel_dest = os.path.relpath(dest, project_dir)
-    rel_src = os.path.relpath(prd_path, project_dir)
+    rel_src = os.path.relpath(spec_path, project_dir)
     run_git(["add", rel_dest], project_dir, check=True)
     # Stage the deletion of the old path
     run_git(["rm", "--cached", "-f", rel_src], project_dir, check=True)
 
-    log(f"  Archived: {os.path.basename(prd_path)} -> archive/")
+    log(f"  Archived: {os.path.basename(spec_path)} -> archive/")
 
 
 # --- Prompt Size Guard ---
@@ -557,22 +557,22 @@ def strip_frontmatter(text: str) -> str:
     return text
 
 
-def gather_prior_learnings(state: dict, current_story_id: str, prd_key: str | None = None) -> list[str]:
+def gather_prior_learnings(state: dict, current_story_id: str, spec_key: str | None = None) -> list[str]:
     """Gather learnings from completed stories.
 
-    In epic mode, also gathers learnings from all completed PRDs.
+    In epic mode, also gathers learnings from all completed feature specs.
     """
     prior_learnings = []
 
-    if prd_key is not None:
-        # Epic mode: gather from ALL PRDs' stories
-        for pk, prd_data in state.get("prds", {}).items():
-            for sid, sdata in prd_data.get("stories", {}).items():
-                if pk == prd_key and sid == current_story_id:
+    if spec_key is not None:
+        # Epic mode: gather from ALL feature specs' stories
+        for pk, spec_data in state.get("specs", {}).items():
+            for sid, sdata in spec_data.get("stories", {}).items():
+                if pk == spec_key and sid == current_story_id:
                     continue  # Skip current story
                 prior_learnings.extend(sdata.get("learnings", []))
     else:
-        # Single-PRD mode: gather from state["stories"]
+        # Single mode: gather from state["stories"]
         for sid, sdata in state.get("stories", {}).items():
             if sid != current_story_id:
                 prior_learnings.extend(sdata.get("learnings", []))
@@ -586,29 +586,29 @@ def gather_prior_learnings(state: dict, current_story_id: str, prd_key: str | No
 
 def build_implementation_prompt(
     story: dict, config: dict, state: dict, attempt: int,
-    feature_name: str | None = None, prd_path: str | None = None,
-    prd_key: str | None = None
+    feature_name: str | None = None, spec_path: str | None = None,
+    spec_key: str | None = None
 ) -> str:
     """Interpolate the story-implementer template with context.
 
     Args:
         feature_name: Override for config["feature_name"] (used in epic mode).
-        prd_path: Override for config["prd_path"] (used in epic mode).
-        prd_key: If set, look up story state in state["prds"][prd_key] (epic mode).
+        spec_path: Override for config["spec_path"] (used in epic mode).
+        spec_key: If set, look up story state in state["specs"][spec_key] (epic mode).
     """
     template = strip_frontmatter(config["implementer_template"])
     context = config.get("project_context", {})
     feat_name = feature_name or config.get("feature_name", "feature")
-    prd = prd_path or config.get("prd_path", "")
+    spec = spec_path or config.get("spec_path", "")
 
     # Gather learnings from previous stories
-    prior_learnings = gather_prior_learnings(state, story["id"], prd_key)
+    prior_learnings = gather_prior_learnings(state, story["id"], spec_key)
 
     # Build retry context
     retry_context = ""
     if attempt > 1:
-        if prd_key is not None:
-            stories_dict = state.get("prds", {}).get(prd_key, {}).get("stories", {})
+        if spec_key is not None:
+            stories_dict = state.get("specs", {}).get(spec_key, {}).get("stories", {})
         else:
             stories_dict = state.get("stories", {})
         story_state = stories_dict.get(story["id"], {})
@@ -624,8 +624,8 @@ def build_implementation_prompt(
     # Build previous attempt diff context
     previous_diff = ""
     if attempt > 1:
-        if prd_key is not None:
-            stories_dict = state.get("prds", {}).get(prd_key, {}).get("stories", {})
+        if spec_key is not None:
+            stories_dict = state.get("specs", {}).get(spec_key, {}).get("stories", {})
         else:
             stories_dict = state.get("stories", {})
         story_state = stories_dict.get(story["id"], {})
@@ -640,7 +640,7 @@ def build_implementation_prompt(
     prompt = prompt.replace("{{IMPLEMENTATION_HINTS}}", story.get("hints") or "No hints provided — explore the codebase.")
     prompt = prompt.replace("{{ACCEPTANCE_CRITERIA}}", story["criteria_text"])
     prompt = prompt.replace("{{FEATURE}}", feat_name)
-    prompt = prompt.replace("{{PRD_OVERVIEW}}", context.get("prd_overview", "Not available"))
+    prompt = prompt.replace("{{SPEC_OVERVIEW}}", context.get("spec_overview", "Not available"))
     # Reference-based context: paths instead of content
     prompt = prompt.replace("{{SYNOPSIS_PATH}}", context.get("synopsis", "kit_tools/SYNOPSIS.md"))
     prompt = prompt.replace("{{CODE_ARCH_PATH}}", context.get("code_arch", "kit_tools/arch/CODE_ARCH.md"))
@@ -658,9 +658,9 @@ def build_implementation_prompt(
 
     # Add autonomous-mode instructions
     prompt += f"\n\n## Additional Instructions (Autonomous Mode)\n"
-    prompt += f"- The PRD file is at: {prd}\n"
-    prompt += f"- Read the PRD directly for full story context\n"
-    prompt += f"- Do NOT modify the PRD file — checkboxes are updated by the orchestrator after verification\n"
+    prompt += f"- The feature spec file is at: {spec}\n"
+    prompt += f"- Read the feature spec directly for full story context\n"
+    prompt += f"- Do NOT modify the feature spec file — checkboxes are updated by the orchestrator after verification\n"
     prompt += f'- Commit with message: feat({feat_name}): {story["id"]} - {story["title"]}\n'
 
     return prompt
@@ -668,7 +668,7 @@ def build_implementation_prompt(
 
 def build_verification_prompt(
     story: dict, config: dict, files_changed_from_git: str,
-    diff_stat: str = "", test_command: str | None = None, prd_path: str = ""
+    diff_stat: str = "", test_command: str | None = None, spec_path: str = ""
 ) -> str:
     """Interpolate the story-verifier template with git-sourced context.
 
@@ -677,7 +677,7 @@ def build_verification_prompt(
             by the orchestrator — NOT from the implementer's output.
         diff_stat: Output of `git diff --stat` for the attempt.
         test_command: Auto-detected test command, or None.
-        prd_path: Path to the PRD file for cross-reference.
+        spec_path: Path to the feature spec file for cross-reference.
     """
     template = strip_frontmatter(config["verifier_template"])
     context = config.get("project_context", {})
@@ -695,7 +695,7 @@ def build_verification_prompt(
     prompt = prompt.replace("{{CODE_ARCH_PATH}}", context.get("code_arch", "kit_tools/arch/CODE_ARCH.md"))
     prompt = prompt.replace("{{CONVENTIONS_PATH}}", context.get("conventions", "kit_tools/docs/CONVENTIONS.md"))
     prompt = prompt.replace("{{GOTCHAS_PATH}}", context.get("gotchas", "kit_tools/docs/GOTCHAS.md"))
-    prompt = prompt.replace("{{PRD_PATH}}", prd_path or "Not available")
+    prompt = prompt.replace("{{SPEC_PATH}}", spec_path or "Not available")
     prompt = prompt.replace(
         "{{TEST_COMMAND}}",
         f"Run: `{test_command}`" if test_command else "No test command detected — skip test step unless criteria explicitly mention tests."
@@ -884,27 +884,27 @@ def init_execution_log(config: dict, epic_mode: bool = False) -> None:
 
     if epic_mode:
         epic_name = config["epic_name"]
-        epic_prds = config["epic_prds"]
+        epic_specs = config["epic_specs"]
         header = f"""
 ## Run: epic/{epic_name} — {now[:10]}
 - **Epic:** {epic_name}
 - **Branch:** {branch}
 - **Mode:** {mode} ({f'max {max_retries} retries' if max_retries else 'unlimited retries'})
-- **PRDs:** {len(epic_prds)} total
+- **Feature Specs:** {len(epic_specs)} total
 
 """
     else:
         feature_name = config.get("feature_name", "unknown")
-        prd_name = os.path.basename(config["prd_path"])
+        spec_name = os.path.basename(config["spec_path"])
 
         # Count total stories
-        stories = parse_stories_from_prd(config["prd_path"])
+        stories = parse_stories_from_spec(config["spec_path"])
         total = len(stories)
         complete = sum(1 for s in stories if s["completed"])
 
         header = f"""
 ## Run: {feature_name} — {now[:10]}
-- **PRD:** {prd_name}
+- **Feature Spec:** {spec_name}
 - **Branch:** {branch}
 - **Mode:** {mode} ({f'max {max_retries} retries' if max_retries else 'unlimited retries'})
 - **Stories:** {total} total, {complete} complete at start
@@ -983,14 +983,14 @@ def log_completion(config: dict, state: dict) -> None:
     log_path = get_log_path(config)
     now = now_iso()
 
-    # Support both single-PRD and epic state structures
-    if "prds" in state:
-        # Epic mode: aggregate across all PRDs
+    # Support both single and epic state structures
+    if "specs" in state:
+        # Epic mode: aggregate across all specs
         total_stories = 0
         completed = 0
         total_attempts = 0
-        for prd_data in state.get("prds", {}).values():
-            for sdata in prd_data.get("stories", {}).values():
+        for spec_data in state.get("specs", {}).values():
+            for sdata in spec_data.get("stories", {}).values():
                 total_stories += 1
                 if sdata.get("status") == "completed":
                     completed += 1
@@ -1280,32 +1280,32 @@ def log(message: str) -> None:
 # --- Story Execution Loop ---
 
 
-def execute_prd_stories(
-    prd_path: str, feature_name: str, config: dict, state: dict,
-    prd_key: str | None = None
+def execute_spec_stories(
+    spec_path: str, feature_name: str, config: dict, state: dict,
+    spec_key: str | None = None
 ) -> dict:
-    """Execute all stories in a single PRD. Returns updated state.
+    """Execute all stories in a single feature spec. Returns updated state.
 
     Args:
-        prd_path: Absolute path to the PRD file.
+        spec_path: Absolute path to the feature spec file.
         feature_name: Feature name for commit messages.
         config: Orchestrator config dict.
         state: Execution state dict.
-        prd_key: If set, story state lives under state["prds"][prd_key] (epic mode).
-                 If None, story state lives under state["stories"] (single-PRD mode).
+        spec_key: If set, story state lives under state["specs"][spec_key] (epic mode).
+                 If None, story state lives under state["stories"] (single mode).
     """
     project_dir = config["project_dir"]
     mode = config["mode"]
     max_retries = config.get("max_retries")
 
-    # Auto-detect test command once per PRD execution
+    # Auto-detect test command once per feature spec execution
     test_command = detect_test_command(project_dir)
     if test_command:
         log(f"  Detected test command: {test_command}")
 
     # Determine which stories_state dict to use for find_next_uncompleted_story
-    if prd_key is not None:
-        stories_state = state["prds"][prd_key]
+    if spec_key is not None:
+        stories_state = state["specs"][spec_key]
     else:
         stories_state = state
 
@@ -1315,7 +1315,7 @@ def execute_prd_stories(
             wait_for_pause_removal(project_dir, config=config)
 
         # Find next uncompleted story
-        story = find_next_uncompleted_story(prd_path, stories_state)
+        story = find_next_uncompleted_story(spec_path, stories_state)
         if not story:
             return state  # All stories done
 
@@ -1348,7 +1348,7 @@ def execute_prd_stories(
                     update_state_story(
                         state, story["id"], "failed", attempt - 1,
                         failure=f"Exceeded max retries ({max_retries})",
-                        prd_key=prd_key
+                        spec_key=spec_key
                     )
                     save_state(state, config)
                     write_notification(
@@ -1371,12 +1371,12 @@ def execute_prd_stories(
 
             # --- Implementation session ---
             log(f"Implementing {story['id']}: {story['title']} (attempt {attempt})...")
-            update_state_story(state, story["id"], "in_progress", attempt, prd_key=prd_key)
+            update_state_story(state, story["id"], "in_progress", attempt, spec_key=spec_key)
             save_state(state, config)
 
             prompt = build_implementation_prompt(
                 story, config, state, attempt,
-                feature_name=feature_name, prd_path=prd_path, prd_key=prd_key
+                feature_name=feature_name, spec_path=spec_path, spec_key=spec_key
             )
             prompt = check_and_trim_prompt(prompt, "implementation")
 
@@ -1401,7 +1401,7 @@ def execute_prd_stories(
                 log_story_failure(story, attempt, config, impl_output[:500], learnings)
                 update_state_story(
                     state, story["id"], "failed", attempt, learnings, impl_output[:500],
-                    prd_key=prd_key
+                    spec_key=spec_key
                 )
                 state["status"] = "failed"
                 save_state(state, config)
@@ -1421,7 +1421,7 @@ def execute_prd_stories(
                 log_story_failure(story, attempt, config, impl_output[:500], learnings)
                 update_state_story(
                     state, story["id"], "retrying", attempt, learnings, impl_output[:500],
-                    prd_key=prd_key
+                    spec_key=spec_key
                 )
                 save_state(state, config)
                 # Delete the failed attempt branch (no diff to capture on session error)
@@ -1447,7 +1447,7 @@ def execute_prd_stories(
             log(f"  Verifying {story['id']}...")
             verify_prompt = build_verification_prompt(
                 story, config, files_changed_from_git,
-                diff_stat=diff_stat, test_command=test_command, prd_path=prd_path
+                diff_stat=diff_stat, test_command=test_command, spec_path=spec_path
             )
             verify_prompt = check_and_trim_prompt(verify_prompt, "verification")
 
@@ -1472,13 +1472,13 @@ def execute_prd_stories(
                 log_story_failure(story, attempt, config, verify_error, learnings)
                 update_state_story(
                     state, story["id"], "retrying", attempt,
-                    learnings, verify_error, prd_key=prd_key
+                    learnings, verify_error, spec_key=spec_key
                 )
                 save_state(state, config)
                 # Capture diff as retry context, then delete attempt branch
                 attempt_diff = delete_attempt_branch(project_dir, feature_branch, attempt_branch)
-                if prd_key is not None:
-                    state["prds"][prd_key].setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
+                if spec_key is not None:
+                    state["specs"][spec_key].setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
                 else:
                     state.setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
                 save_state(state, config)
@@ -1497,28 +1497,28 @@ def execute_prd_stories(
                     log_story_failure(story, attempt, config, "Merge conflict", learnings)
                     update_state_story(
                         state, story["id"], "retrying", attempt,
-                        learnings, "Merge conflict", prd_key=prd_key
+                        learnings, "Merge conflict", spec_key=spec_key
                     )
                     save_state(state, config)
                     attempt_diff = delete_attempt_branch(project_dir, feature_branch, attempt_branch)
-                    if prd_key is not None:
-                        state["prds"][prd_key].setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
+                    if spec_key is not None:
+                        state["specs"][spec_key].setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
                     else:
                         state.setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
                     save_state(state, config)
                     clean_result_files(project_dir)
                     continue
-                # Update PRD checkboxes on the feature branch
-                if update_prd_checkboxes(prd_path, story["id"]):
-                    log(f"  Updated PRD checkboxes for {story['id']}")
-                    run_git(["add", prd_path], project_dir, check=True)
+                # Update feature spec checkboxes on the feature branch
+                if update_spec_checkboxes(spec_path, story["id"]):
+                    log(f"  Updated feature spec checkboxes for {story['id']}")
+                    run_git(["add", spec_path], project_dir, check=True)
                     run_git(
                         ["commit", "-m", f"chore({feature_name}): mark {story['id']} criteria complete"],
                         project_dir, check=True
                     )
                 log_story_success(story, attempt, config, learnings, feature_name=feature_name)
                 update_state_story(
-                    state, story["id"], "completed", attempt, learnings, prd_key=prd_key
+                    state, story["id"], "completed", attempt, learnings, spec_key=spec_key
                 )
                 save_state(state, config)
                 write_notification(
@@ -1537,13 +1537,13 @@ def execute_prd_stories(
                 log_story_failure(story, attempt, config, str(failure_details), learnings)
                 update_state_story(
                     state, story["id"], "retrying", attempt,
-                    learnings, str(failure_details), prd_key=prd_key
+                    learnings, str(failure_details), spec_key=spec_key
                 )
                 save_state(state, config)
                 # Capture diff as retry context, then delete attempt branch
                 attempt_diff = delete_attempt_branch(project_dir, feature_branch, attempt_branch)
-                if prd_key is not None:
-                    state["prds"][prd_key].setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
+                if spec_key is not None:
+                    state["specs"][spec_key].setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
                 else:
                     state.setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
                 save_state(state, config)
@@ -1553,20 +1553,20 @@ def execute_prd_stories(
     return state
 
 
-# --- Single-PRD Mode ---
+# --- Single Feature Spec Mode ---
 
 
-def run_single_prd(config: dict) -> None:
-    """Execute a single PRD (original behavior, backwards compatible)."""
+def run_single_spec(config: dict) -> None:
+    """Execute a single feature spec (original behavior, backwards compatible)."""
     state, is_rerun = load_or_create_state(config)
     save_state(state, config)
 
     project_dir = config["project_dir"]
-    prd_path = config["prd_path"]
+    spec_path = config["spec_path"]
     mode = config["mode"]
     max_retries = config.get("max_retries")
 
-    log(f"Starting execution: {os.path.basename(prd_path)}")
+    log(f"Starting execution: {os.path.basename(spec_path)}")
     log(f"Mode: {mode}, Max retries: {max_retries or 'unlimited'}")
     log(f"Branch: {config['branch_name']}")
 
@@ -1587,7 +1587,7 @@ def run_single_prd(config: dict) -> None:
     init_execution_log(config)
 
     # Execute all stories
-    execute_prd_stories(prd_path, config.get("feature_name", "feature"), config, state)
+    execute_spec_stories(spec_path, config.get("feature_name", "feature"), config, state)
 
     # All stories complete
     log("All stories complete!")
@@ -1607,11 +1607,11 @@ def run_single_prd(config: dict) -> None:
     )
 
     # Run feature validation (may auto-invoke complete-feature)
-    prd_basename = os.path.basename(prd_path)
+    spec_basename = os.path.basename(spec_path)
     branch = config["branch_name"]
     log("Running feature validation...")
     validate_prompt = (
-        f"Run /kit-tools:validate-feature for PRD {prd_basename}. "
+        f"Run /kit-tools:validate-feature for feature spec {spec_basename}. "
         f"Mode: autonomous. Branch: {branch}."
     )
     validate_output = run_claude_session(validate_prompt, project_dir)
@@ -1645,15 +1645,15 @@ def run_single_prd(config: dict) -> None:
 
 
 def run_epic(config: dict) -> None:
-    """Execute an epic: multiple PRDs in sequence on a shared branch."""
+    """Execute an epic: multiple feature specs in sequence on a shared branch."""
     state, is_rerun = load_or_create_epic_state(config)
     save_state(state, config)
 
     project_dir = config["project_dir"]
     epic_name = config["epic_name"]
-    epic_prds = config["epic_prds"]
+    epic_specs = config["epic_specs"]
 
-    log(f"Starting epic: {epic_name} ({len(epic_prds)} PRDs)")
+    log(f"Starting epic: {epic_name} ({len(epic_specs)} feature specs)")
     log(f"Branch: {config['branch_name']}")
 
     if not verify_branch_base(project_dir):
@@ -1668,55 +1668,55 @@ def run_epic(config: dict) -> None:
 
     init_execution_log(config, epic_mode=True)
 
-    for i, prd_info in enumerate(epic_prds):
-        prd_path = prd_info["prd_path"]
-        feature_name = prd_info["feature_name"]
-        is_final = prd_info.get("epic_final", False)
-        prd_basename = os.path.basename(prd_path)
+    for i, spec_info in enumerate(epic_specs):
+        spec_path = spec_info["spec_path"]
+        feature_name = spec_info["feature_name"]
+        is_final = spec_info.get("epic_final", False)
+        spec_basename = os.path.basename(spec_path)
 
-        # Skip already completed PRDs (resume support)
-        prd_entry = state["prds"].get(prd_basename, {})
-        if prd_entry.get("status") == "completed":
-            log(f"Skipping {prd_basename} (already completed)")
+        # Skip already completed specs (resume support)
+        spec_entry = state["specs"].get(spec_basename, {})
+        if spec_entry.get("status") == "completed":
+            log(f"Skipping {spec_basename} (already completed)")
             continue
 
         # Hard gate: verify dependencies are archived
-        deps_ok, missing = check_dependencies_archived(project_dir, prd_path)
+        deps_ok, missing = check_dependencies_archived(project_dir, spec_path)
         if not deps_ok:
-            log(f"ERROR: Dependencies not met for {prd_basename}: {missing}")
+            log(f"ERROR: Dependencies not met for {spec_basename}: {missing}")
             log("Cannot continue epic execution.")
             state["status"] = "blocked"
             save_state(state, config)
             write_notification(
                 config, "execution_paused",
                 "Epic blocked on dependencies",
-                f"{prd_basename} blocked — missing: {', '.join(missing)}",
+                f"{spec_basename} blocked — missing: {', '.join(missing)}",
                 severity="critical",
             )
             commit_tracking_files(project_dir, epic_name)
             clean_result_files(project_dir)
             sys.exit(1)
 
-        log(f"--- PRD {i+1}/{len(epic_prds)}: {prd_basename} ---")
+        log(f"--- Feature spec {i+1}/{len(epic_specs)}: {spec_basename} ---")
 
-        # Initialize PRD state entry
-        if prd_basename not in state["prds"]:
-            state["prds"][prd_basename] = {
+        # Initialize feature spec state entry
+        if spec_basename not in state["specs"]:
+            state["specs"][spec_basename] = {
                 "feature_name": feature_name,
                 "status": "in_progress",
                 "started_at": now_iso(),
                 "stories": {},
             }
-        state["current_prd"] = prd_basename
+        state["current_spec"] = spec_basename
         save_state(state, config)
 
-        # Execute all stories in this PRD
-        execute_prd_stories(prd_path, feature_name, config, state, prd_key=prd_basename)
+        # Execute all stories in this feature spec
+        execute_spec_stories(spec_path, feature_name, config, state, spec_key=spec_basename)
 
-        # PRD stories complete — validate
-        log(f"  All stories complete for {prd_basename}. Validating...")
+        # Feature spec stories complete — validate
+        log(f"  All stories complete for {spec_basename}. Validating...")
         validate_prompt = (
-            f"Run /kit-tools:validate-feature for PRD {prd_basename}. "
+            f"Run /kit-tools:validate-feature for feature spec {spec_basename}. "
             f"Mode: autonomous. Branch: {config['branch_name']}. "
             f"This is part of an epic — do NOT invoke complete-feature."
         )
@@ -1730,18 +1730,18 @@ def run_epic(config: dict) -> None:
 
         # Check for pause file (created by validate-feature if critical findings exist)
         if pause_file_exists(project_dir):
-            log(f"  Critical validation findings for {prd_basename}. Pausing.")
+            log(f"  Critical validation findings for {spec_basename}. Pausing.")
             wait_for_pause_removal(project_dir, config=config)
             log("  Resuming after pause.")
 
-        # Commit tracking files for this PRD
+        # Commit tracking files for this feature spec
         commit_tracking_files(project_dir, feature_name)
 
         # Tag checkpoint
         tag_checkpoint(project_dir, epic_name, feature_name)
 
-        # Archive PRD
-        archive_prd(project_dir, prd_path, feature_name)
+        # Archive feature spec
+        archive_spec(project_dir, spec_path, feature_name)
 
         # Commit archive + tag
         run_git(
@@ -1750,42 +1750,42 @@ def run_epic(config: dict) -> None:
         )
 
         # Update state
-        state["prds"][prd_basename]["status"] = "completed"
-        state["prds"][prd_basename]["completed_at"] = now_iso()
+        state["specs"][spec_basename]["status"] = "completed"
+        state["specs"][spec_basename]["completed_at"] = now_iso()
         save_state(state, config)
 
-        log(f"  {prd_basename} complete. Tagged: {epic_name}/{feature_name}-complete")
+        log(f"  {spec_basename} complete. Tagged: {epic_name}/{feature_name}-complete")
         write_notification(
-            config, "prd_complete",
-            f"PRD complete: {feature_name}",
-            f"{prd_basename} ({i+1}/{len(epic_prds)}) complete in epic {epic_name}",
+            config, "spec_complete",
+            f"Feature spec complete: {feature_name}",
+            f"{spec_basename} ({i+1}/{len(epic_specs)}) complete in epic {epic_name}",
             severity="info",
         )
 
-        # Pause between PRDs if configured
-        if config.get("epic_pause_between_prds") and not is_final:
+        # Pause between feature specs if configured
+        if config.get("epic_pause_between_specs") and not is_final:
             pause_path = os.path.join(project_dir, "kit_tools", ".pause_execution")
             with open(pause_path, "w") as f:
-                f.write(f"Epic paused after {prd_basename}. Remove this file to continue.\n")
-            log(f"  Pausing between PRDs. Review {prd_basename} results, then:")
+                f.write(f"Epic paused after {spec_basename}. Remove this file to continue.\n")
+            log(f"  Pausing between feature specs. Review {spec_basename} results, then:")
             log(f"    rm kit_tools/.pause_execution")
             write_notification(
                 config, "execution_paused",
-                "Epic paused between PRDs",
-                f"Paused after {prd_basename}. Remove pause file to continue.",
+                "Epic paused between feature specs",
+                f"Paused after {spec_basename}. Remove pause file to continue.",
                 severity="warning",
             )
             wait_for_pause_removal(project_dir, config=config)
 
-    # All PRDs complete
-    log("All epic PRDs complete!")
+    # All feature specs complete
+    log("All epic feature specs complete!")
     state["status"] = "completed"
     save_state(state, config)
     log_completion(config, state)
     write_notification(
         config, "execution_complete",
         "Epic complete",
-        f"All {len(epic_prds)} PRDs complete for epic {epic_name}",
+        f"All {len(epic_specs)} feature specs complete for epic {epic_name}",
         severity="info",
     )
 
@@ -1794,7 +1794,7 @@ def run_epic(config: dict) -> None:
     complete_prompt = (
         f"Run /kit-tools:complete-feature for the epic '{epic_name}'. "
         f"Branch: {config['branch_name']}. "
-        f"All PRDs are archived. Create a PR for the epic branch."
+        f"All feature specs are archived. Create a PR for the epic branch."
     )
     complete_output = run_claude_session(complete_prompt, project_dir)
 
@@ -1821,10 +1821,10 @@ def main():
     config = load_config(args.config)
     register_crash_handler(config)
 
-    if config.get("epic_prds"):
+    if config.get("epic_specs"):
         run_epic(config)
     else:
-        run_single_prd(config)
+        run_single_spec(config)
 
     log("Orchestrator finished.")
 

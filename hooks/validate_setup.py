@@ -24,7 +24,7 @@ def check_required_files(kit_tools_dir: Path) -> list[str]:
         "arch/CODE_ARCH.md",
         "docs/LOCAL_DEV.md",
         "docs/GOTCHAS.md",
-        "roadmap/MVP_TODO.md",
+        "roadmap/MILESTONES.md",
         "roadmap/BACKLOG.md",
     ]
 

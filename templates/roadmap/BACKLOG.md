@@ -11,6 +11,14 @@
 > Last updated: YYYY-MM-DD
 > Updated by: [Human/Claude]
 
+## Prioritized Items
+
+| Priority | Item | Type | Feature Spec | Status |
+|----------|------|------|--------------|--------|
+| P0 | [Item] | Feature / Tech Debt / Bug | [link or N/A] | Planned / In Progress |
+
+---
+
 ## Future Features
 
 ### [Feature Idea]
@@ -28,8 +36,8 @@
 
 ---
 
-## Parked Ideas
+## Icebox
 
-### [Parked Idea]
-**Reason parked:** [Why not now]
+### [Icebox Item]
+**Reason shelved:** [Why not now]
 **Revisit when:** [Condition to reconsider]

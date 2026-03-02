@@ -6,11 +6,11 @@ Detailed formats, schemas, and examples for the execute-feature workflow. Read t
 
 ## Execution Config Schema
 
-### Standalone PRD (no epic)
+### Standalone Feature Spec (no epic)
 
 ```json
 {
-  "prd_path": "kit_tools/prd/prd-auth.md",
+  "spec_path": "kit_tools/specs/feature-auth.md",
   "project_dir": "/absolute/path/to/project",
   "branch_name": "feature/auth",
   "feature_name": "auth",
@@ -24,12 +24,12 @@ Detailed formats, schemas, and examples for the execute-feature workflow. Read t
     "code_arch": "kit_tools/arch/CODE_ARCH.md",
     "conventions": "kit_tools/docs/CONVENTIONS.md",
     "gotchas": "kit_tools/docs/GOTCHAS.md",
-    "prd_overview": "... PRD overview section ..."
+    "spec_overview": "... feature spec overview section ..."
   }
 }
 ```
 
-### Epic PRD (multiple PRDs in sequence)
+### Epic (multiple feature specs in sequence)
 
 ```json
 {
@@ -45,25 +45,25 @@ Detailed formats, schemas, and examples for the execute-feature workflow. Read t
     "code_arch": "kit_tools/arch/CODE_ARCH.md",
     "conventions": "kit_tools/docs/CONVENTIONS.md",
     "gotchas": "kit_tools/docs/GOTCHAS.md",
-    "prd_overview": "... PRD overview section ..."
+    "spec_overview": "... feature spec overview section ..."
   },
   "epic_name": "arxiv",
-  "epic_pause_between_prds": true,
-  "epic_prds": [
+  "epic_pause_between_specs": true,
+  "epic_specs": [
     {
-      "prd_path": "/abs/path/kit_tools/prd/prd-arxiv-source.md",
+      "spec_path": "/abs/path/kit_tools/specs/feature-arxiv-source.md",
       "feature_name": "arxiv-source",
       "epic_seq": 1,
       "epic_final": false
     },
     {
-      "prd_path": "/abs/path/kit_tools/prd/prd-arxiv-api.md",
+      "spec_path": "/abs/path/kit_tools/specs/feature-arxiv-api.md",
       "feature_name": "arxiv-api",
       "epic_seq": 2,
       "epic_final": false
     },
     {
-      "prd_path": "/abs/path/kit_tools/prd/prd-arxiv-ui.md",
+      "spec_path": "/abs/path/kit_tools/specs/feature-arxiv-ui.md",
       "feature_name": "arxiv-ui",
       "epic_seq": 3,
       "epic_final": true
@@ -72,7 +72,7 @@ Detailed formats, schemas, and examples for the execute-feature workflow. Read t
 }
 ```
 
-When `epic_prds` is present, the orchestrator runs in epic mode. When absent, it runs in single-PRD mode. Exclude already-completed/archived PRDs from `epic_prds`.
+When `epic_specs` is present, the orchestrator runs in epic mode. When absent, it runs in single-feature-spec mode. Exclude already-completed/archived feature specs from `epic_specs`.
 
 ---
 
@@ -80,7 +80,7 @@ When `epic_prds` is present, the orchestrator runs in epic mode. When absent, it
 
 ```json
 {
-  "prd": "prd-auth.md",
+  "spec": "feature-auth.md",
   "branch": "feature/auth",
   "mode": "autonomous",
   "max_retries": null,
@@ -110,12 +110,12 @@ These tokens are used in the agent templates and interpolated by this skill (sup
 | Token | Source |
 |-------|--------|
 | `{{STORY_ID}}` | Story ID (e.g., "US-003") |
-| `{{STORY_TITLE}}` | Story title from PRD |
+| `{{STORY_TITLE}}` | Story title from feature spec |
 | `{{STORY_DESCRIPTION}}` | Full story description |
 | `{{IMPLEMENTATION_HINTS}}` | Per-story hints from planning (or fallback message) |
-| `{{ACCEPTANCE_CRITERIA}}` | Checkbox list from PRD |
-| `{{FEATURE}}` | Feature name from PRD frontmatter |
-| `{{PRD_OVERVIEW}}` | Overview + goals + tech considerations + non-goals |
+| `{{ACCEPTANCE_CRITERIA}}` | Checkbox list from feature spec |
+| `{{FEATURE}}` | Feature name from feature spec frontmatter |
+| `{{SPEC_OVERVIEW}}` | Overview + goals + tech considerations + out of scope |
 | `{{SYNOPSIS_PATH}}` | Path to SYNOPSIS.md |
 | `{{CODE_ARCH_PATH}}` | Path to CODE_ARCH.md |
 | `{{CONVENTIONS_PATH}}` | Path to CONVENTIONS.md |
@@ -125,7 +125,7 @@ These tokens are used in the agent templates and interpolated by this skill (sup
 | `{{PREVIOUS_ATTEMPT_DIFF}}` | Git diff from last failed attempt (for retries) |
 | `{{DIFF_STAT}}` | `git diff --stat` output showing scale of changes (verifier only) |
 | `{{FILES_CHANGED}}` | Files changed from git diff (verifier only) |
-| `{{PRD_PATH}}` | Path to the PRD file for cross-reference (verifier only) |
+| `{{SPEC_PATH}}` | Path to the feature spec file for cross-reference (verifier only) |
 | `{{TEST_COMMAND}}` | Auto-detected test command or skip instruction (verifier only) |
 | `{{RESULT_FILE_PATH}}` | Path where agent should write its JSON result |
 
@@ -135,42 +135,42 @@ These tokens are used in the agent templates and interpolated by this skill (sup
 
 ### Epic detection
 
-After selecting a PRD, read its frontmatter. If the `epic` field is present and non-empty:
+After selecting a feature spec, read its frontmatter. If the `epic` field is present and non-empty:
 
-1. Scan `kit_tools/prd/` (non-archived) for all PRDs with the same `epic` value
-2. Also scan `kit_tools/prd/archive/` for completed PRDs in the same epic
+1. Check for an `epic-*.md` file in `kit_tools/specs/` for ordering; fall back to scanning feature specs by `epic` frontmatter
+2. Also scan `kit_tools/specs/archive/` for completed feature specs in the same epic
 3. Order all by `epic_seq`
 4. Determine which are already completed (archived)
 
 ### Epic user options
 
-- **A. Execute all remaining, pause between each** — Sets `epic_pause_between_prds: true`. Pauses after each PRD (validate + tag + archive).
-- **B. Execute all remaining non-stop** — No stops between PRDs.
-- **C. Execute just this PRD** — Standalone on the `epic/[name]` branch.
+- **A. Execute all remaining, pause between each** — Sets `epic_pause_between_specs: true`. Pauses after each feature spec (validate + tag + archive).
+- **B. Execute all remaining non-stop** — No stops between feature specs.
+- **C. Execute just this feature spec** — Standalone on the `epic/[name]` branch.
 
 ### Epic orchestrator behavior
 
-The orchestrator chains PRD execution:
-1. Execute all stories in PRD N
-2. Validate PRD N
+The orchestrator chains feature spec execution:
+1. Execute all stories in feature spec N
+2. Validate feature spec N
 3. Tag checkpoint: `[epic-name]/[feature-name]-complete`
-4. Archive PRD N (update frontmatter, move to archive/)
+4. Archive feature spec N (update frontmatter, move to archive/)
 5. Commit: `chore([epic-name]): complete [feature-name]`
-6. (Optional: pause between PRDs)
-7. Move to PRD N+1
+6. (Optional: pause between feature specs)
+7. Move to feature spec N+1
 
 ---
 
 ## Pre-flight Check Details
 
 ### 1. Session readiness
-Read the PRD frontmatter. Check for `session_ready: true`.
+Read the feature spec frontmatter. Check for `session_ready: true`.
 - If `session_ready: false`: Warn and ask to continue anyway.
 - If field missing: Proceed with a note.
 
 ### 2. Dependency check
-Read `depends_on` from PRD frontmatter. For each dependency:
-- Check if a completed PRD exists in `kit_tools/prd/archive/prd-[dep].md`
+Read `depends_on` from feature spec frontmatter. For each dependency:
+- Check if a completed feature spec exists in `kit_tools/specs/archive/` (check both `feature-[dep].md` and `prd-[dep].md` for backwards compatibility)
 - If dependencies not met: Warn with specific missing deps, ask to continue.
 
 ### 3. Clean working tree
@@ -178,7 +178,7 @@ Run `git status --porcelain` via Bash.
 - If output is non-empty: Stop and ask user to commit or stash changes first.
 
 ### 4. Uncompleted stories exist
-Parse PRD for stories with unchecked criteria.
+Parse feature spec for stories with unchecked criteria.
 - If all stories complete: Report that nothing to execute, suggest `/kit-tools:complete-feature`.
 
 ### 5. No concurrent execution
@@ -194,28 +194,28 @@ If the branch already exists (resuming):
 - Verify the branch is based on main: `git merge-base --is-ancestor main [branch-name]`
 - If check fails: Warn that the branch may contain commits from another feature.
 
-### 7. Dependency gate (epic PRDs)
-For PRDs with an `epic` field: this is a **hard gate**.
-- All PRDs listed in `depends_on` **must** be archived in `kit_tools/prd/archive/`
+### 7. Dependency gate (epic feature specs)
+For feature specs with an `epic` field: this is a **hard gate**.
+- All feature specs listed in `depends_on` **must** be archived in `kit_tools/specs/archive/`
 - If any dependency is not archived, **block execution**
 
-For standalone PRDs (no `epic` field): soft warning only.
+For standalone feature specs (no `epic` field): soft warning only.
 
 ---
 
 ## Supervised Mode Details
 
-For each uncompleted story (in PRD order):
+For each uncompleted story (in feature spec order):
 
 1. **Read agent templates:** Read `$CLAUDE_PLUGIN_ROOT/agents/story-implementer.md`, interpolate placeholders
 2. **Spawn implementer:** Task tool with `subagent_type: "general-purpose"`, read JSON result file
 3. **Gather verifier context:** `git diff --name-only` + `git diff --stat`, detect test command
-4. **Read verifier template:** Interpolate with git-sourced file list, diff stat, test command, context paths, and PRD path
+4. **Read verifier template:** Interpolate with git-sourced file list, diff stat, test command, context paths, and feature spec path
 5. **Spawn verifier:** Task tool, read JSON result file
-6. **If PASS:** Update PRD checkboxes (skill/orchestrator handles this after verification), update state, log success, commit
+6. **If PASS:** Update feature spec checkboxes (skill/orchestrator handles this after verification), update state, log success, commit
 7. **If FAIL:** Log failure, present to user with verifier's notes, ask: retry, adjust, or stop?
 
-> The implementer does NOT self-verify or update PRD checkboxes. The verifier is the sole quality gate.
+> The implementer does NOT self-verify or update feature spec checkboxes. The verifier is the sole quality gate.
 
 ---
 
@@ -237,7 +237,7 @@ Claude Code prevents running `claude -p` from within an existing Claude session 
 ```bash
 tmux new-session -d -s {session_name} \
   "unset CLAUDECODE; python3 \"$CLAUDE_PLUGIN_ROOT/scripts/execute_orchestrator.py\" \
-  --config \"$(pwd)/kit_tools/prd/.execution-config.json\""
+  --config \"$(pwd)/kit_tools/specs/.execution-config.json\""
 ```
 
 ### Fallback (no tmux)
@@ -246,7 +246,7 @@ If `which tmux` fails, print a copy-pasteable command for the user to run in a s
 
 ```
 python3 "/resolved/plugin/root/scripts/execute_orchestrator.py" \
-  --config "/resolved/project/dir/kit_tools/prd/.execution-config.json"
+  --config "/resolved/project/dir/kit_tools/specs/.execution-config.json"
 ```
 
 ### Monitoring commands
@@ -258,7 +258,7 @@ After launching, report these to the user (using the actual session name):
 | `/kit-tools:execution-status` | Full status report with progress, errors, and actions |
 | `tmux attach -t {session_name}` | Attach to watch live output |
 | `tail -f kit_tools/EXECUTION_LOG.md` | Follow the execution log |
-| `cat kit_tools/prd/.execution-state.json` | Check current state |
+| `cat kit_tools/specs/.execution-state.json` | Check current state |
 | `touch kit_tools/.pause_execution` | Pause after current story |
 
 ---

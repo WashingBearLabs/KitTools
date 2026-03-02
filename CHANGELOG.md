@@ -5,6 +5,42 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-03-01
+
+### Breaking Changes
+- **`kit_tools/prd/` → `kit_tools/specs/`** — The feature specs directory has been renamed. All internal paths, config keys, state keys, and tokens updated to match.
+  - Config keys: `prd_path` → `spec_path`, `epic_prds` → `epic_specs`, `epic_pause_between_prds` → `epic_pause_between_specs`
+  - State keys: `prd` → `spec`, `prds` → `specs`, `current_prd` → `current_spec`
+  - Agent tokens: `{{PRD_OVERVIEW}}` → `{{SPEC_OVERVIEW}}`, `{{PRD_PATH}}` → `{{SPEC_PATH}}`
+  - Orchestrator functions: `parse_prd_frontmatter` → `parse_spec_frontmatter`, `parse_stories_from_prd` → `parse_stories_from_spec`, `update_prd_checkboxes` → `update_spec_checkboxes`, `archive_prd` → `archive_spec`, `execute_prd_stories` → `execute_spec_stories`, `run_single_prd` → `run_single_spec`
+  - Template directory: `templates/prd/` → `templates/specs/`
+- **Run `/kit-tools:migrate` to update existing projects** — The migrate skill has been rewritten to handle the v1.x → v2.0 transition automatically.
+
+### Changed
+- **`/kit-tools:migrate` rewritten** — Now handles v1.x → v2.0 migration instead of the defunct dev-tools migration. Covers directory rename, file renames (`prd-*.md` → `feature-*.md`), config/state key migration, hook path updates, and documentation path sweep. All steps are idempotent.
+- **`detect_phase_completion` hook** — Now checks both `kit_tools/specs/` and `kit_tools/prd/` paths for backwards compatibility with unmigrated projects.
+
+### Unchanged
+- `kit_tools/` top-level directory name
+- `feature-*.md` filenames (renamed in v1.7.0)
+- Frontmatter field names (`feature`, `status`, `epic`, `epic_seq`, etc.)
+- Archive backwards-compat: `check_dependencies_archived()` still checks for `prd-{dep}.md` in archive
+
+## [1.7.0] - 2026-03-01
+
+### Changed
+- **Agile Alignment Refactor** — Corrected agile hierarchy throughout the plugin
+  - **"PRD" → "Feature Spec"** — What kit-tools called a "PRD" was actually a feature-level spec, not a product-level document. All user-facing references updated.
+  - **New: Product Brief** (`brief-*.md`) — Optional strategic planning document for new product areas. Integrated into `plan-feature` as Step 1.
+  - **New: Epic files** (`epic-*.md`) — Explicit epic decomposition documents with goal, feature spec table, and completion criteria. Replaces implicit `epic:` frontmatter scanning.
+  - **Feature Spec template** (`FEATURE_SPEC.md`) — Replaces `PRODUCT_REQ_DOC.md`. Removes Functional Requirements (FR-X) section and Success Metrics (moved to Product Brief). Renames "Non-Goals" → "Out of Scope". Adds `brief:` and `type:` frontmatter fields.
+  - **`MILESTONES.md`** — Replaces `MVP_TODO.md` for milestone tracking
+  - **`FEATURE_TODO.md` removed** — Superseded by feature specs since v1.3.0
+  - **Generated files** — `prd-[name].md` → `feature-[name].md`
+  - **`prd-compliance-reviewer` agent** → `feature-compliance-reviewer` — FR-X coverage check removed
+  - **Backwards compatibility** — Orchestrator `check_dependencies_archived()` checks both `feature-*.md` and `prd-*.md` patterns. Internal variable/config key names unchanged.
+  - **`/kit-tools:migrate`** — New "Agile Alignment Migration" step renames `prd-*.md` → `feature-*.md`, generates epic files, renames `MVP_TODO.md` → `MILESTONES.md`
+
 ## [1.6.6] - 2026-03-01
 
 ### Added

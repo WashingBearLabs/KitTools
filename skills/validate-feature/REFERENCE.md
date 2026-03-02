@@ -12,7 +12,7 @@ All review steps output findings in this structured format:
 FINDING:
   category: [quality|security|compliance|testing]
   severity: [critical|warning|info]
-  file: [file path or "PRD" or "test suite"]
+  file: [file path or "feature spec" or "test suite"]
   description: [What was found]
   recommendation: [What to do about it]
 END_FINDING
@@ -47,13 +47,13 @@ Template: `$CLAUDE_PLUGIN_ROOT/agents/security-reviewer.md`
 | `{{SECURITY_PATH}}` | Path to SECURITY.md (agent reads on-demand) |
 | `{{CODE_ARCH_PATH}}` | Path to CODE_ARCH.md (agent reads on-demand) |
 
-### PRD Compliance Agent
+### Feature Spec Compliance Agent
 
-Template: `$CLAUDE_PLUGIN_ROOT/agents/prd-compliance-reviewer.md`
+Template: `$CLAUDE_PLUGIN_ROOT/agents/feature-compliance-reviewer.md`
 
 | Token | Source |
 |-------|--------|
-| `{{PRD_PATH}}` | Path to the PRD file |
+| `{{SPEC_PATH}}` | Path to the feature spec file |
 | `{{GIT_DIFF}}` | Full branch diff from Step 2 |
 | `{{CHANGED_FILES}}` | File list from Step 2 |
 | `{{CODE_ARCH_PATH}}` | Path to CODE_ARCH.md (agent reads on-demand) |
@@ -86,7 +86,7 @@ Always include the full `git diff --stat` output — it fits easily and gives ag
 
 ---
 
-## PRD Compliance Review Details
+## Feature Spec Compliance Review Details
 
 ### 5a: Acceptance Criteria Coverage
 
@@ -95,24 +95,18 @@ For each user story's acceptance criteria:
 - If not, is it pre-existing (already met before this branch)?
 - Flag unaddressed criteria as findings
 
-### 5b: Functional Requirements Coverage
-
-For each FR-X requirement:
-- Is there code in the diff that implements this requirement?
-- Flag unaddressed requirements as findings
-
-### 5c: Non-Goal Scope Creep
+### 5b: Out of Scope Creep
 
 Review the diff for changes that:
-- Implement functionality explicitly listed as a non-goal
-- Add features or capabilities not described anywhere in the PRD
+- Implement functionality explicitly listed as out of scope
+- Add features or capabilities not described anywhere in the feature spec
 - Flag scope creep as findings (severity: warning)
 
-### 5d: Intent Alignment
+### 5c: Intent Alignment
 
 Overall assessment:
-- Do the changes accomplish what the PRD describes?
-- Are there significant gaps between the PRD goals and the implementation?
+- Do the changes accomplish what the feature spec describes?
+- Are there significant gaps between the feature spec goals and the implementation?
 - Are there TODO comments or placeholder implementations?
 
 ---

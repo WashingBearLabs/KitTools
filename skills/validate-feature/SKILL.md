@@ -1,11 +1,11 @@
 ---
 name: validate-feature
-description: Validate a feature branch against its PRD with code quality, security, and compliance checks
+description: Validate a feature branch against its feature spec with code quality, security, and compliance checks
 ---
 
 # Validate Feature
 
-Run a comprehensive validation of a feature branch against its PRD. Reviews the entire branch diff for code quality, security, testing, and PRD compliance.
+Run a comprehensive validation of a feature branch against its feature spec. Reviews the entire branch diff for code quality, security, testing, and feature spec compliance.
 
 Read `REFERENCE.md` in this skill directory for detailed finding formats, agent interpolation, and edge cases.
 
@@ -15,7 +15,7 @@ Read `REFERENCE.md` in this skill directory for detailed finding formats, agent 
 |-----------|----------|----------|
 | Quality agent | `$CLAUDE_PLUGIN_ROOT/agents/code-quality-validator.md` | Yes |
 | Security agent | `$CLAUDE_PLUGIN_ROOT/agents/security-reviewer.md` | Yes |
-| Compliance agent | `$CLAUDE_PLUGIN_ROOT/agents/prd-compliance-reviewer.md` | Yes |
+| Compliance agent | `$CLAUDE_PLUGIN_ROOT/agents/feature-compliance-reviewer.md` | Yes |
 | Fixer agent | `$CLAUDE_PLUGIN_ROOT/agents/feature-fixer.md` | For autonomous |
 | Findings template | `$CLAUDE_PLUGIN_ROOT/templates/AUDIT_FINDINGS.md` | Yes |
 
@@ -25,14 +25,14 @@ Read `REFERENCE.md` in this skill directory for detailed finding formats, agent 
 
 | Argument | Description |
 |----------|-------------|
-| `[prd-name]` | Optional: specific PRD to validate against |
+| `[feature-name]` | Optional: specific feature spec to validate against |
 
 ---
 
 ## Step 1: Identify Feature
 
-Determine PRD from argument, `.execution-state.json`, or by listing active PRDs.
-Read full PRD: overview, stories, criteria, FRs, non-goals, tech considerations.
+Determine feature spec from argument, `.execution-state.json`, or by listing active feature specs.
+Read full feature spec: overview, stories, criteria, out of scope, tech considerations.
 
 ---
 
@@ -80,16 +80,15 @@ Spawn via Task tool. Parse findings.
 
 ---
 
-## Step 5: PRD Compliance Review
+## Step 5: Feature Spec Compliance Review
 
-Interpolate `prd-compliance-reviewer.md` with PRD path, diff, file list, and architecture context.
+Interpolate `feature-compliance-reviewer.md` with feature spec path, diff, file list, and architecture context.
 Spawn via Task tool. Parse `FINDING:` / `END_FINDING` blocks.
 
 Reviews:
 - **5a: Acceptance criteria** — Is each criterion addressed?
-- **5b: Functional requirements** — Is each FR-X implemented?
-- **5c: Scope creep** — Changes outside PRD scope? (warning)
-- **5d: Intent alignment** — Do changes match PRD goals?
+- **5b: Scope creep** — Changes outside feature spec scope? (warning)
+- **5c: Intent alignment** — Do changes match feature spec goals?
 
 **Steps 3, 4, and 5 can all run in parallel.**
 

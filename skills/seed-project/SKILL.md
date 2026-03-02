@@ -161,7 +161,7 @@ Process templates in tier order. Within each tier, can run in parallel if `--par
 #### Tier 4: Ongoing Documentation
 20. `docs/GOTCHAS.md` — Document anything non-obvious discovered
 21. `arch/DECISIONS.md` — Architectural decisions
-22. `roadmap/MVP_TODO.md` — Incomplete features, TODOs in code
+22. `roadmap/MILESTONES.md` — Incomplete features, TODOs in code
 
 #### Tier 5: Meta (Always last)
 23. `AGENT_README.md` — Customized AI navigation guide

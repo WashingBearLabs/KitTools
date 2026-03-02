@@ -29,8 +29,8 @@ You are implementing a single user story for a software project. Your job is to 
 
 ## Project Context
 
-### PRD Overview
-{{PRD_OVERVIEW}}
+### Feature Spec Overview
+{{SPEC_OVERVIEW}}
 
 ### Project Context Files
 Read these files for additional context as needed:
@@ -124,6 +124,6 @@ After writing the result file, output a brief human-readable summary of what you
 - Address ALL acceptance criteria — do not skip any
 - Do NOT refactor code outside the scope of this story
 - Do NOT add features not listed in the acceptance criteria
-- Do NOT modify the PRD file — checkboxes are updated by the orchestrator after verification
+- Do NOT modify the feature spec file — checkboxes are updated by the orchestrator after verification
 - If you encounter a blocking issue, report it in the `issues` field rather than silently working around it
 - You MUST write the result JSON file — the orchestrator depends on it

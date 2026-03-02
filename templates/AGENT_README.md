@@ -29,7 +29,7 @@
 **For making changes:**
 7. **arch/SECURITY.md** — Auth flows, secrets, permissions
 8. **docs/GOTCHAS.md** — Known landmines, tech debt, non-obvious behaviors
-9. **prd/*.md** — Active feature PRDs (Product Requirements Documents)
+9. **specs/*.md** — Active feature specs
 10. **roadmap/*.md** — MVP milestones and backlog
 
 **For infrastructure:**
@@ -43,8 +43,8 @@
 Before starting any work session:
 
 - [ ] Read `SYNOPSIS.md` to understand current project state
-- [ ] Check `prd/*.md` for active PRDs (features in progress)
-- [ ] Check `roadmap/MVP_TODO.md` for milestone tracking
+- [ ] Check `specs/*.md` for active feature specs
+- [ ] Check `roadmap/MILESTONES.md` for milestone tracking
 - [ ] Review `arch/CODE_ARCH.md` for structure and patterns
 - [ ] Scan `docs/GOTCHAS.md` for relevant landmines
 - [ ] Check `AUDIT_FINDINGS.md` for open findings
@@ -69,8 +69,8 @@ Before closing any session, use this checklist to prevent documentation drift:
 | File | Update If... |
 |------|--------------|
 | `SESSION_LOG.md` | Always — log what was done this session |
-| `prd/*.md` | Working on a feature — update acceptance criteria, add Implementation Notes |
-| `roadmap/MVP_TODO.md` | Milestone progress changed |
+| `specs/*.md` | Working on a feature — update acceptance criteria, add Implementation Notes |
+| `roadmap/MILESTONES.md` | Milestone progress changed |
 
 ### Architecture Changes
 | File | Update If... |
@@ -188,13 +188,13 @@ kit_tools/
 │   ├── GOTCHAS.md           # Known issues and landmines
 │   └── feature_guides/      # Feature-specific docs
 │
-├── prd/                     # Product Requirements Documents
-│   ├── prd-*.md             # Active feature PRDs
-│   └── archive/             # Completed PRDs
+├── specs/                   # Feature Specs
+│   ├── feature-*.md         # Active feature specs
+│   └── archive/             # Completed feature specs
 │
 ├── testing/                 # Test documentation
 └── roadmap/                 # Milestones and backlog
-    ├── MVP_TODO.md          # High-level milestone tracking
+    ├── MILESTONES.md        # High-level milestone tracking
     └── BACKLOG.md           # Future work items
 ```
 
@@ -204,9 +204,9 @@ kit_tools/
 
 | Type | Pattern | Example |
 |------|---------|---------|
-| PRDs | `prd-feature-name.md` (kebab-case) | `prd-user-auth.md`, `prd-payments.md` |
+| Feature specs | `feature-feature-name.md` (kebab-case) | `feature-user-auth.md`, `feature-payments.md` |
 | Feature guides | `FEATURENAME_FEATURE_GUIDE.md` | `AUTH_FEATURE_GUIDE.md` |
-| Milestone tracking | `SCOPE_TODO.md` | `MVP_TODO.md`, `V2_TODO.md` |
+| Milestone tracking | `MILESTONES.md` | `MILESTONES.md` |
 | Architecture patterns | `PATTERNNAME.md` | `LOGGING.md`, `AUTH.md` |
 | Decision records | Date prefix in `DECISIONS.md` | `2024-01-15: Chose X over Y` |
 

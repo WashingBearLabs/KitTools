@@ -1,9 +1,11 @@
-<!-- Template Version: 1.3.0 -->
+<!-- Template Version: 2.0.0 -->
 ---
 feature: {{FEATURE_NAME}}
 status: active
 session_ready: true
 depends_on: []
+brief:
+type: feature
 epic:
 epic_seq:
 epic_final:
@@ -16,14 +18,16 @@ Frontmatter fields:
 - feature: Kebab-case feature name (e.g., "user-auth")
 - status: active | on-hold | completed
 - session_ready: true if all stories pass session-fit checks; false if skipped or unresolved issues
-- depends_on: Array of feature names this PRD depends on (for epics)
-- epic: Epic name (empty for standalone PRDs)
+- depends_on: Array of feature names this feature spec depends on (for epics)
+- brief: Parent Product Brief name (optional, links to brief-*.md)
+- type: feature | epic-child
+- epic: Epic name (empty for standalone feature specs)
 - epic_seq: Execution order within epic (1-based; empty for standalone)
-- epic_final: true only on the last PRD in an epic (empty for standalone)
+- epic_final: true only on the last feature spec in an epic (empty for standalone)
 - created/updated: Dates in YYYY-MM-DD format
 -->
 
-# PRD: {{FEATURE_TITLE}}
+# Feature Spec: {{FEATURE_TITLE}}
 
 ## Overview
 
@@ -87,21 +91,10 @@ Story count is not a target — what matters is that each story:
 
 <!-- Add more user stories as needed -->
 
-## Functional Requirements
+## Out of Scope
 
 <!--
-Numbered list of specific functionalities.
-Be explicit and unambiguous.
--->
-
-- **FR-1:** {{The system must...}}
-- **FR-2:** {{When a user does X, the system must...}}
-- **FR-3:** {{...}}
-
-## Non-Goals
-
-<!--
-What this feature will NOT include. Critical for managing scope.
+What this feature will NOT include. Critical for managing scope and preventing creep.
 -->
 
 - {{Explicitly out of scope item 1}}
@@ -137,15 +130,6 @@ Remove any that don't apply.
 - Architecture: [CODE_ARCH.md](../arch/CODE_ARCH.md)
 - Known Issues: [GOTCHAS.md](../docs/GOTCHAS.md)
 - Conventions: [CONVENTIONS.md](../docs/CONVENTIONS.md)
-
-## Success Metrics
-
-<!--
-How will we measure success? Be specific.
--->
-
-- {{Metric 1: e.g., "Reduce time to X by 50%"}}
-- {{Metric 2: e.g., "Zero critical bugs in first week"}}
 
 ## Implementation Notes
 

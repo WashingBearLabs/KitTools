@@ -56,7 +56,7 @@
 ### Documentation Updated
 - [x] SYNOPSIS.md — Initial project description
 - [x] CODE_ARCH.md — Basic structure documented
-- [x] MVP_TODO.md — Initial task list
+- [x] MILESTONES.md — Initial task list
 
 ### Open Items
 - [ ] Complete infrastructure setup

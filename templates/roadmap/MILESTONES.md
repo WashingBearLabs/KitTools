@@ -4,9 +4,9 @@
   required_sections: []
   skip_if: never
 -->
-# MVP_TODO.md
+# Milestones
 
-> **TEMPLATE_INTENT:** Track current sprint or MVP tasks. What's being worked on now.
+> **TEMPLATE_INTENT:** Track milestones and release targets. What's being worked on now.
 
 > Last updated: YYYY-MM-DD
 > Updated by: [Human/Claude]

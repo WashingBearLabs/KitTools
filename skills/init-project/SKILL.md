@@ -44,8 +44,8 @@ Directories to create:
   - kit_tools/arch/
   - kit_tools/docs/
   - kit_tools/roadmap/
-  - kit_tools/prd/
-  - kit_tools/prd/archive/
+  - kit_tools/specs/
+  - kit_tools/specs/archive/
   - kit_tools/hooks/
   - .claude/
 
@@ -240,8 +240,10 @@ Based on selection, include these templates:
 - docs/feature_guides/FEATURE_TEMPLATE.md
 - testing/TESTING_GUIDE.md
 - roadmap/BACKLOG.md
-- roadmap/MVP_TODO.md
-- prd/PRODUCT_REQ_DOC.md
+- roadmap/MILESTONES.md
+- specs/FEATURE_SPEC.md
+- specs/PRODUCT_BRIEF.md
+- specs/EPIC.md
 
 **API/Backend adds:**
 - arch/DATA_MODEL.md
@@ -322,8 +324,8 @@ kit_tools/
 │   └── feature_guides/
 ├── testing/
 ├── roadmap/
-├── prd/
-│   └── archive/      (for completed PRDs)
+├── specs/
+│   └── archive/      (for completed feature specs)
 └── hooks/            (automation scripts)
 ```
 
@@ -493,7 +495,7 @@ Report to the user:
 - Run `/kit-tools:seed-project` next to populate templates with project-specific content
   - The project context gathered in Step 0 (description, tech stack, special considerations) will help seed SYNOPSIS and other templates more accurately
 - Run `/kit-tools:update-kit-tools` later to update hooks, templates, or other components as the project grows
-- Run `/kit-tools:validate-feature` after completing a feature to validate the full branch against its PRD
+- Run `/kit-tools:validate-feature` after completing a feature to validate the full branch against its feature spec
 
 ## Adding Templates Later
 
@@ -514,6 +516,6 @@ The templates come from this plugin's `templates/` directory. They are canonical
 | Skill | When to use |
 |-------|-------------|
 | `/kit-tools:seed-project` | After init, to populate templates with project-specific content |
-| `/kit-tools:plan-feature` | To create a PRD for a new feature in `kit_tools/prd/` |
+| `/kit-tools:plan-feature` | To create a feature spec for a new feature in `kit_tools/specs/` |
 | `/kit-tools:update-kit-tools` | Later, to update hooks/templates from newer plugin versions |
 | `/kit-tools:migrate` | Instead of init, if project has existing documentation to preserve |

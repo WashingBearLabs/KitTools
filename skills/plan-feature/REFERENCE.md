@@ -10,11 +10,11 @@ Detailed examples, heuristics, and edge cases for the plan-feature workflow.
 |--------|---------|-------------------|
 | **Multiple subsystems** | "Auth with OAuth, session management, and user profiles" | Touches too many areas |
 | **Scope keywords** | "entire", "full", "complete", "from scratch", "system" | Indicates large scope |
-| **Layer spanning** | "Database + API + UI for payments" | Should be separate PRDs per layer |
+| **Layer spanning** | "Database + API + UI for payments" | Should be separate feature specs per layer |
 | **Multiple user types** | "Admin dashboard AND user dashboard" | Should be separate features |
 | **Vague boundaries** | "Make it production-ready" | Scope is undefined |
 
-**Note:** Epic = multi-subsystem feature, not just "many stories". A PRD with 15 well-refined, session-fit stories is fine. A PRD spanning 3 subsystems with 5 stories is an epic.
+**Note:** Epic = multi-subsystem feature, not just "many stories". A feature spec with 15 well-refined, session-fit stories is fine. A feature spec spanning 3 subsystems with 5 stories is an epic.
 
 ---
 
@@ -24,22 +24,22 @@ Detailed examples, heuristics, and edge cases for the plan-feature workflow.
 Epic: "OAuth Authentication System"
          ↓ decompose into:
 
-1. prd-oauth-schema.md
+1. feature-oauth-schema.md
    - Database tables, migrations, types
    - 3-4 stories
    - No dependencies
 
-2. prd-oauth-provider.md
+2. feature-oauth-provider.md
    - OAuth provider config, token handling
    - 4-5 stories
    - depends_on: [oauth-schema]
 
-3. prd-oauth-api.md
+3. feature-oauth-api.md
    - Login/logout endpoints, session validation
    - 4-5 stories
    - depends_on: [oauth-schema, oauth-provider]
 
-4. prd-oauth-ui.md
+4. feature-oauth-ui.md
    - Login button, callback handling, error states
    - 4-5 stories
    - depends_on: [oauth-api]
@@ -48,21 +48,21 @@ Epic: "OAuth Authentication System"
 ### Epic Frontmatter Example
 
 ```yaml
-# prd-oauth-schema.md
+# feature-oauth-schema.md
 epic: oauth
 epic_seq: 1
 
-# prd-oauth-provider.md
+# feature-oauth-provider.md
 epic: oauth
 epic_seq: 2
 depends_on: [oauth-schema]
 
-# prd-oauth-api.md
+# feature-oauth-api.md
 epic: oauth
 epic_seq: 3
 depends_on: [oauth-schema, oauth-provider]
 
-# prd-oauth-ui.md
+# feature-oauth-ui.md
 epic: oauth
 epic_seq: 4
 epic_final: true
@@ -179,22 +179,24 @@ US-004: Handle OAuth callback and create session
 | `feature` | Kebab-case feature name |
 | `status` | `active`, `on-hold`, or `completed` |
 | `session_ready` | `true` if all stories pass session-fit checks |
-| `depends_on` | Array of feature names this PRD depends on |
-| `epic` | Epic name (same across all PRDs in epic, empty for standalone) |
+| `depends_on` | Array of feature names this feature spec depends on |
+| `brief` | Parent Product Brief name (optional, links to brief-*.md) |
+| `type` | `feature` or `epic-child` |
+| `epic` | Epic name (same across all feature specs in epic, empty for standalone) |
 | `epic_seq` | Execution order within epic, 1-based (empty for standalone) |
-| `epic_final` | `true` only on the last PRD in the epic |
+| `epic_final` | `true` only on the last feature spec in the epic |
 | `created` | Creation date |
 | `updated` | Last update date |
 
 ---
 
-## PRD Lifecycle
+## Feature Spec Lifecycle
 
 | Status | Meaning |
 |--------|---------|
 | `active` | Currently being implemented |
 | `on-hold` | Paused, not currently prioritized |
-| `completed` | All stories done, moved to `prd/archive/` |
+| `completed` | All stories done, moved to `specs/archive/` |
 
 Use `/kit-tools:complete-feature` to mark completed and archive.
 
@@ -204,8 +206,8 @@ Use `/kit-tools:complete-feature` to mark completed and archive.
 
 ```markdown
 ## OAuth Authentication (Epic)
-- [OAuth Schema](../prd/prd-oauth-schema.md) — Database foundation
-- [OAuth Provider](../prd/prd-oauth-provider.md) — Provider integration (depends on: schema)
-- [OAuth API](../prd/prd-oauth-api.md) — Backend endpoints (depends on: schema, provider)
-- [OAuth UI](../prd/prd-oauth-ui.md) — User interface (depends on: api)
+- [OAuth Schema](../specs/feature-oauth-schema.md) — Database foundation
+- [OAuth Provider](../specs/feature-oauth-provider.md) — Provider integration (depends on: schema)
+- [OAuth API](../specs/feature-oauth-api.md) — Backend endpoints (depends on: schema, provider)
+- [OAuth UI](../specs/feature-oauth-ui.md) — User interface (depends on: api)
 ```

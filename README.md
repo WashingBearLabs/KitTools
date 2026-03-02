@@ -72,12 +72,13 @@ git clone https://github.com/WashingBearLabs/KitTools.git
 | `/kit-tools:start-session` | Orient and create scratchpad for a work session |
 | `/kit-tools:close-session` | Process notes and update docs at session end |
 | `/kit-tools:checkpoint` | Mid-session checkpoint without closing |
-| `/kit-tools:plan-feature` | Create a Product Requirements Document (PRD) for a new feature |
-| `/kit-tools:complete-feature` | Mark a PRD as completed and archive it |
+| `/kit-tools:plan-feature` | Create a Feature Spec for a new feature |
+| `/kit-tools:complete-feature` | Mark a Feature Spec as completed and archive it |
 | `/kit-tools:sync-project` | Full sync between code and docs (`--quick` for audit) |
-| `/kit-tools:validate-feature` | Validate a feature branch against its PRD (quality, security, compliance) |
+| `/kit-tools:validate-feature` | Validate a feature branch against its feature spec (quality, security, compliance) |
 | `/kit-tools:update-kit-tools` | Update project components from latest plugin versions |
-| `/kit-tools:execute-feature` | Execute PRD stories autonomously, supervised, or guarded |
+| `/kit-tools:execute-feature` | Execute feature spec stories autonomously, supervised, or guarded |
+| `/kit-tools:execution-status` | Check progress and status of autonomous feature execution |
 | `/kit-tools:sync-symlinks` | Force-refresh skill symlinks after a plugin update |
 
 ## Hooks
@@ -89,7 +90,7 @@ kit-tools includes automation hooks that run automatically:
 | `create_scratchpad` | SessionStart | Creates SESSION_SCRATCH.md if kit_tools exists |
 | `sync_skill_symlinks` | SessionStart | Syncs skill symlinks (verifies against `installed_plugins.json`) |
 | `update_doc_timestamps` | PostToolUse (Edit/Write) | Updates "Last Updated" in kit_tools docs |
-| `detect_phase_completion` | PostToolUse (Edit/Write) | Notes PRD criteria and TODO task completions; suggests validate-feature when all PRD criteria are done |
+| `detect_phase_completion` | PostToolUse (Edit/Write) | Notes feature spec criteria and milestone task completions; suggests validate-feature when all criteria are done |
 | `validate_seeded_template` | PostToolUse (Edit/Write) | Validates seeded templates for unfilled placeholders |
 | `remind_scratchpad_before_compact` | PreCompact | Reminds to capture notes, adds compaction marker |
 | `remind_close_session` | Stop | Reminds to run close-session if scratchpad has notes |
@@ -126,7 +127,7 @@ kit-tools provides 29 documentation templates organized by category:
 - `CONVENTIONS.md` — Code conventions and standards
 - `TROUBLESHOOTING.md` — Common issues and solutions
 - `TESTING_GUIDE.md` — Testing strategy and patterns
-- `prd/*` — Product Requirements Documents
+- `specs/*` — Feature specs and product briefs
 - `roadmap/*` — Milestone tracking and backlog
 
 **API** — For backend services:
@@ -155,8 +156,8 @@ your-project/
 │   ├── arch/                # Architecture docs
 │   ├── docs/                # Operational docs
 │   ├── testing/             # Testing docs
-│   ├── prd/                 # Product Requirements Documents
-│   │   └── archive/         # Completed PRDs
+│   ├── specs/               # Feature specs and product briefs
+│   │   └── archive/         # Completed feature specs
 │   └── roadmap/             # Milestone tracking
 └── CLAUDE.md                # Claude Code instructions
 ```
@@ -193,75 +194,76 @@ kit-tools encourages a session-based workflow:
 
 ## Feature Validation
 
-Use `/kit-tools:validate-feature` to validate an entire feature branch against its PRD:
+Use `/kit-tools:validate-feature` to validate an entire feature branch against its feature spec:
 
 1. Captures the full branch diff (`git diff main...HEAD`) — all changes across the feature
 2. Runs three independent review passes:
    - **Code Quality** — naming, patterns, code smells, error handling (dedicated agent)
    - **Security** — injection, auth gaps, secrets, input validation (dedicated agent)
-   - **PRD Compliance** — acceptance criteria coverage, requirement fulfillment, scope creep
+   - **Feature Spec Compliance** — acceptance criteria coverage, scope creep, intent alignment
 3. Fixes critical findings automatically (autonomous mode) or inline (supervised mode)
 4. Writes remaining findings to `kit_tools/AUDIT_FINDINGS.md` with unique IDs and severity levels
 5. All findings are advisory — they inform but never block workflows
 
 Validation runs automatically after autonomous execution completes, and can be invoked manually at any time. Open findings are reviewed at `/kit-tools:start-session`.
 
-## Feature Planning with PRDs
+## Feature Planning
 
-Use `/kit-tools:plan-feature` to create Product Requirements Documents (PRDs):
+Use `/kit-tools:plan-feature` to create Feature Specs:
 
-1. Interactive questions refine scope and requirements
-2. **Epic detection** — Large features are automatically decomposed into multiple PRDs
-3. Generates `prd-[name].md` with:
+1. Optional **Product Brief** for strategic context (recommended for new product areas)
+2. Interactive questions refine scope and requirements
+3. **Epic detection** — Large features are automatically decomposed into multiple feature specs with an explicit epic file
+4. Generates `feature-[name].md` with:
    - Overview and goals
    - User stories with acceptance criteria (US-XXX format)
-   - Functional requirements (FR-X format)
-   - Non-goals and scope boundaries
+   - Out of scope boundaries
    - Technical considerations
-4. Links to backlog and milestone tracking
-5. Captures implementation notes as you work
+5. Links to backlog and milestone tracking
+6. Captures implementation notes as you work
 
 ### Session-Fit Guidelines
 
-PRDs are sized for reliable autonomous execution:
+Feature specs are sized for reliable autonomous execution:
 
 | Guideline | Target |
 |-----------|--------|
-| Stories per PRD | 5-7 (max 7) |
+| Stories per feature spec | 5-7 (max 7) |
 | Criteria per story | 3-5 (max 6) |
 | Total criteria | ≤35 |
 
-PRDs exceeding these limits are flagged as `session_ready: false` and should be decomposed.
+Feature specs exceeding these limits are flagged as `session_ready: false` and should be decomposed.
 
 ### Epic Decomposition
 
-Large features ("epics") are automatically split into focused PRDs:
+Large features ("epics") are automatically split into focused feature specs with an explicit epic file:
 
 ```
 "OAuth Authentication" (epic)
          ↓ decomposed into:
-├── prd-oauth-schema.md    (3 stories, no dependencies)
-├── prd-oauth-provider.md  (4 stories, depends_on: [oauth-schema])
-├── prd-oauth-api.md       (4 stories, depends_on: [oauth-provider])
-└── prd-oauth-ui.md        (4 stories, depends_on: [oauth-api])
+├── epic-oauth.md              (decomposition table, completion criteria)
+├── feature-oauth-schema.md    (3 stories, no dependencies)
+├── feature-oauth-provider.md  (4 stories, depends_on: [oauth-schema])
+├── feature-oauth-api.md       (4 stories, depends_on: [oauth-provider])
+└── feature-oauth-ui.md        (4 stories, depends_on: [oauth-api])
 ```
 
-### PRD Lifecycle
+### Feature Spec Lifecycle
 
 ```
-/plan-feature → prd-auth.md (status: active, session_ready: true)
+/plan-feature → feature-auth.md (status: active, session_ready: true)
        ↓
     Work on feature, check off acceptance criteria
        ↓
-/complete-feature → prd-auth.md moves to prd/archive/
+/complete-feature → feature-auth.md moves to specs/archive/
 ```
 
 ### Autonomous Execution
 
-kit-tools can execute PRD stories autonomously using `/kit-tools:execute-feature`:
+kit-tools can execute feature spec stories autonomously using `/kit-tools:execute-feature`:
 
 ```
-/kit-tools:execute-feature    # Select PRD, choose execution mode, run
+/kit-tools:execute-feature    # Select feature spec, choose execution mode, run
 ```
 
 Three execution modes:
@@ -269,7 +271,7 @@ Three execution modes:
 - **Autonomous** — Spawn separate Claude sessions per story, run until complete
 - **Guarded** — Autonomous with human oversight on failures
 
-Autonomous execution uses git branch isolation (`feature/[prd-name]`), independent story verification, and a pause mechanism (`touch kit_tools/.pause_execution`). Progress is tracked in `kit_tools/EXECUTION_LOG.md` and PRD checkboxes.
+Autonomous execution uses git branch isolation (`feature/[feature-name]`), independent story verification, and a pause mechanism (`touch kit_tools/.pause_execution`). Progress is tracked in `kit_tools/EXECUTION_LOG.md` and feature spec checkboxes.
 
 ## Template Versioning
 

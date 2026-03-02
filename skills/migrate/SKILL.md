@@ -1,316 +1,240 @@
 ---
 name: migrate
-description: Migrate existing documentation to kit_tools structure
+description: Migrate a v1.x kit_tools project to v2.0 structure
 ---
 
-# Migrate Existing Documentation
+# Migrate to v2.0
 
-This skill helps projects with existing documentation adopt the kit_tools framework without losing their current docs.
+Migrate a project's `kit_tools/` directory from v1.x structure to v2.0. Handles the `prd/` → `specs/` directory rename, file renames, config/state key migration, and path updates.
 
 ## Dependencies
 
-This skill requires the following plugin components:
+| File | Required | Purpose |
+|------|----------|---------|
+| `kit_tools/` | Yes | Existing kit_tools setup to migrate |
 
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| **Templates** | `$CLAUDE_PLUGIN_ROOT/templates/` | Target structure templates |
-| **Hook scripts** | `$CLAUDE_PLUGIN_ROOT/hooks/*.py` | Automation scripts to install |
+**Modifies:**
+- `kit_tools/prd/` → `kit_tools/specs/` (directory rename)
+- `.execution-config.json` (config key migration)
+- `.execution-state.json` (state key migration)
+- `.claude/settings.local.json` (hook path updates)
+- `kit_tools/.kit_tools_sync.json` (sync marker update)
+- All `.md` files under `kit_tools/` (path references)
 
-**Reads from project:**
-- Existing documentation (README.md, docs/, etc.)
-
-**Creates:**
-- `kit_tools/` directory structure with migrated content
-- `hooks/` directory with automation scripts
-- `.claude/settings.local.json` with hook configuration
-- `CLAUDE.md` with scratchpad instructions
-
-**Alternative to:**
-- `/kit-tools:init-project` — Use migrate instead when project has existing docs to preserve
-
-## Step 1: Discovery
-
-Scan the project for existing documentation:
-
-### Common locations to check:
-- `README.md` — Project overview
-- `docs/` or `documentation/` — Documentation folder
-- `CONTRIBUTING.md` — Contribution guidelines
-- `CHANGELOG.md` — Version history
-- `API.md` or `api/` — API documentation
-- `.env.example` — Environment variables
-- `ARCHITECTURE.md` or `architecture/` — Architecture docs
-- `DEVELOPMENT.md` or `SETUP.md` — Local dev setup
-- `DEPLOYMENT.md` — Deployment docs
-- `wiki/` — GitHub wiki content
-- Inline docs (JSDoc, docstrings, etc.)
-- OpenAPI/Swagger specs
-
-### Report findings:
-
-```
-Existing Documentation Found:
-
-📄 README.md (2.3kb) - Project overview, setup instructions
-📄 docs/api.md (5.1kb) - REST API documentation
-📄 docs/architecture.md (1.8kb) - System architecture
-📄 .env.example (0.4kb) - 12 environment variables
-📄 CONTRIBUTING.md (1.2kb) - Contribution guidelines
-📁 docs/guides/ - 3 feature guides
-
-No existing docs found for:
-- Data model/schema
-- Deployment procedures
-- Testing guide
-- Security documentation
-```
-
-## Step 2: Mapping
-
-Present a mapping of existing docs to kit_tools structure:
-
-```
-Proposed Migration:
-
-Existing File              → kit_tools Location              Action
-─────────────────────────────────────────────────────────────────────
-README.md                  → kit_tools/SYNOPSIS.md           Merge content
-docs/api.md                → kit_tools/docs/API_GUIDE.md     Migrate
-docs/architecture.md       → kit_tools/arch/CODE_ARCH.md     Migrate
-.env.example               → kit_tools/docs/ENV_REFERENCE.md Extract & expand
-CONTRIBUTING.md            → kit_tools/docs/CONVENTIONS.md   Merge relevant parts
-docs/guides/*.md           → kit_tools/docs/feature_guides/  Move & rename
-
-Will create new (no existing source):
-- kit_tools/AGENT_README.md (AI navigation guide)
-- kit_tools/arch/DECISIONS.md (will be empty, fill over time)
-- kit_tools/docs/GOTCHAS.md (will be empty, fill over time)
-- kit_tools/SESSION_LOG.md (session tracking)
-- kit_tools/roadmap/MVP_TODO.md (milestone tracking)
-- kit_tools/prd/ (PRD directory)
-
-FEATURE_TODO conversions (if found):
-- FEATURE_TODO_auth.md      → kit_tools/prd/prd-auth.md       Convert to PRD
-- FEATURE_TODO_payments.md  → kit_tools/prd/prd-payments.md   Convert to PRD
-```
-
-Ask user to confirm or adjust the mapping.
-
-## Step 3: Choose migration strategy
-
-Ask user:
-
-> **How should we handle existing documentation?**
->
-> 1. **Copy & Enhance** — Copy content into kit_tools templates, keep originals
-> 2. **Move & Redirect** — Move to kit_tools, leave redirect notes in original locations
-> 3. **Merge Only** — Merge into kit_tools but don't touch originals
-> 4. **Custom** — Let me specify per-file
-
-## Step 4: Select project type
-
-Since we're creating kit_tools structure, ask for project type (same as init-project):
-
-- API/Backend
-- Web App
-- Full Stack
-- CLI Tool
-- Library
-- Mobile
-- Custom
-
-This determines which additional templates to create beyond migrated content.
-
-## Step 5: Execute migration
-
-For each file in the mapping:
-
-### For "Migrate" actions:
-1. Read existing content
-2. Create kit_tools file from template
-3. Intelligently merge existing content into appropriate sections
-4. Preserve important details, restructure to fit template format
-5. Update "Last updated" date
-
-### For "Merge" actions:
-1. Read existing content
-2. Extract relevant portions
-3. Add to appropriate sections in kit_tools file
-4. Note the source in a comment
-
-### For "Extract" actions (like .env.example):
-1. Parse existing file
-2. Create structured documentation
-3. Add descriptions where inferable
-
-### For new files:
-1. Copy template
-2. Leave as template for user to fill
-
-## Step 5b: Migrate FEATURE_TODO files to PRDs
-
-If the project has existing `FEATURE_TODO_*.md` files (from older kit_tools versions), convert them to PRDs:
-
-### Conversion mapping:
-
-| FEATURE_TODO Section | PRD Section |
-|---------------------|-------------|
-| Feature Overview | Overview |
-| Goal | Goals |
-| Non-Goals | Non-Goals |
-| Success Criteria | Success Metrics |
-| Phase tasks | User Stories (convert each task to a story) |
-| Dependencies | Technical Considerations |
-| Open Questions | Open Questions |
-| Notes | Implementation Notes |
-
-### Conversion steps:
-
-1. **Read the FEATURE_TODO file**
-2. **Create PRD with frontmatter:**
-   ```yaml
-   ---
-   feature: [extracted from filename]
-   status: [infer from TODO status - "In Progress" → active, "Complete" → completed]
-   created: [from TODO if available, else today]
-   updated: [today]
-   ---
-   ```
-
-3. **Convert tasks to user stories:**
-   - Each Phase becomes a logical grouping
-   - Each task becomes a user story (US-001, US-002, etc.)
-   - Task checkboxes become acceptance criteria
-   - Preserve completion status (`[x]` stays `[x]`)
-
-4. **Extract functional requirements:**
-   - Derive FR-X items from the tasks/stories
-
-5. **Save to `kit_tools/prd/prd-[feature-name].md`**
-
-6. **Handle the original:**
-   - If status was "Complete", move original to `kit_tools/roadmap/archive/`
-   - Otherwise, delete the original (PRD replaces it)
-
-### Example conversion:
-
-**Before (FEATURE_TODO_auth.md):**
-```markdown
-## Feature Overview
-Status: In Progress
-
-## Feature Scope
-**Goal:** Allow users to log in
-
-## Phase 1: Database
-- [x] Add users table
-- [x] Add sessions table
-
-## Phase 2: API
-- [ ] Create login endpoint
-- [ ] Create logout endpoint
-```
-
-**After (prd-auth.md):**
-```markdown
----
-feature: auth
-status: active
-created: 2025-01-28
-updated: 2025-02-01
 ---
 
-# PRD: User Authentication
+## Step 1: Version Detection
 
-## Overview
-Allow users to log in
+Determine current project state:
 
-## User Stories
+- **`kit_tools/specs/` exists** → Already v2.0. Report "Already migrated" and stop.
+- **`kit_tools/prd/` exists** → v1.x detected. Continue migration.
+- **Neither exists** → No kit_tools setup found. Suggest `/kit-tools:init-project` and stop.
 
-### US-001: Add users table
-**Description:** As a developer, I need a users table to store user credentials.
-**Acceptance Criteria:**
-- [x] Users table created with required columns
-- [x] Migration runs successfully
+---
 
-### US-002: Add sessions table
-**Description:** As a developer, I need a sessions table to track login sessions.
-**Acceptance Criteria:**
-- [x] Sessions table created
-- [x] Foreign key to users table
+## Step 2: Pre-migration Safety
 
-### US-003: Create login endpoint
-**Description:** As a user, I want to log in so I can access my account.
-**Acceptance Criteria:**
-- [ ] POST /api/login accepts email/password
-- [ ] Returns session token on success
-- [ ] Typecheck passes
+1. Run `git status --porcelain`
+2. If working tree is dirty, warn:
+   > "You have uncommitted changes. I recommend committing or stashing before migrating. Continue anyway?"
+3. Wait for user confirmation before proceeding.
 
-### US-004: Create logout endpoint
-**Description:** As a user, I want to log out to end my session.
-**Acceptance Criteria:**
-- [ ] POST /api/logout invalidates session
-- [ ] Typecheck passes
+---
+
+## Step 3: Directory Rename
+
+Rename the feature specs directory:
+
+```bash
+git mv kit_tools/prd/ kit_tools/specs/
 ```
 
-## Step 6: Handle originals
+If `git mv` fails (untracked files), fall back to:
 
-Based on chosen strategy:
-
-**Copy & Enhance:**
-- Leave originals untouched
-- Add note to kit_tools docs: "Migrated from [original location]"
-
-**Move & Redirect:**
-- Replace original with redirect note:
-```markdown
-# [Original Title]
-
-This documentation has moved to `kit_tools/[new location]`.
-
-Please update your bookmarks.
+```bash
+mv kit_tools/prd/ kit_tools/specs/
+git add kit_tools/specs/
 ```
 
-**Merge Only:**
-- Leave originals completely untouched
+**Verify:** `ls kit_tools/specs/` shows files; `kit_tools/prd/` is gone.
 
-## Step 7: Create CLAUDE.md
+---
 
-Set up CLAUDE.md with scratchpad instructions (same as init-project).
+## Step 4: File Renames
 
-## Step 8: Summary
+Rename any `prd-*.md` files to `feature-*.md` (idempotent — skip files already named `feature-*`):
 
-Report:
+### In `kit_tools/specs/`:
+```bash
+for f in kit_tools/specs/prd-*.md; do
+  [ -f "$f" ] && git mv "$f" "${f/prd-/feature-}"
+done
+```
 
-- **Migrated**: Files that were migrated with content
-- **Created**: New template files (empty or minimal)
-- **Skipped**: Files that weren't migrated (and why)
-- **Originals**: What happened to original files
+### In `kit_tools/specs/archive/`:
+```bash
+for f in kit_tools/specs/archive/prd-*.md; do
+  [ -f "$f" ] && git mv "$f" "${f/prd-/feature-}"
+done
+```
 
-**Recommend next steps:**
-- Review migrated content for accuracy
-- Run `/kit-tools:seed-project` to fill in gaps
-- Run `/kit-tools:sync-project --quick` to verify nothing was missed
+---
 
-## Migration Notes
+## Step 5: Roadmap Migration
 
-### Handling conflicts
+Rename `MVP_TODO.md` → `MILESTONES.md` if it exists (idempotent):
 
-If existing content doesn't fit neatly into kit_tools structure:
-- Ask user where it should go
-- Create a custom section if needed
-- Note in DECISIONS.md why structure was adjusted
+```bash
+[ -f kit_tools/roadmap/MVP_TODO.md ] && git mv kit_tools/roadmap/MVP_TODO.md kit_tools/roadmap/MILESTONES.md
+```
 
-### Preserving history
+---
 
-If existing docs have valuable history (dates, authors, changelog):
-- Preserve in a "History" section at bottom of migrated file
-- Or note in kit_tools/arch/DECISIONS.md
+## Step 6: Epic File Generation
 
-### Large documentation sets
+Scan all feature specs in `kit_tools/specs/` for shared `epic:` frontmatter values.
 
-For projects with extensive existing docs:
-- Migrate in batches
-- Start with core docs (README, architecture, API)
-- Add secondary docs in follow-up sessions
-- Use SYNC_PROGRESS.md to track migration progress
+For each unique epic name found:
+1. Check if `kit_tools/specs/epic-[name].md` already exists (idempotent)
+2. If not, read `$CLAUDE_PLUGIN_ROOT/templates/specs/EPIC.md`
+3. Generate `kit_tools/specs/epic-[name].md` with:
+   - Epic name from frontmatter
+   - Feature spec table populated from `epic_seq` ordering
+   - Dependencies from `depends_on` fields
+
+---
+
+## Step 7: Config Migration
+
+If `kit_tools/specs/.execution-config.json` exists (or `kit_tools/prd/.execution-config.json` was just moved), rewrite config keys:
+
+| Old Key | New Key |
+|---------|---------|
+| `prd_path` | `spec_path` |
+| `prd_overview` | `spec_overview` |
+| `epic_prds` | `epic_specs` |
+| `epic_pause_between_prds` | `epic_pause_between_specs` |
+
+Within `epic_specs` entries:
+| Old Key | New Key |
+|---------|---------|
+| `prd_path` | `spec_path` |
+
+Within `project_context`:
+| Old Key | New Key |
+|---------|---------|
+| `prd_overview` | `spec_overview` |
+
+Also update path values: replace `kit_tools/prd/` with `kit_tools/specs/` in all string values.
+
+Read the file, apply key renames and path updates, write it back.
+
+---
+
+## Step 8: State Migration
+
+If `kit_tools/specs/.execution-state.json` exists, rewrite state keys:
+
+| Old Key | New Key |
+|---------|---------|
+| `prd` | `spec` |
+| `prds` | `specs` |
+| `current_prd` | `current_spec` |
+
+Read the file, apply key renames, write it back.
+
+---
+
+## Step 9: Project Hook Paths
+
+If `.claude/settings.local.json` exists, update hook commands:
+
+- Replace `kit_tools/prd/` with `kit_tools/specs/` in all command strings
+
+Read the file, apply replacements, write it back.
+
+---
+
+## Step 10: Documentation Path Sweep
+
+Update all `.md` files under `kit_tools/` that reference `kit_tools/prd/`:
+
+```bash
+# Find files with old paths
+grep -rl 'kit_tools/prd/' kit_tools/ --include='*.md'
+```
+
+For each file found, replace:
+- `kit_tools/prd/` → `kit_tools/specs/`
+- `prd/archive/` → `specs/archive/`
+- `prd/*.md` → `specs/*.md`
+- `../prd/` → `../specs/`
+
+Do NOT modify:
+- `prd-{dep}.md` patterns (backwards-compat archive lookups)
+- CHANGELOG entries (historical records)
+
+---
+
+## Step 11: Sync Marker Update
+
+If `kit_tools/.kit_tools_sync.json` exists:
+
+1. Update any path values containing `kit_tools/prd/` → `kit_tools/specs/`
+2. Update `version` field to `"2.0.0"` if present
+
+---
+
+## Step 12: Summary Report
+
+Report all changes made:
+
+```
+Migration Complete: v1.x → v2.0
+
+Directory:
+  - kit_tools/prd/ → kit_tools/specs/ ✓
+
+Files renamed:
+  - [list any prd-*.md → feature-*.md renames]
+  - [MVP_TODO.md → MILESTONES.md if applicable]
+
+Epic files generated:
+  - [list any epic-*.md files created]
+
+Config migrated:
+  - .execution-config.json: [N] keys renamed ✓  (or "not found")
+  - .execution-state.json: [N] keys renamed ✓  (or "not found")
+
+Paths updated:
+  - .claude/settings.local.json: [N] commands updated ✓  (or "not found")
+  - [N] .md files updated with new paths
+
+Recommended next steps:
+  1. Review changes: git diff --stat
+  2. Commit: git add -A && git commit -m "chore: migrate kit_tools to v2.0 structure"
+  3. Run /kit-tools:start-session to verify everything works
+```
+
+---
+
+## Idempotency
+
+Every step is idempotent. Running this skill twice produces the same result:
+
+- Step 1 detects v2.0 and stops if already migrated
+- Steps 3-5 use `git mv` which fails safely on already-renamed files
+- Steps 6-11 check for existing state before modifying
+
+Safe to run multiple times.
+
+---
+
+## Related Skills
+
+| Skill | When to use |
+|-------|-------------|
+| `/kit-tools:init-project` | For new projects without existing kit_tools |
+| `/kit-tools:start-session` | After migration to verify everything works |
+| `/kit-tools:update-kit-tools` | To update hooks and templates from latest plugin |

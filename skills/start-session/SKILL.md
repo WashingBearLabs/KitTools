@@ -16,8 +16,8 @@ This skill requires the following project files:
 | `kit_tools/AGENT_README.md` | Yes | Navigation guide and patterns |
 | `kit_tools/SYNOPSIS.md` | Yes | Project status overview |
 | `kit_tools/SESSION_LOG.md` | Yes | Session history |
-| `kit_tools/prd/*.md` | Yes | PRDs for active features |
-| `kit_tools/roadmap/MVP_TODO.md` | Yes | Milestone tracking |
+| `kit_tools/specs/*.md` | Yes | Feature specs for active features |
+| `kit_tools/roadmap/MILESTONES.md` | Yes | Milestone tracking |
 | `kit_tools/arch/CODE_ARCH.md` | Recommended | Code architecture reference |
 | `kit_tools/arch/INFRA_ARCH.md` | Optional | Infrastructure reference |
 | `kit_tools/docs/GOTCHAS.md` | Recommended | Known issues and landmines |
@@ -85,7 +85,7 @@ Create `kit_tools/SESSION_SCRATCH.md` with this content:
 ## Active Feature
 
 **Working on:** [Feature name or "General" if not feature-specific]
-**PRD:** [e.g., `prd-auth.md` or "N/A" if not feature-specific]
+**Feature Spec:** [e.g., `feature-auth.md` or "N/A" if not feature-specific]
 
 ---
 
@@ -105,13 +105,13 @@ Read `kit_tools/SYNOPSIS.md` to understand the current project state.
 
 ## Step 5: Check active work
 
-### PRDs (Product Requirements Documents)
+### Feature Specs
 
-Check `kit_tools/prd/` for active features:
+Check `kit_tools/specs/` for active features:
 
-- Look for `prd-*.md` files (excluding `archive/` subdirectory)
+- Look for `feature-*.md` files (excluding `archive/` subdirectory)
 - Read the YAML frontmatter to check `status: active`
-- For each active PRD, note:
+- For each active feature spec, note:
   - Feature name
   - How many user stories are complete vs total (count `- [x]` vs `- [ ]` in acceptance criteria)
 
@@ -119,10 +119,10 @@ Check `kit_tools/prd/` for active features:
 
 Review `kit_tools/roadmap/`:
 
-- `MVP_TODO.md` — High-level milestone tasks
+- `MILESTONES.md` — High-level milestone tracking
 - `BACKLOG.md` — Future work items and planned features
 
-List any active PRDs and their progress so we know what's being worked on.
+List any active feature specs and their progress so we know what's being worked on.
 
 ## Step 6: Architecture refresh
 
@@ -153,11 +153,11 @@ Once oriented, provide a quick summary of:
 - **Git status** — branch, sync state, uncommitted changes (with any warnings/suggestions)
 - Any recovered notes from orphaned scratchpad (if applicable)
 - Current project status (from SYNOPSIS.md)
-- **Active PRDs and their progress** (list each with story completion count, e.g., "prd-auth.md: 3/5 stories complete")
-- Milestone progress from MVP_TODO.md
+- **Active feature specs and their progress** (list each with story completion count, e.g., "feature-auth.md: 3/5 stories complete")
+- Milestone progress from MILESTONES.md
 - Open audit findings count (N critical, N warning, N info) — if any exist
 - Any concerns or inconsistencies noticed
 
-**Ask the user:** Which feature or area will we be working on today? (This helps track work to the correct PRD)
+**Ask the user:** Which feature or area will we be working on today? (This helps track work to the correct feature spec)
 
 Then we're ready to get started!

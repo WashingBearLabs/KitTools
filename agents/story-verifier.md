@@ -44,7 +44,7 @@ Read these for conventions, architecture, and context as needed:
 - **Code Architecture:** {{CODE_ARCH_PATH}}
 - **Conventions:** {{CONVENTIONS_PATH}}
 - **Known Gotchas:** {{GOTCHAS_PATH}}
-- **PRD:** {{PRD_PATH}}
+- **Feature Spec:** {{SPEC_PATH}}
 
 ## Test Command
 {{TEST_COMMAND}}
@@ -64,7 +64,7 @@ For each acceptance criterion:
 - **Does the code actually satisfy this criterion?** Read the relevant code and confirm.
 - **Run the test command** listed above (if available) to check for regressions and passing tests.
 - **Run typecheck/lint commands** if the criteria mention them (e.g., `npx tsc --noEmit`, `npm run lint`).
-- **Cross-reference the PRD** if a criterion is ambiguous — the PRD has the full story description and intent.
+- **Cross-reference the feature spec** if a criterion is ambiguous — the feature spec has the full story description and intent.
 - **Check convention adherence** — does the implementation follow the project's stated conventions?
 
 ### 3. Be Skeptical

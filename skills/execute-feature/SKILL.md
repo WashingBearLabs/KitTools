@@ -1,11 +1,11 @@
 ---
 name: execute-feature
-description: Execute PRD user stories autonomously, with supervision, or in guarded mode
+description: Execute feature spec user stories autonomously, with supervision, or in guarded mode
 ---
 
 # Execute Feature
 
-Execute user stories from a PRD. Supports three modes: supervised (in-session with review between stories), autonomous (multi-session, runs until complete), and guarded (multi-session, pauses on failures).
+Execute user stories from a feature spec. Supports three modes: supervised (in-session with review between stories), autonomous (multi-session, runs until complete), and guarded (multi-session, pauses on failures).
 
 Read `REFERENCE.md` in this skill directory for detailed schemas, token tables, and edge cases.
 
@@ -13,31 +13,31 @@ Read `REFERENCE.md` in this skill directory for detailed schemas, token tables, 
 
 | File | Required | Purpose |
 |------|----------|---------|
-| `kit_tools/prd/prd-*.md` | Yes | PRD with user stories to execute |
+| `kit_tools/specs/feature-*.md` | Yes | Feature spec with user stories to execute |
 | `$CLAUDE_PLUGIN_ROOT/agents/story-implementer.md` | Yes | Implementation agent template |
 | `$CLAUDE_PLUGIN_ROOT/agents/story-verifier.md` | Yes | Verification agent template |
 | `$CLAUDE_PLUGIN_ROOT/scripts/execute_orchestrator.py` | For autonomous/guarded | Python orchestrator script |
 
 **Creates:** `.execution-state.json`, `.execution-config.json`, `EXECUTION_LOG.md`
-**Modifies:** PRD checkboxes (updated by orchestrator/skill after verification passes)
+**Modifies:** Feature spec checkboxes (updated by orchestrator/skill after verification passes)
 
 ---
 
-## Step 1: Select PRD
+## Step 1: Select Feature Spec
 
-Check `kit_tools/prd/.execution-state.json`:
+Check `kit_tools/specs/.execution-state.json`:
 - **`status: running`** — Report progress table, offer monitoring commands
 - **`status: completed`** — Report completion, suggest `/kit-tools:validate-feature`
 - **`status: failed/paused`** — Offer: resume, start fresh, or abort
 
-**If no state:** List active PRDs from `kit_tools/prd/` with completion counts, ask which to execute.
+**If no state:** List active feature specs from `kit_tools/specs/` with completion counts, ask which to execute.
 
 ### Epic Detection
 
-If selected PRD has `epic` field: scan for all PRDs in the epic, present options:
+If selected feature spec has `epic` field: first check for an `epic-*.md` file for ordering, then fall back to scanning feature specs by `epic` frontmatter. Present options:
 - **A.** Execute all remaining, pause between each (recommended)
 - **B.** Execute all remaining non-stop
-- **C.** Execute just this PRD
+- **C.** Execute just this feature spec
 - **D.** Cancel
 
 ---
@@ -56,12 +56,12 @@ If selected PRD has `epic` field: scan for all PRDs in the epic, present options
 Run checks and report pass/fail for each:
 
 1. **Session readiness** — `session_ready: true` in frontmatter
-2. **Dependency check** — `depends_on` PRDs archived
+2. **Dependency check** — `depends_on` feature specs archived
 3. **Clean working tree** — `git status --porcelain` empty
 4. **Uncompleted stories** — At least one story with unchecked criteria
 5. **No concurrent execution** — State not `running`
 6. **Branch base** — New branch from `main`, or existing branch based on `main`
-7. **Epic dependency gate** — Hard gate: all `depends_on` PRDs must be archived
+7. **Epic dependency gate** — Hard gate: all `depends_on` feature specs must be archived
 8. **tmux available** (autonomous/guarded only) — `which tmux` succeeds
    - If not installed: warn, offer manual launch fallback (print command for separate terminal)
 
@@ -69,10 +69,10 @@ Run checks and report pass/fail for each:
 
 ## Step 4: Git Branch Setup
 
-- **Epic PRD:** Branch `epic/[epic-name]`
-- **Standalone PRD:** Branch `feature/[feature-name]`
+- **Epic feature spec:** Branch `epic/[epic-name]`
+- **Standalone feature spec:** Branch `feature/[feature-name]`
 
-Create new or checkout existing. Feature/epic name from PRD frontmatter.
+Create new or checkout existing. Feature/epic name from feature spec frontmatter.
 
 ---
 
@@ -86,7 +86,7 @@ Discover paths (do NOT inline file contents):
 | `kit_tools/arch/CODE_ARCH.md` | `code_arch` |
 | `kit_tools/docs/CONVENTIONS.md` | `conventions` |
 | `kit_tools/docs/GOTCHAS.md` | `gotchas` |
-| PRD: Overview, Goals, Tech, Non-Goals | `prd_overview` (inline — small) |
+| Feature spec: Overview, Goals, Tech, Out of Scope | `spec_overview` (inline — small) |
 
 Agents read context files on-demand via their Read tool.
 
@@ -108,10 +108,10 @@ For each uncompleted story:
 3. Get files changed from `git diff --name-only` and `git diff --stat`
 4. Read + interpolate `story-verifier.md` (with diff stat, test command, full context paths), spawn via Task tool
 5. Read verifier JSON result file
-6. **PASS:** Update PRD checkboxes (orchestrator/skill handles this), commit, log success, ask to continue
+6. **PASS:** Update feature spec checkboxes (orchestrator/skill handles this), commit, log success, ask to continue
 7. **FAIL:** Log failure, present to user, ask: retry / adjust / stop
 
-> The implementer does NOT self-verify or update PRD checkboxes. The verifier is the sole quality gate. PRD checkboxes are updated by the orchestrator (autonomous/guarded) or this skill (supervised) after verification passes.
+> The implementer does NOT self-verify or update feature spec checkboxes. The verifier is the sole quality gate. Feature spec checkboxes are updated by the orchestrator (autonomous/guarded) or this skill (supervised) after verification passes.
 
 ### Autonomous/Guarded Mode
 
@@ -123,7 +123,7 @@ For each uncompleted story:
    ```bash
    tmux new-session -d -s {session_name} \
      "unset CLAUDECODE; python3 \"$CLAUDE_PLUGIN_ROOT/scripts/execute_orchestrator.py\" \
-     --config \"$(pwd)/kit_tools/prd/.execution-config.json\""
+     --config \"$(pwd)/kit_tools/specs/.execution-config.json\""
    ```
    The orchestrator kills its own tmux session on completion. Progress is reported to the parent Claude session via file-based notifications (surfaced on the user's next prompt).
 6. **If no tmux:** Print the command for the user to run in a separate terminal:
@@ -131,13 +131,13 @@ For each uncompleted story:
    Run this in a separate terminal window:
 
    python3 "<plugin_root>/scripts/execute_orchestrator.py" \
-     --config "<project_dir>/kit_tools/prd/.execution-config.json"
+     --config "<project_dir>/kit_tools/specs/.execution-config.json"
    ```
 7. Report monitoring commands (using the actual session name):
    - `/kit-tools:execution-status` — check progress, errors, and available actions
    - `tmux attach -t {session_name}` — attach to watch live output
    - `tail -f kit_tools/EXECUTION_LOG.md` — follow the execution log
-   - `cat kit_tools/prd/.execution-state.json` — check current state
+   - `cat kit_tools/specs/.execution-state.json` — check current state
    - `touch kit_tools/.pause_execution` — pause after current story
 
 ---
@@ -155,6 +155,6 @@ For each uncompleted story:
 
 | Skill | When to use |
 |-------|-------------|
-| `/kit-tools:plan-feature` | To create a PRD before executing |
-| `/kit-tools:complete-feature` | To archive PRD after all stories pass |
-| `/kit-tools:validate-feature` | To validate the full feature branch against its PRD |
+| `/kit-tools:plan-feature` | To create a feature spec before executing |
+| `/kit-tools:complete-feature` | To archive feature spec after all stories pass |
+| `/kit-tools:validate-feature` | To validate the full feature branch against its feature spec |

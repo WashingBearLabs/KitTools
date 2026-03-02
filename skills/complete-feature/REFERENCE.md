@@ -6,23 +6,23 @@ Detailed formats, epic handling, and edge cases for the complete-feature workflo
 
 ## Epic Handling
 
-### Mid-epic PRD (not `epic_final`)
+### Mid-epic feature spec (not `epic_final`)
 
 The orchestrator handles mid-epic completion automatically (tag + archive). If manually invoked:
 
 - Tag checkpoint: `git tag [epic-name]/[feature-name]-complete`
-- Archive PRD (update frontmatter, move to archive/)
+- Archive feature spec (update frontmatter, move to archive/)
 - **Do NOT** create a PR or merge
-- **Do NOT** clean up execution artifacts (other PRDs may need them)
+- **Do NOT** clean up execution artifacts (other feature specs may need them)
 
-### Final PRD (`epic_final: true`)
+### Final feature spec (`epic_final: true`)
 
 - Tag checkpoint
-- Archive PRD
+- Archive feature spec
 - Offer PR for the entire `epic/[name]` branch
 - Clean up all execution artifacts
 
-### Standalone PRD (no `epic` field)
+### Standalone feature spec (no `epic` field)
 
 Standard behavior — archive, clean up, offer PR/merge.
 
@@ -35,9 +35,9 @@ PR title: feat([epic-name]): complete epic
 
 PR body:
 ## Summary
-- prd-[name-1]: [N stories]
-- prd-[name-2]: [N stories]
-- prd-[name-3]: [N stories]
+- feature-[name-1]: [N stories]
+- feature-[name-2]: [N stories]
+- feature-[name-3]: [N stories]
 
 ## Checkpoints
 - [epic-name]/[feature-1]-complete
@@ -45,7 +45,7 @@ PR body:
 - [epic-name]/[feature-3]-complete
 ```
 
-Scan `kit_tools/prd/archive/` for all PRDs with the same `epic` field, and `git tag -l` for checkpoint tags.
+Scan `kit_tools/specs/archive/` for all feature specs with the same `epic` field, and `git tag -l` for checkpoint tags.
 
 ---
 
@@ -65,9 +65,9 @@ completed: 2025-02-01  # Add completion date
 
 ## Tracking File Updates
 
-### MVP_TODO.md
-- Find line referencing this PRD
-- Mark complete: `- [x] Feature Name ([PRD](../prd/archive/prd-auth.md))`
+### MILESTONES.md
+- Find line referencing this feature spec
+- Mark complete: `- [x] Feature Name ([Feature Spec](../specs/archive/feature-auth.md))`
 - Update link to archive location
 
 ### BACKLOG.md
@@ -78,11 +78,11 @@ completed: 2025-02-01  # Add completion date
 
 ## Archive Handling
 
-Move PRD to `kit_tools/prd/archive/`. Create directory if needed.
+Move feature spec to `kit_tools/specs/archive/`. Create directory if needed.
 
 If file already exists in archive (shouldn't happen):
-- Rename existing to `prd-auth-[date].md`
-- Then move current PRD
+- Rename existing to `feature-auth-[date].md`
+- Then move current feature spec
 
 ### Why archive instead of delete?
 - Preserves Implementation Notes for future reference
@@ -94,18 +94,18 @@ If file already exists in archive (shouldn't happen):
 
 ## Cleanup Artifacts
 
-**Standalone PRD or final epic PRD:**
-- Delete `kit_tools/prd/.execution-state.json`
-- Delete `kit_tools/prd/.execution-config.json`
+**Standalone feature spec or final epic feature spec:**
+- Delete `kit_tools/specs/.execution-state.json`
+- Delete `kit_tools/specs/.execution-config.json`
 - Delete `kit_tools/.pause_execution`
 
-**Mid-epic PRD:** Do NOT clean up — still needed for subsequent PRDs.
+**Mid-epic feature spec:** Do NOT clean up — still needed for subsequent feature specs.
 
 ---
 
 ## Branch Options
 
-### Standalone PRD
+### Standalone feature spec
 ```
 Feature branch: feature/auth
 
@@ -114,7 +114,7 @@ Feature branch: feature/auth
 3. Leave it — I'll handle it myself
 ```
 
-### Epic (final PRD)
+### Epic (final feature spec)
 ```
 Epic branch: epic/arxiv
 

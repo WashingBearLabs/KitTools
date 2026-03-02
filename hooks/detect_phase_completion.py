@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-detect_phase_completion.py - Detects checkbox completions in PRDs and roadmap files.
+detect_phase_completion.py - Detects checkbox completions in feature specs and roadmap files.
 
 Trigger: PostToolUse (Edit|Write)
 
 When a checkbox is marked complete (- [ ] → - [x]) in:
-- kit_tools/prd/*.md (PRD acceptance criteria)
-- kit_tools/roadmap/*_TODO.md (milestone tasks)
+- kit_tools/specs/*.md (feature spec acceptance criteria)
+- kit_tools/roadmap/MILESTONES.md (milestone tasks)
 
-Outputs an advisory message. Suggests /kit-tools:validate-feature only when all PRD criteria are complete.
+Outputs an advisory message. Suggests /kit-tools:validate-feature only when all feature spec criteria are complete.
 """
 import json
 import re
@@ -34,12 +34,12 @@ def main():
         return
 
     # Determine file type
-    is_prd = "kit_tools/prd/" in file_path and file_path.endswith(".md") and "/archive/" not in file_path
+    is_spec = ("kit_tools/specs/" in file_path or "kit_tools/prd/" in file_path) and file_path.endswith(".md") and "/archive/" not in file_path
     is_roadmap = "kit_tools/roadmap/" in file_path and (
-        file_path.endswith("_TODO.md") or file_path.endswith("BACKLOG.md")
+        file_path.endswith("_TODO.md") or file_path.endswith("MILESTONES.md") or file_path.endswith("BACKLOG.md")
     )
 
-    if not is_prd and not is_roadmap:
+    if not is_spec and not is_roadmap:
         return
 
     old_string = tool_input.get("old_string", "")
@@ -60,8 +60,8 @@ def main():
         filename = file_path.split("/")[-1]
         completed_count = old_unchecked - new_unchecked
 
-        if is_prd:
-            # PRD acceptance criteria completed
+        if is_spec:
+            # Feature spec acceptance criteria completed
             message = f"Acceptance criteria completed in {filename}."
             if completed_count > 0:
                 message = f"{completed_count} acceptance criteria completed in {filename}."

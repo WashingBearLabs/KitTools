@@ -226,9 +226,9 @@
       "validation_issues": [],
       "skipped_reason": null
     },
-    "roadmap/MVP_TODO.md": {
+    "roadmap/MILESTONES.md": {
       "tier": 4,
-      "path": "kit_tools/roadmap/MVP_TODO.md",
+      "path": "kit_tools/roadmap/MILESTONES.md",
       "status": "pending",
       "seeded_at": null,
       "validated_at": null,
