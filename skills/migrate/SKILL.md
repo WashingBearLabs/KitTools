@@ -186,6 +186,62 @@ If `kit_tools/.kit_tools_sync.json` exists:
 
 ---
 
+## Step 12b: Vision Document Check
+
+After all structural migrations, check if `kit_tools/PRODUCT_VISION.md` exists.
+
+### If it doesn't exist
+- Copy the blank template from `$CLAUDE_PLUGIN_ROOT/templates/PRODUCT_VISION.md` to `kit_tools/PRODUCT_VISION.md`
+- Note in the migration report: "Created blank PRODUCT_VISION.md — run `/kit-tools:create-vision` to define your product vision."
+
+### If it exists
+- No action needed.
+
+---
+
+## Step 12c: Brief Consolidation
+
+Check for any `kit_tools/specs/brief-*.md` files.
+
+### If found
+- List them in the migration report
+- Inform the user: "These Product Brief files are superseded by the Product Vision document (`kit_tools/PRODUCT_VISION.md`). Review them and consider archiving to `kit_tools/specs/archive/`."
+- Do **NOT** auto-delete — the user should review and decide
+
+### If none found
+- No action needed.
+
+---
+
+## Step 12d: Feature Spec Frontmatter Update
+
+Scan all `kit_tools/specs/feature-*.md` files for `brief:` frontmatter fields.
+
+### If found
+- Note them in the migration report: "N feature specs have `brief:` fields. These are harmless but new features should use `vision_ref:` instead."
+- Do **NOT** auto-modify — the `brief:` field is harmless and the user may want to preserve the historical link
+
+### If none found
+- No action needed.
+
+---
+
+## Step 12e: Completeness Check
+
+Final sweep to verify all expected v2.0 files exist:
+
+| File | Expected |
+|------|----------|
+| `kit_tools/PRODUCT_VISION.md` | Yes (created in 12b if missing) |
+| `kit_tools/roadmap/MILESTONES.md` | Yes |
+| `kit_tools/roadmap/BACKLOG.md` | Yes |
+| `kit_tools/specs/` directory | Yes |
+| `kit_tools/specs/archive/` directory | Yes |
+
+Report any gaps: "Missing: [file]. Run `/kit-tools:init-project` to create missing files."
+
+---
+
 ## Step 12: Summary Report
 
 Report all changes made:
@@ -211,10 +267,19 @@ Paths updated:
   - .claude/settings.local.json: [N] commands updated ✓  (or "not found")
   - [N] .md files updated with new paths
 
+Vision / Brief migration:
+  - PRODUCT_VISION.md: [Created / Already exists] ✓
+  - Legacy briefs: [N found — review and archive / None found] ✓
+  - Feature specs with brief: field: [N found — use vision_ref: for new features / None]
+
+Completeness check:
+  - [All v2.0 files present ✓ / Missing: list]
+
 Recommended next steps:
   1. Review changes: git diff --stat
   2. Commit: git add -A && git commit -m "chore: migrate kit_tools to v2.0 structure"
-  3. Run /kit-tools:start-session to verify everything works
+  3. Run /kit-tools:create-vision to define your product vision
+  4. Run /kit-tools:start-session to verify everything works
 ```
 
 ---

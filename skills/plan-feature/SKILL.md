@@ -22,29 +22,23 @@ Read `REFERENCE.md` in this skill directory for detailed examples, heuristics, a
 | `kit_tools/specs/` directory | Yes | Location for new feature spec |
 | `kit_tools/roadmap/BACKLOG.md` | Yes | To add feature reference |
 | `$CLAUDE_PLUGIN_ROOT/templates/specs/FEATURE_SPEC.md` | Yes | Template for new feature spec |
-| `$CLAUDE_PLUGIN_ROOT/templates/specs/PRODUCT_BRIEF.md` | Optional | Template for Product Brief |
+| `kit_tools/PRODUCT_VISION.md` | Optional | Product vision for strategic context |
 | `$CLAUDE_PLUGIN_ROOT/templates/specs/EPIC.md` | Optional | Template for epic decomposition |
 
 ---
 
-## Step 1: Product Brief Check
+## Step 1: Product Vision Check
 
-Check for existing Product Briefs in `kit_tools/specs/brief-*.md`.
+Check if `kit_tools/PRODUCT_VISION.md` exists.
 
-Ask: **"Does this feature belong to an existing Product Brief, or should we create one? (Recommended for new product areas, optional for incremental features)"**
-
-### If creating a new brief
-- Use `PRODUCT_BRIEF.md` template
-- Save as `kit_tools/specs/brief-[name].md`
-- Fill in Problem Statement, Target Users, Strategic Context, Success Metrics
+### If it exists
+- Read it for strategic context (target users, value proposition, feature areas)
+- Note which feature area this new feature relates to (for the feature spec's `vision_ref:` field)
 - Continue to Step 2
 
-### If linking to an existing brief
-- Note the brief name for the feature spec's `brief:` frontmatter field
-- Continue to Step 2
-
-### If skipping
-- Proceed directly to Step 2
+### If it doesn't exist
+- Suggest: "Consider running `/kit-tools:create-vision` to define your product vision first. This helps align features with strategic goals."
+- Don't block — proceed to Step 2 regardless. Some features are tactical and don't need a vision doc.
 
 ---
 
@@ -129,7 +123,7 @@ Verify: 3-5 criteria per story, single layer focus, dependencies clear, stories 
 
 ## Step 10: Generate the Feature Spec
 
-Create `kit_tools/specs/feature-[feature-name].md` using the FEATURE_SPEC.md template. Set frontmatter fields including `brief:` (if applicable) and `type:`. See REFERENCE.md for field reference.
+Create `kit_tools/specs/feature-[feature-name].md` using the FEATURE_SPEC.md template. Set frontmatter fields including `vision_ref:` (if applicable) and `type:`. See REFERENCE.md for field reference.
 
 ---
 
@@ -172,13 +166,17 @@ Update the feature spec's Refinement Notes: research conducted, scope adjustment
 
 ## Step 12: Update tracking files
 
-Add feature spec reference to `kit_tools/roadmap/BACKLOG.md`. For epics, group as a section.
+1. Add feature spec reference to `kit_tools/roadmap/BACKLOG.md`. For epics, group as a section.
+2. Update `kit_tools/roadmap/MILESTONES.md`:
+   - Determine priority (P0/P1/P2) based on feature goals and urgency
+   - Ask user to confirm placement: "I'd suggest this as a **P1** milestone item. Does that feel right?"
+   - Add the feature to the appropriate priority section
 
 ---
 
 ## Step 13: Summary
 
-Report: feature(s) planned, epic decomposition (if any), feature spec location(s), story counts, refinement status, session readiness, dependencies, key decisions, open questions, next steps.
+Report: feature(s) planned, epic decomposition (if any), feature spec location(s), story counts, refinement status, session readiness, dependencies, key decisions, open questions, milestone placement, next steps.
 
 ---
 

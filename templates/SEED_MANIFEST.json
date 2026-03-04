@@ -46,6 +46,16 @@
   },
 
   "templates": {
+    "PRODUCT_VISION.md": {
+      "tier": 1,
+      "path": "kit_tools/PRODUCT_VISION.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": "skip_if: always — created by create-vision skill"
+    },
     "SYNOPSIS.md": {
       "tier": 1,
       "path": "kit_tools/SYNOPSIS.md",
@@ -279,16 +289,16 @@
   },
 
   "summary": {
-    "total": 23,
+    "total": 24,
     "by_status": {
-      "pending": 23,
+      "pending": 24,
       "seeded": 0,
       "validated": 0,
       "skipped": 0,
       "failed": 0
     },
     "by_tier": {
-      "1": { "total": 4, "completed": 0 },
+      "1": { "total": 5, "completed": 0 },
       "2": { "total": 5, "completed": 0 },
       "3": { "total": 9, "completed": 0 },
       "4": { "total": 3, "completed": 0 },

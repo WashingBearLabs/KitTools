@@ -180,7 +180,7 @@ US-004: Handle OAuth callback and create session
 | `status` | `active`, `on-hold`, or `completed` |
 | `session_ready` | `true` if all stories pass session-fit checks |
 | `depends_on` | Array of feature names this feature spec depends on |
-| `brief` | Parent Product Brief name (optional, links to brief-*.md) |
+| `vision_ref` | Product Vision reference (optional, section in PRODUCT_VISION.md — e.g., "Feature Area 2: User Management") |
 | `type` | `feature` or `epic-child` |
 | `epic` | Epic name (same across all feature specs in epic, empty for standalone) |
 | `epic_seq` | Execution order within epic, 1-based (empty for standalone) |

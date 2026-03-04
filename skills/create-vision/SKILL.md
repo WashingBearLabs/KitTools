@@ -1,0 +1,163 @@
+---
+name: create-vision
+description: Define the product vision through an interactive, iterative process
+---
+
+# Create Product Vision
+
+Define your product's vision through a guided, iterative process with AI-assisted review.
+
+## Dependencies
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| **Vision template** | `$CLAUDE_PLUGIN_ROOT/templates/PRODUCT_VISION.md` | Template for vision document |
+| **Vision reviewer agent** | `$CLAUDE_PLUGIN_ROOT/agents/vision-reviewer.md` | Reviews vision for completeness and feasibility |
+
+**Creates in project:**
+- `kit_tools/PRODUCT_VISION.md` — the singular product vision document
+
+---
+
+## Step 1: Check for Existing Vision
+
+Check if `kit_tools/PRODUCT_VISION.md` already exists.
+
+### If it exists and is populated (not just the template)
+Ask: **"You already have a Product Vision document. Would you like to:"**
+1. **Revise** — Update the existing vision (keep structure, refine content)
+2. **Start fresh** — Replace with a new vision document
+3. **Cancel** — Keep the existing vision as-is
+
+### If it doesn't exist
+Proceed to Step 2.
+
+---
+
+## Step 2: Gather Initial Input
+
+Ask the user about their product vision. Use a conversational approach — don't dump all questions at once.
+
+**Start with:**
+> "Let's define your product vision. Tell me: **What are you building, and what problem does it solve?**"
+
+**Follow up with** (as needed, based on the initial answer):
+- "**Who is this for?** Describe your target users — their roles, context, and what frustrates them today."
+- "**What does success look like?** How would you measure whether this product is working?"
+- "**What are the main feature areas you envision?** Think high-level capabilities, not individual features."
+- "**Any constraints I should know about?** Technical limits, timeline, team size, etc."
+
+Don't require complete answers — the review step will catch gaps.
+
+---
+
+## Step 3: Draft the Vision Document
+
+1. Read the template from `$CLAUDE_PLUGIN_ROOT/templates/PRODUCT_VISION.md`
+2. Write `kit_tools/PRODUCT_VISION.md` populated with the user's input
+3. Replace all `{{placeholder}}` tokens with real content or remove sections that don't apply yet
+4. Set the "Last updated" date to today
+5. Tell the user: "I've drafted your vision document. Let me run it through a review to identify any gaps."
+
+---
+
+## Step 4: Agent Review — Completeness
+
+Spawn the `vision-reviewer` agent in `completeness` mode:
+
+1. Read the agent template from `$CLAUDE_PLUGIN_ROOT/agents/vision-reviewer.md`
+2. Interpolate tokens:
+   - `{{VISION_CONTENT}}` — the content of `kit_tools/PRODUCT_VISION.md`
+   - `{{REVIEW_MODE}}` — `completeness`
+   - `{{PROJECT_CONTEXT}}` — project summary from any existing `kit_tools/SYNOPSIS.md` or CLAUDE.md, or "No project context available"
+   - `{{RESULT_FILE_PATH}}` — `kit_tools/.vision_review_1.json`
+3. Run via Task tool
+4. Read the result file
+
+---
+
+## Step 5: Surface Gaps to User
+
+Present the reviewer's findings conversationally:
+
+**Format:**
+> "The review scored your vision **X/5 overall**. Here's what stood out:"
+>
+> **Strong areas:**
+> - [Dimensions scoring 4-5 with brief finding]
+>
+> **Areas to strengthen:**
+> - [Dimensions scoring 1-3 with finding and suggestion]
+>
+> **Potential gotchas:**
+> - [List from reviewer]
+
+Ask: **"Would you like to address any of these gaps? You can also mark some as intentional — not every vision doc needs a perfect score."**
+
+---
+
+## Step 6: Revise the Document
+
+Incorporate the user's responses:
+- Update sections they want to strengthen
+- Add notes for intentional omissions (e.g., "Constraints are minimal for this personal project")
+- Don't change sections the user is happy with
+
+---
+
+## Step 7: Agent Review — Feasibility
+
+Spawn the `vision-reviewer` agent in `feasibility` mode:
+
+1. Interpolate tokens:
+   - `{{VISION_CONTENT}}` — the updated content of `kit_tools/PRODUCT_VISION.md`
+   - `{{REVIEW_MODE}}` — `feasibility`
+   - `{{PROJECT_CONTEXT}}` — same as Step 4
+   - `{{RESULT_FILE_PATH}}` — `kit_tools/.vision_review_2.json`
+2. Run via Task tool
+3. Read the result file
+
+---
+
+## Step 8: Final Refinement
+
+Present feasibility findings:
+
+> "The feasibility review flagged a few things to consider:"
+>
+> - [Gotchas and open questions from the review]
+>
+> "These aren't blockers — they're things to keep in mind as you plan features. Want to address any of these now, or note them as open questions in the vision doc?"
+
+Apply any final updates the user requests.
+
+---
+
+## Step 9: Finalize
+
+1. Write the final version of `kit_tools/PRODUCT_VISION.md`
+2. Clean up temporary review files (`kit_tools/.vision_review_1.json`, `kit_tools/.vision_review_2.json`)
+3. Report summary:
+
+```
+Product Vision: Defined ✓
+
+Document: kit_tools/PRODUCT_VISION.md
+Overall Score: X/5 (from completeness review)
+Feature Areas: N defined
+Open Questions: N remaining
+
+Suggested next steps:
+  - /kit-tools:seed-project — if you haven't seeded yet
+  - /kit-tools:plan-feature — to create feature specs for your vision's feature areas
+```
+
+---
+
+## Related Skills
+
+| Skill | When to use |
+|-------|-------------|
+| `/kit-tools:init-project` | Before this, to set up the kit_tools framework |
+| `/kit-tools:seed-project` | After this, to populate other templates |
+| `/kit-tools:plan-feature` | After this, to create feature specs for vision areas |

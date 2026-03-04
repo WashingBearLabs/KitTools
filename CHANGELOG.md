@@ -5,6 +5,44 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2025-03-04
+
+### Added
+- **New Skill: `/kit-tools:create-vision`** — Interactive, iterative product vision definition
+  - Guided conversation to capture vision, users, value proposition, success criteria, and feature areas
+  - Two-pass AI review: completeness scoring across 6 dimensions, then feasibility assessment
+  - Surfaces gaps and suggestions between review rounds for user refinement
+  - Produces `kit_tools/PRODUCT_VISION.md` — a singular strategic document per project
+- **New Agent: `vision-reviewer.md`** — Reviews Product Vision documents for completeness, feasibility, and clarity
+  - Scores across 6 dimensions: target users, value proposition, success criteria, feature areas, constraints, feasibility
+  - Two modes: `completeness` (gap detection) and `feasibility` (implementation concerns)
+  - Returns structured JSON with per-dimension scores, findings, gotchas, and open questions
+- **New Template: `PRODUCT_VISION.md`** — Root-level strategic document (replaces `PRODUCT_BRIEF.md`)
+  - Sections: Vision Statement, Target Users & Personas, Value Proposition, Success Criteria, High-Level Feature Areas, Constraints & Assumptions, Open Questions
+  - `skip_if: always` — created interactively by `create-vision` skill, not auto-seeded
+
+### Changed
+- **`/kit-tools:plan-feature`** — Step 1 now checks for Product Vision instead of Product Briefs
+  - Reads `kit_tools/PRODUCT_VISION.md` for strategic context if it exists
+  - Suggests `/kit-tools:create-vision` if no vision doc found (non-blocking)
+  - Step 12 now updates both `BACKLOG.md` and `MILESTONES.md` with priority confirmation
+  - Feature specs use `vision_ref:` instead of `brief:` frontmatter field
+- **`/kit-tools:init-project`** — Template list updated: `PRODUCT_VISION.md` replaces `PRODUCT_BRIEF.md`
+  - Summary now recommends `create-vision` after seeding
+  - Suggested workflow: init → seed → create-vision → plan-feature
+- **`/kit-tools:migrate`** — Added vision/brief migration steps (12b–12e)
+  - 12b: Creates blank `PRODUCT_VISION.md` if missing
+  - 12c: Flags legacy `brief-*.md` files for user review (no auto-delete)
+  - 12d: Notes feature specs with `brief:` fields (harmless, recommends `vision_ref:` for new features)
+  - 12e: Completeness check for all expected v2.0 files
+- **Feature Spec template** — `brief:` frontmatter field replaced with `vision_ref:` (references section in PRODUCT_VISION.md)
+- **Epic template** — `brief:` frontmatter field replaced with `vision_ref:`
+- **SEED_MANIFEST.json** — Added `PRODUCT_VISION.md` as Tier 1 (24 templates, 5 in Tier 1)
+- **SYNC_MANIFEST.json** — Added `PRODUCT_VISION.md` to document tracking (20 documents)
+
+### Removed
+- **`templates/specs/PRODUCT_BRIEF.md`** — Replaced by `templates/PRODUCT_VISION.md`
+
 ## [2.0.0] - 2026-03-01
 
 ### Breaking Changes

@@ -4,7 +4,7 @@ feature: {{FEATURE_NAME}}
 status: active
 session_ready: true
 depends_on: []
-brief:
+vision_ref:
 type: feature
 epic:
 epic_seq:
@@ -19,7 +19,7 @@ Frontmatter fields:
 - status: active | on-hold | completed
 - session_ready: true if all stories pass session-fit checks; false if skipped or unresolved issues
 - depends_on: Array of feature names this feature spec depends on (for epics)
-- brief: Parent Product Brief name (optional, links to brief-*.md)
+- vision_ref: Product Vision reference (optional, section in PRODUCT_VISION.md — e.g., "Feature Area 2: User Management")
 - type: feature | epic-child
 - epic: Epic name (empty for standalone feature specs)
 - epic_seq: Execution order within epic (1-based; empty for standalone)

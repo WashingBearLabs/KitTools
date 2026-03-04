@@ -8,7 +8,7 @@
 ---
 epic: {{EPIC_NAME}}
 status: active
-brief:
+vision_ref:
 created: {{DATE}}
 updated: {{DATE}}
 ---
@@ -17,7 +17,7 @@ updated: {{DATE}}
 Frontmatter fields:
 - epic: Kebab-case epic name (e.g., "user-management")
 - status: active | on-hold | completed
-- brief: Parent Product Brief name (optional, links to brief-*.md)
+- vision_ref: Product Vision reference (optional, section in PRODUCT_VISION.md — e.g., "Feature Area 2: User Management")
 - created/updated: Dates in YYYY-MM-DD format
 -->
 

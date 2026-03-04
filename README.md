@@ -68,10 +68,11 @@ git clone https://github.com/WashingBearLabs/KitTools.git
 | `/kit-tools:seed-project` | Populate templates from codebase exploration |
 | `/kit-tools:seed-template` | Seed a single template with project-specific content |
 | `/kit-tools:validate-seeding` | Validate seeded templates for unfilled placeholders |
-| `/kit-tools:migrate` | Migrate existing docs to kit_tools structure |
+| `/kit-tools:migrate` | Migrate a v1.x project to v2.0+ structure |
 | `/kit-tools:start-session` | Orient and create scratchpad for a work session |
 | `/kit-tools:close-session` | Process notes and update docs at session end |
 | `/kit-tools:checkpoint` | Mid-session checkpoint without closing |
+| `/kit-tools:create-vision` | Define the product vision interactively |
 | `/kit-tools:plan-feature` | Create a Feature Spec for a new feature |
 | `/kit-tools:complete-feature` | Mark a Feature Spec as completed and archive it |
 | `/kit-tools:sync-project` | Full sync between code and docs (`--quick` for audit) |
@@ -90,9 +91,10 @@ kit-tools includes automation hooks that run automatically:
 | `create_scratchpad` | SessionStart | Creates SESSION_SCRATCH.md if kit_tools exists |
 | `sync_skill_symlinks` | SessionStart | Syncs skill symlinks (verifies against `installed_plugins.json`) |
 | `update_doc_timestamps` | PostToolUse (Edit/Write) | Updates "Last Updated" in kit_tools docs |
-| `detect_phase_completion` | PostToolUse (Edit/Write) | Notes feature spec criteria and milestone task completions; suggests validate-feature when all criteria are done |
+| `detect_phase_completion` | PostToolUse (Edit) | Notes feature spec criteria and milestone task completions; suggests validate-feature when all criteria are done |
 | `validate_seeded_template` | PostToolUse (Edit/Write) | Validates seeded templates for unfilled placeholders |
 | `remind_scratchpad_before_compact` | PreCompact | Reminds to capture notes, adds compaction marker |
+| `check_execution_notifications` | UserPromptSubmit | Surfaces execution notifications (completions, failures, crashes, pauses) on next user message |
 | `remind_close_session` | Stop | Reminds to run close-session if scratchpad has notes |
 
 *Note: Setup validation is built into `/kit-tools:init-project` as a final step.*
@@ -113,7 +115,7 @@ When initializing, select your project type for tailored templates:
 
 ## Templates
 
-kit-tools provides 29 documentation templates organized by category:
+kit-tools provides 30 documentation templates organized by category:
 
 **Core** — Always included:
 - `AGENT_README.md` — AI navigation guide
@@ -127,7 +129,8 @@ kit-tools provides 29 documentation templates organized by category:
 - `CONVENTIONS.md` — Code conventions and standards
 - `TROUBLESHOOTING.md` — Common issues and solutions
 - `TESTING_GUIDE.md` — Testing strategy and patterns
-- `specs/*` — Feature specs and product briefs
+- `PRODUCT_VISION.md` — Product vision (via create-vision)
+- `specs/*` — Feature specs and epics
 - `roadmap/*` — Milestone tracking and backlog
 
 **API** — For backend services:
@@ -151,14 +154,16 @@ your-project/
 ├── kit_tools/
 │   ├── AGENT_README.md      # AI navigation guide
 │   ├── SYNOPSIS.md          # Project overview
+│   ├── PRODUCT_VISION.md    # Product vision (populate via create-vision)
 │   ├── SESSION_LOG.md       # Session history
 │   ├── AUDIT_FINDINGS.md    # Code quality findings
 │   ├── arch/                # Architecture docs
 │   ├── docs/                # Operational docs
 │   ├── testing/             # Testing docs
-│   ├── specs/               # Feature specs and product briefs
+│   ├── specs/               # Feature specs and epics
 │   │   └── archive/         # Completed feature specs
-│   └── roadmap/             # Milestone tracking
+│   ├── roadmap/             # Milestone tracking
+│   └── hooks/               # Automation scripts
 └── CLAUDE.md                # Claude Code instructions
 ```
 
@@ -211,7 +216,7 @@ Validation runs automatically after autonomous execution completes, and can be i
 
 Use `/kit-tools:plan-feature` to create Feature Specs:
 
-1. Optional **Product Brief** for strategic context (recommended for new product areas)
+1. Optional **Product Vision** for strategic context (define with `/kit-tools:create-vision`)
 2. Interactive questions refine scope and requirements
 3. **Epic detection** — Large features are automatically decomposed into multiple feature specs with an explicit epic file
 4. Generates `feature-[name].md` with:

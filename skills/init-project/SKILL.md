@@ -242,8 +242,8 @@ Based on selection, include these templates:
 - roadmap/BACKLOG.md
 - roadmap/MILESTONES.md
 - specs/FEATURE_SPEC.md
-- specs/PRODUCT_BRIEF.md
 - specs/EPIC.md
+- PRODUCT_VISION.md
 
 **API/Backend adds:**
 - arch/DATA_MODEL.md
@@ -494,6 +494,8 @@ Report to the user:
 **Remind the user:**
 - Run `/kit-tools:seed-project` next to populate templates with project-specific content
   - The project context gathered in Step 0 (description, tech stack, special considerations) will help seed SYNOPSIS and other templates more accurately
+- Run `/kit-tools:create-vision` to define the product vision (recommended before planning features)
+- Suggested workflow: **init → seed → create-vision → plan-feature**
 - Run `/kit-tools:update-kit-tools` later to update hooks, templates, or other components as the project grows
 - Run `/kit-tools:validate-feature` after completing a feature to validate the full branch against its feature spec
 

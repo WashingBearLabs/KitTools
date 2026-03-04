@@ -88,6 +88,17 @@
   },
 
   "documents": {
+    "PRODUCT_VISION.md": {
+      "path": "kit_tools/PRODUCT_VISION.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
     "SYNOPSIS.md": {
       "path": "kit_tools/SYNOPSIS.md",
       "status": "pending",
@@ -302,10 +313,10 @@
   "conflicts": [],
 
   "summary": {
-    "total_documents": 19,
+    "total_documents": 20,
     "discovery_areas": 8,
     "by_status": {
-      "pending": 19,
+      "pending": 20,
       "reviewed": 0,
       "updated": 0,
       "skipped": 0,
