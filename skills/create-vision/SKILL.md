@@ -12,7 +12,7 @@ Define your product's vision through a guided, iterative process with AI-assiste
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | **Vision template** | `$CLAUDE_PLUGIN_ROOT/templates/PRODUCT_VISION.md` | Template for vision document |
-| **Vision reviewer agent** | `$CLAUDE_PLUGIN_ROOT/agents/vision-reviewer.md` | Reviews vision for completeness and feasibility |
+| **Vision reviewer agent** | `$CLAUDE_PLUGIN_ROOT/agents/vision-reviewer.md` | Reviews vision for completeness, feasibility, and spec-readiness |
 
 **Creates in project:**
 - `kit_tools/PRODUCT_VISION.md` — the singular product vision document
@@ -56,8 +56,10 @@ Don't require complete answers — the review step will catch gaps.
 1. Read the template from `$CLAUDE_PLUGIN_ROOT/templates/PRODUCT_VISION.md`
 2. Write `kit_tools/PRODUCT_VISION.md` populated with the user's input
 3. Replace all `{{placeholder}}` tokens with real content or remove sections that don't apply yet
-4. Set the "Last updated" date to today
-5. Tell the user: "I've drafted your vision document. Let me run it through a review to identify any gaps."
+4. Use tier-prefixed IDs for feature areas (T1.1, T1.2, T2.1, etc.) — group features into tiers based on user input about priority
+5. Leave the Build Order and Walking Skeleton sections with placeholder content for now — these are filled in Steps 7-8
+6. Set the "Last updated" date to today
+7. Tell the user: "I've drafted your vision document. Let me run it through a review to identify any gaps."
 
 ---
 
@@ -105,7 +107,41 @@ Incorporate the user's responses:
 
 ---
 
-## Step 7: Agent Review — Feasibility
+## Step 7: Build Order
+
+Now that features are defined and reviewed, prompt the user to think about dependencies and sequencing.
+
+Ask: **"Let's figure out what gets built first. Looking at your feature areas:"**
+
+Present the feature areas by tier, then ask:
+> "**Which of these depend on each other?** For example, does T1.2 need T1.1 to exist first? Are there features that are foundational — everything else builds on them?"
+
+Based on the user's answers:
+1. Fill in the **Dependency Graph** table in the vision doc
+2. Propose a **Build Sequence** — ordered phases based on the dependency graph
+3. Ask the user to confirm or adjust the sequence
+
+If the user isn't sure about dependencies, help them think through it:
+> "Think about it this way: if you could only ship one feature area, which one? That's Phase 1. Now what does the next one need from Phase 1 to work?"
+
+---
+
+## Step 8: Walking Skeleton
+
+Prompt the user to define the thinnest vertical slice.
+
+Ask: **"What's the thinnest end-to-end path through your system that would prove the architecture works?"**
+
+Clarify if needed:
+> "This isn't the MVP — it's smaller. It's the simplest thing that touches every layer: a user does X, the system processes Y, data Z gets stored. What would that look like for your product?"
+
+Based on the user's answer:
+1. Fill in the **Walking Skeleton** section with the slice description and layers touched
+2. Note what architectural assumption it validates
+
+---
+
+## Step 9: Agent Review — Feasibility
 
 Spawn the `vision-reviewer` agent in `feasibility` mode:
 
@@ -117,10 +153,6 @@ Spawn the `vision-reviewer` agent in `feasibility` mode:
 2. Run via Task tool
 3. Read the result file
 
----
-
-## Step 8: Final Refinement
-
 Present feasibility findings:
 
 > "The feasibility review flagged a few things to consider:"
@@ -129,22 +161,55 @@ Present feasibility findings:
 >
 > "These aren't blockers — they're things to keep in mind as you plan features. Want to address any of these now, or note them as open questions in the vision doc?"
 
-Apply any final updates the user requests.
+Apply any updates the user requests.
 
 ---
 
-## Step 9: Finalize
+## Step 10: Agent Review — Spec-Readiness
+
+Spawn the `vision-reviewer` agent in `spec-readiness` mode:
+
+1. Interpolate tokens:
+   - `{{VISION_CONTENT}}` — the updated content of `kit_tools/PRODUCT_VISION.md`
+   - `{{REVIEW_MODE}}` — `spec-readiness`
+   - `{{PROJECT_CONTEXT}}` — same as Step 4
+   - `{{RESULT_FILE_PATH}}` — `kit_tools/.vision_review_3.json`
+2. Run via Task tool
+3. Read the result file
+
+Present spec-readiness findings:
+
+> "Final check — can a spec writer use this vision to create feature specs?"
+>
+> **Ready for specs:**
+> - [Feature areas that passed]
+>
+> **Needs work before speccing:**
+> - [Feature areas with issues and what's missing]
+>
+> **Structural issues:**
+> - [Any build order gaps, boundary confusion, etc.]
+
+Ask: **"Want to address any of these, or are you comfortable moving to feature planning with these noted as open items?"**
+
+Apply any final updates.
+
+---
+
+## Step 11: Finalize
 
 1. Write the final version of `kit_tools/PRODUCT_VISION.md`
-2. Clean up temporary review files (`kit_tools/.vision_review_1.json`, `kit_tools/.vision_review_2.json`)
+2. Clean up temporary review files (`kit_tools/.vision_review_1.json`, `kit_tools/.vision_review_2.json`, `kit_tools/.vision_review_3.json`)
 3. Report summary:
 
 ```
-Product Vision: Defined ✓
+Product Vision: Defined
 
 Document: kit_tools/PRODUCT_VISION.md
 Overall Score: X/5 (from completeness review)
-Feature Areas: N defined
+Feature Areas: N defined (T1: X, T2: Y, T3: Z)
+Build Phases: N phases defined
+Walking Skeleton: Defined / Not defined
 Open Questions: N remaining
 
 Suggested next steps:

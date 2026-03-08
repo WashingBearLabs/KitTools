@@ -1,4 +1,4 @@
-<!-- Template Version: 2.0.0 -->
+<!-- Template Version: 2.1.0 -->
 <!-- Seeding:
   explorer_focus: none
   required_sections: []
@@ -65,18 +65,84 @@ How will we measure whether this product is succeeding? Be specific and measurab
 
 ---
 
-## High-Level Feature Areas
+## Feature Areas
 
 <!--
-Major capability areas that compose this product. Each may correspond to one or more feature specs.
+Major capability areas organized by tier. Each feature area may become one or more feature specs.
+Use tier-prefixed IDs (T1.1, T1.2, T2.1) to avoid cascading renumber pain when adding features.
 Link to feature specs as they are created via /kit-tools:plan-feature.
 -->
 
-| # | Feature Area | Description | Feature Spec(s) | Status |
-|---|-------------|-------------|-----------------|--------|
-| 1 | {{Feature Area 1}} | {{What this area covers}} | — | Planned |
-| 2 | {{Feature Area 2}} | {{What this area covers}} | — | Planned |
-| 3 | {{Feature Area 3}} | {{What this area covers}} | — | Planned |
+### Tier 1 — Core (MVP)
+
+#### T1.1 — {{Feature Area Name}}
+- **Description:** {{What this area covers and why it matters}}
+- **Feature Spec(s):** —
+- **Status:** Planned
+
+#### T1.2 — {{Feature Area Name}}
+- **Description:** {{What this area covers and why it matters}}
+- **Feature Spec(s):** —
+- **Status:** Planned
+
+### Tier 2 — Extended
+
+#### T2.1 — {{Feature Area Name}}
+- **Description:** {{What this area covers and why it matters}}
+- **Feature Spec(s):** —
+- **Status:** Planned
+
+### Tier 3 — Future
+
+#### T3.1 — {{Feature Area Name}}
+- **Description:** {{What this area covers and why it matters}}
+- **Feature Spec(s):** —
+- **Status:** Planned
+
+---
+
+## Build Order
+
+<!--
+How do the feature areas depend on each other? What gets built first?
+This section answers "what do I build first?" — the dependency graph between feature areas.
+-->
+
+### Dependency Graph
+<!-- List feature areas and what they depend on. Use tier-prefixed IDs. -->
+
+| Feature | Depends On | Notes |
+|---------|-----------|-------|
+| {{T1.1}} | — | {{Foundation, no dependencies}} |
+| {{T1.2}} | T1.1 | {{Why this dependency exists}} |
+| {{T2.1}} | T1.1, T1.2 | {{Why these dependencies exist}} |
+
+### Suggested Build Sequence
+<!-- Ordered list of implementation phases based on the dependency graph. -->
+
+1. **Phase 1:** {{T1.1 — Rationale for why this is first}}
+2. **Phase 2:** {{T1.2 — What it unblocks}}
+3. **Phase 3:** {{T2.1 — Why it follows}}
+
+---
+
+## Walking Skeleton
+
+<!--
+The thinnest possible end-to-end slice that proves the architecture works.
+This is NOT the MVP — it's the minimal vertical slice that touches every layer
+(UI → logic → data → integration) to validate the approach before building out.
+-->
+
+**Slice:** {{One sentence describing the thinnest end-to-end path through the system}}
+
+**Layers touched:**
+- {{UI/Frontend}}: {{What the user sees/does}}
+- {{Logic/Backend}}: {{What processing happens}}
+- {{Data/Storage}}: {{What gets persisted}}
+- {{Integration}}: {{What external systems are involved, if any}}
+
+**Proves:** {{What architectural assumption this validates}}
 
 ---
 
