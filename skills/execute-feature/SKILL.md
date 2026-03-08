@@ -64,6 +64,10 @@ Run checks and report pass/fail for each:
 7. **Epic dependency gate** — Hard gate: all `depends_on` feature specs must be archived
 8. **tmux available** (autonomous/guarded only) — `which tmux` succeeds
    - If not installed: warn, offer manual launch fallback (print command for separate terminal)
+9. **Story quality check** — Scan uncompleted stories for potential issues:
+   - Stories with fewer than 2 acceptance criteria (may be under-specified)
+   - Acceptance criteria that are vague (e.g., "works correctly", "is fast", "looks good")
+   - If issues found: warn with specifics, ask user to confirm or refine before proceeding
 
 ---
 
@@ -94,7 +98,11 @@ Agents read context files on-demand via their Read tool.
 
 ## Step 6: Initialize State
 
-Create `.execution-state.json` and append run header to `EXECUTION_LOG.md`.
+**Autonomous/Guarded mode:** Do NOT create `.execution-state.json`. The orchestrator creates it with the correct schema (single-spec or epic) on first run. Pre-creating state causes schema mismatches.
+
+**Supervised mode:** Create `.execution-state.json` using the single-spec schema from REFERENCE.md (supervised mode does not support epics).
+
+**All modes:** Append a run header to `EXECUTION_LOG.md`.
 
 ---
 

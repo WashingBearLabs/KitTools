@@ -78,6 +78,12 @@ When `epic_specs` is present, the orchestrator runs in epic mode. When absent, i
 
 ## Execution State Schema
 
+**Important:** For autonomous/guarded mode, the skill must NOT pre-create `.execution-state.json`. The orchestrator creates it with the correct schema on first run. Pre-creating state with the wrong schema causes crashes. Only create state for supervised mode (single-spec only).
+
+### Single Feature Spec State
+
+Created by the orchestrator's `load_or_create_state()`:
+
 ```json
 {
   "spec": "feature-auth.md",
@@ -93,13 +99,37 @@ When `epic_specs` is present, the orchestrator runs in epic mode. When absent, i
     "implementation": 0,
     "verification": 0,
     "validation": 0
-  },
-  "token_estimates": {
-    "input": 0,
-    "output": 0
   }
 }
 ```
+
+### Epic State
+
+Created by the orchestrator's `load_or_create_epic_state()`:
+
+```json
+{
+  "epic": "arxiv",
+  "branch": "epic/arxiv",
+  "mode": "autonomous",
+  "max_retries": null,
+  "started_at": "2026-02-06T10:30:00Z",
+  "updated_at": "2026-02-06T10:30:00Z",
+  "status": "running",
+  "current_spec": null,
+  "specs": {},
+  "sessions": {
+    "total": 0,
+    "implementation": 0,
+    "verification": 0,
+    "validation": 0
+  }
+}
+```
+
+Key differences from single-spec: `epic` instead of `spec`, `specs` dict instead of `stories`, `current_spec` tracking field. The orchestrator populates `specs[basename]` entries as each feature spec starts.
+
+Note: The orchestrator also tracks `token_estimates` at the top level (rough char/4 approximation), added via `setdefault` during execution. This field is not pre-created.
 
 ---
 

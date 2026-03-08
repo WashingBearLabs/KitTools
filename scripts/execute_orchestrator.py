@@ -21,13 +21,10 @@ import json
 import os
 import re
 import signal
-import shutil
 import subprocess
 import sys
 import time
 from datetime import datetime, timezone
-from pathlib import Path
-
 import yaml
 
 
@@ -224,11 +221,23 @@ def update_state_story(
     if status == "completed":
         entry["completed_at"] = now_iso()
     if learnings:
-        entry.setdefault("learnings", []).extend(learnings)
+        # Cap per-story learnings to prevent unbounded growth (fix #7)
+        existing = entry.setdefault("learnings", [])
+        existing.extend(learnings)
+        if len(existing) > 20:
+            entry["learnings"] = existing[-20:]
     if failure:
         entry["last_failure"] = failure
 
     stories_dict[story_id] = entry
+
+
+def _store_attempt_diff(state: dict, story_id: str, diff: str, spec_key: str | None) -> None:
+    """Store last_attempt_diff in the correct location (single or epic mode)."""
+    if spec_key is not None:
+        state["specs"][spec_key].setdefault("stories", {}).setdefault(story_id, {})["last_attempt_diff"] = diff
+    else:
+        state.setdefault("stories", {}).setdefault(story_id, {})["last_attempt_diff"] = diff
 
 
 # --- Feature Spec Parsing ---
@@ -412,33 +421,44 @@ def tag_checkpoint(project_dir: str, epic_name: str, feature_name: str) -> None:
 
 
 def archive_spec(project_dir: str, spec_path: str, feature_name: str) -> None:
-    """Update feature spec frontmatter and move to archive directory."""
-    # Update frontmatter
+    """Update feature spec frontmatter and move to archive directory.
+
+    Safety: writes updated content to the archive destination directly,
+    then removes the original. This avoids corrupting the source file
+    if the move fails.
+    """
     with open(spec_path, "r") as f:
         content = f.read()
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    content = content.replace("status: active", "status: completed")
-    content = re.sub(r"updated: \d{4}-\d{2}-\d{2}", f"updated: {today}", content)
-    if "completed:" not in content:
-        content = re.sub(
-            r"(updated: \d{4}-\d{2}-\d{2})",
-            f"\\1\ncompleted: {today}",
-            content
-        )
-    with open(spec_path, "w") as f:
-        f.write(content)
 
-    # Move to archive
+    # Update frontmatter in memory (use regex on frontmatter block only)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    fm_match = re.match(r'^(---\s*\n)(.*?)(---)', content, re.DOTALL)
+    if fm_match:
+        fm_text = fm_match.group(2)
+        fm_text = fm_text.replace("status: active", "status: completed")
+        fm_text = re.sub(r"updated: \d{4}-\d{2}-\d{2}", f"updated: {today}", fm_text)
+        if "completed:" not in fm_text:
+            fm_text = re.sub(
+                r"(updated: \d{4}-\d{2}-\d{2})",
+                rf"\1\ncompleted: {today}",
+                fm_text
+            )
+        content = fm_match.group(1) + fm_text + fm_match.group(3) + content[fm_match.end():]
+
+    # Write updated content directly to archive destination
     archive_dir = os.path.join(os.path.dirname(spec_path), "archive")
     os.makedirs(archive_dir, exist_ok=True)
     dest = os.path.join(archive_dir, os.path.basename(spec_path))
-    shutil.move(spec_path, dest)
+    with open(dest, "w") as f:
+        f.write(content)
+
+    # Remove original only after archive write succeeds
+    os.remove(spec_path)
 
     # Stage changes
     rel_dest = os.path.relpath(dest, project_dir)
     rel_src = os.path.relpath(spec_path, project_dir)
     run_git(["add", rel_dest], project_dir, check=True)
-    # Stage the deletion of the old path
     run_git(["rm", "--cached", "-f", rel_src], project_dir, check=True)
 
     log(f"  Archived: {os.path.basename(spec_path)} -> archive/")
@@ -500,43 +520,6 @@ def check_and_trim_prompt(prompt: str, context_type: str) -> str:
         prompt = prompt[:MAX_PROMPT_CHARS] + "\n\n[PROMPT TRUNCATED — size limit reached]"
 
     return prompt
-
-
-# --- Diff Summarization ---
-
-
-def summarize_diff_for_prompt(diff_text: str, max_chars: int = 60000) -> str:
-    """Summarize a large diff to fit within a character budget.
-
-    If the diff fits, returns as-is. Otherwise, splits by file and allocates
-    a per-file budget, truncating each file's hunks as needed.
-    """
-    if len(diff_text) <= max_chars:
-        return diff_text
-
-    # Split into per-file chunks by "diff --git" headers
-    file_chunks = re.split(r"(?=^diff --git )", diff_text, flags=re.MULTILINE)
-    file_chunks = [c for c in file_chunks if c.strip()]
-
-    if not file_chunks:
-        return diff_text[:max_chars] + "\n\n[Full diff truncated at size limit]"
-
-    # Reserve space for the truncation notice
-    notice = "\n\nFull diff truncated. Read individual files for complete changes."
-    budget = max_chars - len(notice)
-    per_file = max(budget // len(file_chunks), 500)
-
-    parts = []
-    for chunk in file_chunks:
-        if len(chunk) <= per_file:
-            parts.append(chunk)
-        else:
-            parts.append(chunk[:per_file] + "\n... [file diff truncated] ...\n")
-
-    result = "".join(parts)
-    if len(result) > max_chars:
-        result = result[:max_chars]
-    return result + notice
 
 
 # --- Prompt Building ---
@@ -722,43 +705,50 @@ def is_session_error(output: str) -> bool:
 
 
 def run_claude_session(prompt: str, project_dir: str) -> str:
-    """Execute a claude -p session and capture output."""
-    # Build a clean environment without CLAUDECODE to prevent
-    # "cannot be launched inside another Claude Code session" errors.
+    """Execute a claude -p session and capture output.
+
+    Retries up to NETWORK_MAX_RETRIES times for network errors.
+    Returns the session stdout on success, or a SESSION_ERROR/SESSION_ERROR_PERMANENT
+    string on failure.
+    """
     clean_env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
-    for network_attempt in range(1, NETWORK_MAX_RETRIES + 1):
+
+    for attempt in range(1, NETWORK_MAX_RETRIES + 1):
         try:
             result = subprocess.run(
-                [
-                    "claude", "-p", prompt,
-                    "--dangerously-skip-permissions",
-                ],
+                ["claude", "-p", prompt, "--dangerously-skip-permissions"],
                 capture_output=True,
                 text=True,
                 timeout=SESSION_TIMEOUT,
                 cwd=project_dir,
                 env=clean_env,
             )
-            if result.returncode != 0:
-                stderr = result.stderr.strip()
-                # Check for network-related errors
-                if any(kw in stderr.lower() for kw in ("network", "connection", "timeout", "econnrefused")):
-                    if network_attempt < NETWORK_MAX_RETRIES:
-                        log(f"  Network error (attempt {network_attempt}/{NETWORK_MAX_RETRIES}), retrying in {NETWORK_RETRY_WAIT}s...")
-                        time.sleep(NETWORK_RETRY_WAIT)
-                        continue
-                # Non-network error or final network retry
-                prefix = "SESSION_ERROR_PERMANENT" if _is_permanent_error(stderr) else "SESSION_ERROR"
-                return f"{prefix}: Exit code {result.returncode}\n{stderr}\n{result.stdout}"
 
-            return result.stdout
+            if result.returncode == 0:
+                return result.stdout
+
+            stderr = result.stderr.strip()
+            is_network = any(kw in stderr.lower() for kw in ("network", "connection", "timeout", "econnrefused"))
+
+            # Retry network errors (unless this is the last attempt)
+            if is_network and attempt < NETWORK_MAX_RETRIES:
+                log(f"  Network error (attempt {attempt}/{NETWORK_MAX_RETRIES}), retrying in {NETWORK_RETRY_WAIT}s...")
+                time.sleep(NETWORK_RETRY_WAIT)
+                continue
+
+            # Final network attempt or non-network error — return error
+            if is_network:
+                return f"SESSION_ERROR: Network error after {NETWORK_MAX_RETRIES} attempts\n{stderr}"
+            prefix = "SESSION_ERROR_PERMANENT" if _is_permanent_error(stderr) else "SESSION_ERROR"
+            return f"{prefix}: Exit code {result.returncode}\n{stderr}\n{result.stdout}"
 
         except subprocess.TimeoutExpired:
             return f"SESSION_ERROR: Timed out after {SESSION_TIMEOUT}s"
         except FileNotFoundError:
-            return "SESSION_ERROR: 'claude' command not found. Ensure Claude CLI is installed and in PATH."
+            return "SESSION_ERROR_PERMANENT: 'claude' command not found. Ensure Claude CLI is installed and in PATH."
 
-    return "SESSION_ERROR: All network retries exhausted"
+    # Should not reach here, but safety net
+    return "SESSION_ERROR: All retries exhausted"
 
 
 # --- Result File Reading ---
@@ -781,24 +771,68 @@ def clean_result_files(project_dir: str) -> None:
             os.remove(path)
 
 
+def _extract_json_from_text(text: str) -> str:
+    """Extract JSON from text that may contain markdown fences or preamble.
+
+    Agents sometimes wrap JSON in ```json ... ``` fences or add extra text.
+    """
+    # Try stripping markdown fences first
+    fence_match = re.search(r"```(?:json)?\s*\n({.*?})\s*\n```", text, re.DOTALL)
+    if fence_match:
+        return fence_match.group(1)
+    # Try finding the first { ... } block
+    brace_match = re.search(r"\{.*\}", text, re.DOTALL)
+    if brace_match:
+        return brace_match.group(0)
+    return text
+
+
 def read_json_result(file_path: str) -> tuple[dict | None, str]:
     """Read and parse a JSON result file.
 
     Returns (result_dict, error_message). On success, error_message is empty.
     On failure, result_dict is None and error_message explains why.
+
+    Handles common agent output issues: markdown fences, preamble text,
+    trailing commas.
     """
     if not os.path.exists(file_path):
         return None, f"Result file not found: {os.path.basename(file_path)}"
     try:
         with open(file_path, "r") as f:
-            data = json.load(f)
-        if not isinstance(data, dict):
-            return None, f"Result file is not a JSON object: {os.path.basename(file_path)}"
-        return data, ""
-    except json.JSONDecodeError as e:
-        return None, f"Invalid JSON in {os.path.basename(file_path)}: {e}"
+            raw = f.read()
     except OSError as e:
         return None, f"Could not read {os.path.basename(file_path)}: {e}"
+
+    # First try direct parse
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            return data, ""
+    except json.JSONDecodeError:
+        pass
+
+    # Try extracting JSON from surrounding text (markdown fences, preamble)
+    extracted = _extract_json_from_text(raw)
+    try:
+        data = json.loads(extracted)
+        if isinstance(data, dict):
+            log(f"  Note: extracted JSON from non-clean output in {os.path.basename(file_path)}")
+            return data, ""
+    except json.JSONDecodeError:
+        pass
+
+    # Try fixing trailing commas (common LLM output issue)
+    cleaned = re.sub(r",\s*([\]}])", r"\1", extracted)
+    try:
+        data = json.loads(cleaned)
+        if isinstance(data, dict):
+            log(f"  Note: fixed trailing commas in {os.path.basename(file_path)}")
+            return data, ""
+    except json.JSONDecodeError as e:
+        return None, f"Invalid JSON in {os.path.basename(file_path)}: {e}\nFirst 200 chars: {raw[:200]}"
+
+    return None, f"Result file is not a JSON object: {os.path.basename(file_path)}"
 
 
 def read_implementation_result(project_dir: str) -> tuple[dict | None, str]:
@@ -1086,6 +1120,18 @@ def get_current_branch(project_dir: str) -> str:
     return result.stdout.strip()
 
 
+def cleanup_attempt_branches(project_dir: str, feature_branch: str) -> None:
+    """Delete any leaked attempt branches from previous crashed runs."""
+    result = run_git(["branch", "--list", f"{feature_branch}-*-attempt-*"], project_dir)
+    if result.returncode != 0 or not result.stdout.strip():
+        return
+    for line in result.stdout.strip().split("\n"):
+        branch = line.strip().lstrip("* ")
+        if branch:
+            run_git(["branch", "-D", branch], project_dir)
+            log(f"  Cleaned up leaked attempt branch: {branch}")
+
+
 def create_attempt_branch(project_dir: str, feature_branch: str, story_id: str, attempt: int) -> str:
     """Create a temporary branch for this implementation attempt.
 
@@ -1094,6 +1140,11 @@ def create_attempt_branch(project_dir: str, feature_branch: str, story_id: str, 
     attempt_branch = f"{feature_branch}-{story_id}-attempt-{attempt}"
     # Ensure we're on the feature branch
     run_git(["checkout", feature_branch], project_dir, check=True)
+    # Delete the branch if it already exists (leaked from a previous crash)
+    existing = run_git(["branch", "--list", attempt_branch], project_dir)
+    if existing.stdout.strip():
+        run_git(["branch", "-D", attempt_branch], project_dir)
+        log(f"  Deleted pre-existing attempt branch: {attempt_branch}")
     # Create and switch to the attempt branch
     run_git(["checkout", "-b", attempt_branch], project_dir, check=True)
     log(f"  Created attempt branch: {attempt_branch}")
@@ -1462,6 +1513,23 @@ def execute_spec_stories(
             log(f"  Session tokens: ~{verify_prompt_chars // 4000}k input, ~{verify_output_chars // 4000}k output")
             save_state(state, config)
 
+            # --- Check for verification session errors ---
+            if is_session_error(verify_output):
+                log(f"  Verification session error: {verify_output[:200]}")
+                learnings = extract_learnings_from_results(impl_result, None)
+                learnings.append(f"Verify session error: {verify_output[:200]}")
+                log_story_failure(story, attempt, config, verify_output[:500], learnings)
+                update_state_story(
+                    state, story["id"], "retrying", attempt,
+                    learnings, verify_output[:500], spec_key=spec_key
+                )
+                save_state(state, config)
+                attempt_diff = delete_attempt_branch(project_dir, feature_branch, attempt_branch)
+                _store_attempt_diff(state, story["id"], attempt_diff, spec_key)
+                save_state(state, config)
+                clean_result_files(project_dir)
+                continue
+
             # --- Read verification result from file ---
             verdict, verify_error = read_verification_result(project_dir)
 
@@ -1477,10 +1545,7 @@ def execute_spec_stories(
                 save_state(state, config)
                 # Capture diff as retry context, then delete attempt branch
                 attempt_diff = delete_attempt_branch(project_dir, feature_branch, attempt_branch)
-                if spec_key is not None:
-                    state["specs"][spec_key].setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
-                else:
-                    state.setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
+                _store_attempt_diff(state, story["id"], attempt_diff, spec_key)
                 save_state(state, config)
                 clean_result_files(project_dir)
                 continue
@@ -1501,10 +1566,7 @@ def execute_spec_stories(
                     )
                     save_state(state, config)
                     attempt_diff = delete_attempt_branch(project_dir, feature_branch, attempt_branch)
-                    if spec_key is not None:
-                        state["specs"][spec_key].setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
-                    else:
-                        state.setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
+                    _store_attempt_diff(state, story["id"], attempt_diff, spec_key)
                     save_state(state, config)
                     clean_result_files(project_dir)
                     continue
@@ -1542,10 +1604,7 @@ def execute_spec_stories(
                 save_state(state, config)
                 # Capture diff as retry context, then delete attempt branch
                 attempt_diff = delete_attempt_branch(project_dir, feature_branch, attempt_branch)
-                if spec_key is not None:
-                    state["specs"][spec_key].setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
-                else:
-                    state.setdefault("stories", {}).setdefault(story["id"], {})["last_attempt_diff"] = attempt_diff
+                _store_attempt_diff(state, story["id"], attempt_diff, spec_key)
                 save_state(state, config)
                 clean_result_files(project_dir)
                 # Loop continues to next attempt
@@ -1569,6 +1628,9 @@ def run_single_spec(config: dict) -> None:
     log(f"Starting execution: {os.path.basename(spec_path)}")
     log(f"Mode: {mode}, Max retries: {max_retries or 'unlimited'}")
     log(f"Branch: {config['branch_name']}")
+
+    # Clean up leaked attempt branches from previous crashes
+    cleanup_attempt_branches(project_dir, config["branch_name"])
 
     # Verify branch is based on main
     if not verify_branch_base(project_dir):
@@ -1655,6 +1717,9 @@ def run_epic(config: dict) -> None:
 
     log(f"Starting epic: {epic_name} ({len(epic_specs)} feature specs)")
     log(f"Branch: {config['branch_name']}")
+
+    # Clean up leaked attempt branches from previous crashes
+    cleanup_attempt_branches(project_dir, config["branch_name"])
 
     if not verify_branch_base(project_dir):
         log(f"WARNING: Branch {config['branch_name']} may not be based on main.")
@@ -1818,7 +1883,33 @@ def main():
     )
     args = parser.parse_args()
 
-    config = load_config(args.config)
+    # Register a minimal crash handler before loading config, so that
+    # config parse failures still produce a notification.
+    _minimal_config = {"project_dir": os.path.dirname(os.path.dirname(args.config))}
+    atexit.register(lambda: None)  # placeholder until real handler is set
+
+    try:
+        config = load_config(args.config)
+    except (json.JSONDecodeError, FileNotFoundError, OSError) as e:
+        log(f"FATAL: Could not load config: {e}")
+        # Try to write a notification even without full config
+        try:
+            notif_path = os.path.join(_minimal_config["project_dir"], NOTIFICATION_FILE)
+            os.makedirs(os.path.dirname(notif_path), exist_ok=True)
+            entry = {
+                "type": "execution_crashed",
+                "title": "Config load failed",
+                "details": str(e),
+                "severity": "critical",
+                "feature": "",
+                "timestamp": now_iso(),
+            }
+            with open(notif_path, "a") as f:
+                f.write(json.dumps(entry) + "\n")
+        except OSError:
+            pass
+        sys.exit(1)
+
     register_crash_handler(config)
 
     if config.get("epic_specs"):

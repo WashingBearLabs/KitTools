@@ -1,4 +1,4 @@
-<!-- Template Version: 1.2.3 -->
+<!-- Template Version: 2.0.0 -->
 <!-- Seeding:
   explorer_focus: testing, tech-stack
   required_sections:

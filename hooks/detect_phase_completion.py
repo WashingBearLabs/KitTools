@@ -34,7 +34,7 @@ def main():
         return
 
     # Determine file type
-    is_spec = ("kit_tools/specs/" in file_path or "kit_tools/prd/" in file_path) and file_path.endswith(".md") and "/archive/" not in file_path
+    is_spec = "kit_tools/specs/" in file_path and file_path.endswith(".md") and "/archive/" not in file_path
     is_roadmap = "kit_tools/roadmap/" in file_path and (
         file_path.endswith("_TODO.md") or file_path.endswith("MILESTONES.md") or file_path.endswith("BACKLOG.md")
     )
@@ -49,9 +49,10 @@ def main():
         return
 
     # Count unchecked boxes in old vs new to detect completions
+    # Case-insensitive for both checked and unchecked patterns
     old_unchecked = len(re.findall(r"- \[ \]", old_string))
     new_unchecked = len(re.findall(r"- \[ \]", new_string))
-    new_checked = len(re.findall(r"- \[x\]", new_string, re.IGNORECASE))
+    new_checked = len(re.findall(r"- \[[xX]\]", new_string))
 
     # Only fire when checkboxes are being marked complete
     # (old has unchecked boxes, new has fewer unchecked or more checked)

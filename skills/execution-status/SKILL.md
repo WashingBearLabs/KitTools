@@ -84,7 +84,7 @@ For each story from the feature spec (in order):
 
 From the state file:
 - **Sessions spawned:** `state.sessions.total` (breakdown: `state.sessions.implementation` impl, `state.sessions.verification` verify, `state.sessions.validation` validation)
-- **Estimated tokens:** `state.token_estimates.input` input, `state.token_estimates.output` output (display in k units: `value / 1000`)
+- **Estimated tokens:** `state.token_estimates.input` input, `state.token_estimates.output` output (display in k units: `value / 1000`). If `token_estimates` is missing, omit this line.
 - **Time elapsed:** `state.started_at` to now
 - **Last activity:** `state.updated_at` — flag as **stale** if more than 5 minutes ago
 

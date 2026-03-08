@@ -5,6 +5,34 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2026-03-07
+
+### Fixed
+- **Epic automation state mismatch** — Skill no longer pre-creates `.execution-state.json` for autonomous/guarded modes. The orchestrator owns state creation with the correct schema (single-spec or epic), preventing schema mismatch crashes when running epics.
+- **Epic state schema undocumented** — Added epic state schema to `execute-feature/REFERENCE.md` alongside the single-spec schema
+- **Orchestrator crash handler timing** — Crash handler now registers before config load; config parse failures produce notifications instead of silent crashes
+- **Leaked attempt branches on crash** — New `cleanup_attempt_branches()` runs at startup; `create_attempt_branch()` handles pre-existing branches from previous crashes
+- **Archive spec safety** — `archive_spec()` now writes updated content to archive destination first, removes original only after success (prevents corruption if move fails)
+- **Verify session errors unchecked** — Added `is_session_error()` check before reading verification result file (prevents reading stale results from previous stories)
+- **Agent JSON output brittleness** — `read_json_result()` now handles markdown fences, preamble text, and trailing commas in agent output
+- **Unbounded learnings accumulation** — Per-story learnings capped at 20 at write time (was only pruned to 15 at read time)
+- **Scratchpad creation silent failures** — `create_scratchpad.py` now reports failure messages instead of silently swallowing errors
+- **Placeholder validation false positives** — `validate_seeded_template.py` uses strict whitelist patterns (`[FILL:`, `[TODO:`, 3+ char ALL_CAPS) instead of broad regex that caught legitimate markdown
+- **Checkbox detection inconsistency** — `detect_phase_completion.py` now uses consistent case matching for checked/unchecked boxes; removed stale `prd/` path support
+- **Manifest gaps** — Added missing templates to SEED_MANIFEST (BACKLOG, AUDIT_FINDINGS, SESSION_LOG) and SYNC_MANIFEST (MILESTONES, BACKLOG, pattern docs)
+
+### Changed
+- **`execute-feature` skill (Step 6)** — State initialization split by mode: autonomous/guarded defer to orchestrator, supervised creates single-spec state directly
+- **`execution-status` skill** — Token estimates display conditional on field existence
+- **Network retry logic** — Rewrote `run_claude_session()` with clearer flow; explicit network vs non-network error handling
+- **Duplicate code extraction** — Extracted `_store_attempt_diff()` helper, replacing 3 duplicate spec_key conditional blocks
+- **Template versions normalized** — All 30 templates updated to version `2.0.0`
+- **Story quality pre-flight check** — `execute-feature` skill Step 3 now includes story quality validation (vague criteria, under-specified stories)
+- **`release-version` skill** — Now checks for template version changes during release
+
+### Removed
+- **Dead code** — Removed unused `summarize_diff_for_prompt()` function, unused `shutil` and `Path` imports from orchestrator
+
 ## [2.1.0] - 2025-03-04
 
 ### Added

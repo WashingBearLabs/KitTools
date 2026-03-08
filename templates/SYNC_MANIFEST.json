@@ -307,16 +307,71 @@
       "validation_issues": [],
       "last_updated_in_doc": null,
       "last_code_change": null
+    },
+    "roadmap/MILESTONES.md": {
+      "path": "kit_tools/roadmap/MILESTONES.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "roadmap/BACKLOG.md": {
+      "path": "kit_tools/roadmap/BACKLOG.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "arch/patterns/AUTH.md": {
+      "path": "kit_tools/arch/patterns/AUTH.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "arch/patterns/ERROR_HANDLING.md": {
+      "path": "kit_tools/arch/patterns/ERROR_HANDLING.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
+    },
+    "arch/patterns/LOGGING.md": {
+      "path": "kit_tools/arch/patterns/LOGGING.md",
+      "status": "pending",
+      "reviewed_at": null,
+      "drift_result": null,
+      "drift_issues": [],
+      "validation_result": null,
+      "validation_issues": [],
+      "last_updated_in_doc": null,
+      "last_code_change": null
     }
   },
 
   "conflicts": [],
 
   "summary": {
-    "total_documents": 20,
+    "total_documents": 25,
     "discovery_areas": 8,
     "by_status": {
-      "pending": 20,
+      "pending": 25,
       "reviewed": 0,
       "updated": 0,
       "skipped": 0,

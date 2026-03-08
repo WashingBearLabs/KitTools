@@ -285,13 +285,43 @@
       "validation_result": null,
       "validation_issues": [],
       "skipped_reason": null
+    },
+    "roadmap/BACKLOG.md": {
+      "tier": 4,
+      "path": "kit_tools/roadmap/BACKLOG.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
+    "AUDIT_FINDINGS.md": {
+      "tier": 5,
+      "path": "kit_tools/AUDIT_FINDINGS.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": "skip_if: always — populated by validate-feature skill"
+    },
+    "SESSION_LOG.md": {
+      "tier": 5,
+      "path": "kit_tools/SESSION_LOG.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": "skip_if: always — populated during sessions"
     }
   },
 
   "summary": {
-    "total": 24,
+    "total": 27,
     "by_status": {
-      "pending": 24,
+      "pending": 27,
       "seeded": 0,
       "validated": 0,
       "skipped": 0,
@@ -301,8 +331,8 @@
       "1": { "total": 5, "completed": 0 },
       "2": { "total": 5, "completed": 0 },
       "3": { "total": 9, "completed": 0 },
-      "4": { "total": 3, "completed": 0 },
-      "5": { "total": 1, "completed": 0 }
+      "4": { "total": 4, "completed": 0 },
+      "5": { "total": 3, "completed": 0 }
     },
     "validation": {
       "passed": 0,

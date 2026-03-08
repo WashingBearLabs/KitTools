@@ -14,21 +14,23 @@ import re
 import sys
 
 
-# Placeholder patterns that indicate unfilled template content
+# Placeholder patterns that indicate unfilled template content.
+# These are intentionally strict to minimize false positives on legitimate markdown.
 PLACEHOLDER_PATTERNS = [
-    # Square bracket placeholders
-    (r'\[([A-Z][A-Z_]+|[a-z][a-z_ ]+)\]', 'bracket placeholder'),
+    # FILL-style placeholders: [FILL: description] or [TODO: description]
+    (r'\[(FILL|TODO|REPLACE|INSERT|ADD|DESCRIBE|LIST|SPECIFY)[:\s][^\]]*\]', 'fill placeholder'),
+    # ALL-CAPS bracket placeholders (3+ chars): [PROJECT_NAME], [API_URL], etc.
+    # Excludes common legitimate markdown like [NOTE], [TIP], [OK]
+    (r'\[([A-Z][A-Z_]{2,})\]', 'bracket placeholder'),
     # Date placeholders in content (not in version comments)
     (r'(?<!Version: \d\.\d\.)YYYY-MM-DD', 'date placeholder'),
-    # Mustache placeholders (but not in agent/skill templates)
-    (r'\{\{[^}]+\}\}', 'mustache placeholder'),
-    # Path placeholders
+    # Path placeholders with explicit "path" keyword
     (r'\[path[^\]]*\]', 'path placeholder'),
-    # Choice placeholders
+    # Choice placeholders: [type:X|Y|Z]
     (r'\[type:[^\]]+\]', 'choice placeholder'),
-    # URL placeholders
+    # URL placeholders with explicit "URL" keyword
     (r'\[[^\]]*URL[^\]]*\]', 'URL placeholder'),
-    # Feature list placeholders
+    # Feature list placeholders (numbered template items)
     (r'- \[Feature \d', 'list item placeholder'),
 ]
 
@@ -79,9 +81,6 @@ def check_for_placeholders(content: str) -> list:
                 for match in matches:
                     # Skip if it's part of a version comment on same line
                     if 'Template Version:' in line and issue_type == 'date placeholder':
-                        continue
-                    # Skip common false positives
-                    if match in ['x', 'X', ' ', '']:
                         continue
                     issues.append({
                         'line': line_num,
