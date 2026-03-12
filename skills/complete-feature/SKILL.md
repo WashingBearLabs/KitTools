@@ -7,6 +7,8 @@ description: Mark a feature spec as completed and archive it
 
 Mark a feature spec as completed and move it to the archive. Run when all user stories are implemented and verified.
 
+> **Note:** In autonomous/guarded mode, the orchestrator handles completion directly via the `completion_strategy` config option (`"pr"`, `"merge"`, or `"none"`). This skill is for manual/supervised use or as a fallback when the orchestrator's completion fails.
+
 Read `REFERENCE.md` in this skill directory for epic handling details, PR formats, and edge cases.
 
 ## Dependencies

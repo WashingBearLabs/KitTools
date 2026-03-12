@@ -5,6 +5,24 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.2] - 2026-03-11
+
+### Added
+- **Inline diff for verifier** — Verifier agent now receives the full diff content inline (up to 20KB), reducing tool calls and speeding up verification. Truncated diffs include a stat summary and instruct the verifier to use the Read tool for full files.
+- **Fail-fast test flags** — Verifier test commands now include fail-fast flags for known runners: pytest (`-x`), jest/npm test (`--bail`), vitest (`--bail 1`). The full test suite (without fail-fast) is preserved for validate-feature.
+- **Completion strategy** — New `completion_strategy` config option (`"pr"`, `"merge"`, or `"none"`) controls post-execution behavior. The orchestrator now handles completion directly in Python instead of spawning a `claude -p` session for `/kit-tools:complete-feature`.
+  - `"pr"` (default): pushes branch and creates a GitHub PR via `gh`
+  - `"merge"`: auto-merges to main (blocked if validation finds critical issues, falls back to PR)
+  - `"none"`: leaves branch as-is
+  - All strategies include artifact cleanup and tmux session teardown
+
+### Changed
+- **Pre-attempt HEAD capture** — Diff commands for the verifier now use explicit two-dot syntax (`{pre_attempt_head}..HEAD`) instead of three-dot merge-base syntax, eliminating ambiguity in multi-commit scenarios
+- **Verifier review instructions** — Step 1 updated from "Read Changed Files" to "Review Changes", reflecting the inline diff workflow
+- **`complete-feature` skill** — Added note that autonomous/guarded mode handles completion via the orchestrator; skill is for manual/supervised use or fallback
+- **`execute-feature` skill** — Added Step 2b (completion strategy selection) and pre-flight check 10 (gh auth verification when PR strategy selected)
+- **Epic completion** — `run_epic()` no longer spawns a `claude -p` complete-feature session; uses `complete_feature()` directly
+
 ## [2.1.1] - 2026-03-07
 
 ### Fixed

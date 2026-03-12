@@ -17,6 +17,7 @@ Detailed formats, schemas, and examples for the execute-feature workflow. Read t
   "mode": "autonomous",
   "max_retries": null,
   "tmux_session": "kit-exec-auth",
+  "completion_strategy": "pr",
   "implementer_template": "... raw story-implementer.md content ...",
   "verifier_template": "... raw story-verifier.md content ...",
   "project_context": {
@@ -38,6 +39,7 @@ Detailed formats, schemas, and examples for the execute-feature workflow. Read t
   "mode": "autonomous",
   "max_retries": null,
   "tmux_session": "kit-exec-arxiv",
+  "completion_strategy": "pr",
   "implementer_template": "... raw story-implementer.md content ...",
   "verifier_template": "... raw story-verifier.md content ...",
   "project_context": {
@@ -73,6 +75,8 @@ Detailed formats, schemas, and examples for the execute-feature workflow. Read t
 ```
 
 When `epic_specs` is present, the orchestrator runs in epic mode. When absent, it runs in single-feature-spec mode. Exclude already-completed/archived feature specs from `epic_specs`.
+
+`completion_strategy` controls post-execution behavior: `"pr"` (push + create GitHub PR, recommended), `"merge"` (auto-merge to main, blocked if validation finds critical issues), or `"none"` (leave branch as-is). Default: `"pr"`.
 
 ---
 
@@ -154,6 +158,7 @@ These tokens are used in the agent templates and interpolated by this skill (sup
 | `{{RETRY_CONTEXT}}` | Empty on first attempt; failure details on retry |
 | `{{PREVIOUS_ATTEMPT_DIFF}}` | Git diff from last failed attempt (for retries) |
 | `{{DIFF_STAT}}` | `git diff --stat` output showing scale of changes (verifier only) |
+| `{{DIFF_CONTENT}}` | Inline diff content, truncated at 20KB (verifier only) |
 | `{{FILES_CHANGED}}` | Files changed from git diff (verifier only) |
 | `{{SPEC_PATH}}` | Path to the feature spec file for cross-reference (verifier only) |
 | `{{TEST_COMMAND}}` | Auto-detected test command or skip instruction (verifier only) |

@@ -51,6 +51,18 @@ If selected feature spec has `epic` field: first check for an `epic-*.md` file f
 
 ---
 
+## Step 2b: Completion Strategy
+
+After all stories pass and validation completes, how should the feature be finalized?
+
+- **A. Create PR** (recommended) — Push branch, create GitHub PR for review
+- **B. Merge to main** — Auto-merge to main and delete branch (blocked if validation finds critical issues)
+- **C. None** — Leave branch as-is, clean up tmux only
+
+Store as `completion_strategy` in `.execution-config.json`: `"pr"`, `"merge"`, or `"none"`. Default: `"pr"`.
+
+---
+
 ## Step 3: Pre-flight Checks
 
 Run checks and report pass/fail for each:
@@ -68,6 +80,7 @@ Run checks and report pass/fail for each:
    - Stories with fewer than 2 acceptance criteria (may be under-specified)
    - Acceptance criteria that are vague (e.g., "works correctly", "is fast", "looks good")
    - If issues found: warn with specifics, ask user to confirm or refine before proceeding
+10. **gh auth** (if `completion_strategy` is `"pr"`) — Run `gh auth status`. If fails, warn and ask user to pick a different strategy or fix auth.
 
 ---
 

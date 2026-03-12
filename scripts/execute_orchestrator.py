@@ -36,6 +36,7 @@ NETWORK_RETRY_WAIT = 30  # seconds between network retries
 NETWORK_MAX_RETRIES = 3
 PERMANENT_ERROR_KEYWORDS = ["context", "too long", "token limit", "input.*too.*large", "maximum.*context"]
 MAX_PROMPT_CHARS = 480_000
+DIFF_CONTENT_MAX = 20_000  # max chars of inline diff for verifier
 PAUSE_MAX_WAIT = 86400  # 24 hours max pause
 PAUSE_LOG_INTERVAL = 60  # log reminder every minute
 
@@ -502,6 +503,7 @@ def check_and_trim_prompt(prompt: str, context_type: str) -> str:
         ]
     elif context_type == "verification":
         trim_order = [
+            ("### Diff Content", "[Trimmed — prompt too large]"),
             ("### Files Changed (from git)", "[Trimmed — prompt too large]"),
             ("### Diff Stat", "[Trimmed — prompt too large]"),
         ]
@@ -651,7 +653,8 @@ def build_implementation_prompt(
 
 def build_verification_prompt(
     story: dict, config: dict, files_changed_from_git: str,
-    diff_stat: str = "", test_command: str | None = None, spec_path: str = ""
+    diff_stat: str = "", test_command: str | None = None, spec_path: str = "",
+    diff_content: str = ""
 ) -> str:
     """Interpolate the story-verifier template with git-sourced context.
 
@@ -661,6 +664,7 @@ def build_verification_prompt(
         diff_stat: Output of `git diff --stat` for the attempt.
         test_command: Auto-detected test command, or None.
         spec_path: Path to the feature spec file for cross-reference.
+        diff_content: Inline diff content (truncated if over DIFF_CONTENT_MAX).
     """
     template = strip_frontmatter(config["verifier_template"])
     context = config.get("project_context", {})
@@ -673,6 +677,7 @@ def build_verification_prompt(
     prompt = prompt.replace("{{ACCEPTANCE_CRITERIA}}", story["criteria_text"])
     prompt = prompt.replace("{{DIFF_STAT}}", diff_stat or "No diff stat available.")
     prompt = prompt.replace("{{FILES_CHANGED}}", files_changed_from_git or "No files changed detected")
+    prompt = prompt.replace("{{DIFF_CONTENT}}", diff_content or "No diff content available.")
     # Reference-based context paths
     prompt = prompt.replace("{{SYNOPSIS_PATH}}", context.get("synopsis", "kit_tools/SYNOPSIS.md"))
     prompt = prompt.replace("{{CODE_ARCH_PATH}}", context.get("code_arch", "kit_tools/arch/CODE_ARCH.md"))
@@ -1233,6 +1238,215 @@ def commit_tracking_files(project_dir: str, feature_name: str) -> None:
     )
 
 
+def is_validation_clean(project_dir: str) -> bool:
+    """Check if the last validation run was clean (no critical findings, no pause).
+
+    Returns False if a pause file exists or AUDIT_FINDINGS.md contains
+    unresolved critical findings.
+    """
+    if pause_file_exists(project_dir):
+        return False
+    audit_path = os.path.join(project_dir, "kit_tools", "AUDIT_FINDINGS.md")
+    if not os.path.exists(audit_path):
+        return True
+    try:
+        with open(audit_path, "r") as f:
+            content = f.read()
+        # Look for unresolved critical findings (severity: critical without a ✅ resolved marker)
+        if re.search(r"(?i)severity:\s*critical", content) and "✅" not in content:
+            return False
+    except OSError:
+        pass
+    return True
+
+
+def _cleanup_execution_artifacts(project_dir: str) -> None:
+    """Remove execution state files after completion."""
+    for rel_path in [
+        os.path.join("kit_tools", "specs", ".execution-state.json"),
+        os.path.join("kit_tools", "specs", ".execution-config.json"),
+        os.path.join("kit_tools", ".pause_execution"),
+    ]:
+        full = os.path.join(project_dir, rel_path)
+        if os.path.exists(full):
+            try:
+                os.remove(full)
+            except OSError:
+                pass
+
+
+def _build_pr_body(config: dict, state: dict) -> str:
+    """Build a PR description body from execution state."""
+    lines = ["## Summary\n"]
+    if config.get("epic_specs"):
+        # Epic mode
+        epic_name = config.get("epic_name", "epic")
+        specs = config.get("epic_specs", [])
+        lines.append(f"Epic **{epic_name}** — {len(specs)} feature specs completed.\n")
+        for spec_info in specs:
+            lines.append(f"- {spec_info['feature_name']}")
+        lines.append("")
+    else:
+        # Standalone mode
+        feature_name = config.get("feature_name", "feature")
+        stories = state.get("stories", {})
+        story_count = len([s for s in stories.values() if s.get("status") == "completed"])
+        total_attempts = sum(s.get("attempts", 0) for s in stories.values())
+        sessions = state.get("sessions", {})
+        lines.append(f"Feature **{feature_name}** — {story_count} stories completed.")
+        lines.append(f"- Total attempts: {total_attempts}")
+        lines.append(f"- Sessions: {sessions.get('total', 0)} total "
+                      f"({sessions.get('implementation', 0)} impl, "
+                      f"{sessions.get('verification', 0)} verify, "
+                      f"{sessions.get('validation', 0)} validation)")
+        lines.append("")
+
+    lines.append("---")
+    lines.append("Generated by KitTools autonomous execution")
+    return "\n".join(lines)
+
+
+def complete_feature(config: dict, state: dict, validation_clean: bool) -> None:
+    """Handle post-execution completion based on the configured strategy.
+
+    Strategies:
+        "pr"    — Push branch, create GitHub PR
+        "merge" — Merge to main (blocked if validation found critical issues)
+        "none"  — Leave branch as-is
+    """
+    strategy = config.get("completion_strategy", "none")
+    project_dir = config["project_dir"]
+    branch = config["branch_name"]
+    feature_name = config.get("feature_name") or config.get("epic_name", "feature")
+
+    # Archive spec if single mode and spec still exists
+    if not config.get("epic_specs"):
+        spec_path = config.get("spec_path", "")
+        if spec_path and os.path.exists(spec_path):
+            archive_spec(project_dir, spec_path, feature_name)
+            run_git(
+                ["commit", "-m", f"chore({feature_name}): archive feature spec", "--allow-empty"],
+                project_dir, check=True
+            )
+
+    # Commit tracking files
+    commit_tracking_files(project_dir, feature_name)
+
+    # --- Merge strategy ---
+    if strategy == "merge":
+        if not validation_clean:
+            log("Validation found critical issues — merge blocked. Falling back to PR.")
+            write_notification(
+                config, "completion_fallback",
+                "Merge blocked — falling back to PR",
+                f"Critical validation findings prevent auto-merge for {feature_name}.",
+                severity="warning",
+            )
+            strategy = "pr"
+        else:
+            # Attempt merge
+            checkout_result = run_git(["checkout", "main"], project_dir)
+            if checkout_result.returncode != 0:
+                log(f"Failed to checkout main: {checkout_result.stderr.strip()[:200]}")
+                log("Falling back to PR strategy.")
+                run_git(["checkout", branch], project_dir)
+                strategy = "pr"
+            else:
+                merge_result = run_git(["merge", branch, "--no-edit"], project_dir)
+                if merge_result.returncode != 0:
+                    log(f"Merge failed: {merge_result.stderr.strip()[:200]}")
+                    log("Aborting merge, falling back to PR strategy.")
+                    run_git(["merge", "--abort"], project_dir)
+                    run_git(["checkout", branch], project_dir)
+                    write_notification(
+                        config, "completion_fallback",
+                        "Merge failed — falling back to PR",
+                        f"Merge conflict for {feature_name}. Branch left as-is.",
+                        severity="warning",
+                    )
+                    strategy = "pr"
+                else:
+                    # Merge succeeded — delete feature branch
+                    run_git(["branch", "-d", branch], project_dir)
+                    log(f"Merged {branch} into main and deleted feature branch.")
+                    write_notification(
+                        config, "feature_merged",
+                        f"Feature merged: {feature_name}",
+                        f"Branch {branch} merged to main and deleted.",
+                        severity="info",
+                    )
+                    _cleanup_execution_artifacts(project_dir)
+                    kill_tmux_session(config)
+                    return
+
+    # --- PR strategy ---
+    if strategy == "pr":
+        # Check gh availability
+        gh_available = True
+        try:
+            gh_check = subprocess.run(
+                ["gh", "auth", "status"],
+                capture_output=True, text=True, timeout=15
+            )
+            if gh_check.returncode != 0:
+                gh_available = False
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            gh_available = False
+
+        if not gh_available:
+            log("gh CLI not available or not authenticated. Leaving branch as-is.")
+            write_notification(
+                config, "completion_fallback",
+                "PR creation skipped — gh unavailable",
+                f"Install/authenticate gh CLI to create PRs. Branch {branch} is ready.",
+                severity="warning",
+            )
+            strategy = "none"
+        else:
+            # Push and create PR
+            push_result = run_git(["push", "-u", "origin", branch], project_dir)
+            if push_result.returncode != 0:
+                log(f"Push failed: {push_result.stderr.strip()[:200]}")
+                log("Branch left as-is.")
+                write_notification(
+                    config, "completion_fallback",
+                    "Push failed — PR not created",
+                    f"Could not push {branch}. Create PR manually.",
+                    severity="warning",
+                )
+            else:
+                pr_title = f"feat({feature_name}): autonomous implementation"
+                pr_body = _build_pr_body(config, state)
+                try:
+                    pr_result = subprocess.run(
+                        ["gh", "pr", "create", "--title", pr_title, "--body", pr_body],
+                        capture_output=True, text=True, timeout=30,
+                        cwd=project_dir
+                    )
+                    if pr_result.returncode == 0:
+                        pr_url = pr_result.stdout.strip()
+                        log(f"PR created: {pr_url}")
+                        write_notification(
+                            config, "pr_created",
+                            f"PR created: {feature_name}",
+                            f"PR: {pr_url}",
+                            severity="info",
+                        )
+                    else:
+                        log(f"PR creation failed: {pr_result.stderr.strip()[:200]}")
+                        log(f"Branch {branch} has been pushed — create PR manually.")
+                except (subprocess.TimeoutExpired, OSError) as e:
+                    log(f"PR creation error: {e}")
+                    log(f"Branch {branch} has been pushed — create PR manually.")
+
+    # --- None strategy (or fallback) ---
+    if strategy == "none":
+        log(f"Branch {branch} left as-is. No merge or PR created.")
+
+    _cleanup_execution_artifacts(project_dir)
+    kill_tmux_session(config)
+
+
 # --- Test Command Detection ---
 
 
@@ -1314,6 +1528,19 @@ def detect_test_command(project_dir: str) -> str | None:
     return None
 
 
+def make_fail_fast(test_command: str) -> str:
+    """Append fail-fast flags to known test runners."""
+    if not test_command:
+        return test_command
+    if "pytest" in test_command:
+        return f"{test_command} -x"
+    if test_command in ("npm test",) or "npx jest" in test_command:
+        return f"{test_command} -- --bail"
+    if "vitest" in test_command:
+        return f"{test_command} --bail 1"
+    return test_command
+
+
 # --- Utilities ---
 
 
@@ -1351,6 +1578,7 @@ def execute_spec_stories(
 
     # Auto-detect test command once per feature spec execution
     test_command = detect_test_command(project_dir)
+    fail_fast_test = make_fail_fast(test_command) if test_command else None
     if test_command:
         log(f"  Detected test command: {test_command}")
 
@@ -1414,6 +1642,9 @@ def execute_spec_stories(
 
             # Clean result files before each attempt
             clean_result_files(project_dir)
+
+            # --- Capture pre-attempt HEAD for unambiguous diffs ---
+            pre_attempt_head = get_head_commit(project_dir)
 
             # --- Create attempt branch ---
             attempt_branch = create_attempt_branch(
@@ -1487,18 +1718,36 @@ def execute_spec_stories(
 
             # --- Get files changed from git (for verifier) ---
             git_files_result = run_git(
-                ["diff", "--name-only", f"{feature_branch}...{attempt_branch}"], project_dir
+                ["diff", "--name-only", f"{pre_attempt_head}..HEAD"], project_dir
             )
             files_changed_from_git = git_files_result.stdout.strip() if git_files_result.returncode == 0 else ""
 
             # --- Get diff stat (for verifier) ---
-            diff_stat = get_diff_stat(project_dir, feature_branch, attempt_branch)
+            diff_stat_result = run_git(
+                ["diff", "--stat", f"{pre_attempt_head}..HEAD"], project_dir
+            )
+            diff_stat = diff_stat_result.stdout.strip() if diff_stat_result.returncode == 0 else ""
+
+            # --- Capture inline diff content (for verifier) ---
+            diff_content_result = run_git(
+                ["diff", f"{pre_attempt_head}..HEAD"], project_dir
+            )
+            raw_diff = diff_content_result.stdout.strip() if diff_content_result.returncode == 0 else ""
+            if len(raw_diff) <= DIFF_CONTENT_MAX:
+                diff_content = raw_diff
+            else:
+                diff_content = (
+                    f"[Diff truncated — {len(raw_diff)} chars exceeds {DIFF_CONTENT_MAX} limit. "
+                    f"Use the Read tool to examine full files.]\n\n"
+                    f"Diff stat:\n{diff_stat}"
+                )
 
             # --- Verification session ---
             log(f"  Verifying {story['id']}...")
             verify_prompt = build_verification_prompt(
                 story, config, files_changed_from_git,
-                diff_stat=diff_stat, test_command=test_command, spec_path=spec_path
+                diff_stat=diff_stat, test_command=fail_fast_test, spec_path=spec_path,
+                diff_content=diff_content
             )
             verify_prompt = check_and_trim_prompt(verify_prompt, "verification")
 
@@ -1683,24 +1932,30 @@ def run_single_spec(config: dict) -> None:
     else:
         log("Feature validation complete.")
 
-    # Check for pause file (created by validate-feature if critical findings exist)
+    # Determine if validation was clean
+    validation_clean = not is_session_error(validate_output) and is_validation_clean(project_dir)
+
+    # Handle pause file based on completion strategy
+    strategy = config.get("completion_strategy", "none")
     if pause_file_exists(project_dir):
-        log("Critical validation findings detected. Pausing before completion.")
-        write_notification(
-            config, "execution_paused",
-            "Execution paused",
-            f"Critical validation findings for {feature_label}. Review AUDIT_FINDINGS.md.",
-            severity="warning",
-        )
-        wait_for_pause_removal(project_dir, config=config)
-        log("Resuming after pause. Proceeding to completion.")
+        if strategy == "merge":
+            log("Critical findings detected — merge will be blocked.")
+            # Remove pause file since complete_feature handles the fallback
+            try:
+                os.remove(os.path.join(project_dir, "kit_tools", ".pause_execution"))
+            except OSError:
+                pass
+        else:
+            write_notification(
+                config, "execution_paused",
+                "Execution paused",
+                f"Critical validation findings for {feature_label}. Review AUDIT_FINDINGS.md.",
+                severity="warning",
+            )
+            wait_for_pause_removal(project_dir, config=config)
+            log("Resuming after pause. Proceeding to completion.")
 
-    # Commit tracking files (execution log, audit findings)
-    feature_name = config.get("feature_name", "feature")
-    commit_tracking_files(project_dir, feature_name)
-
-    # Clean up tmux session
-    kill_tmux_session(config)
+    complete_feature(config, state, validation_clean)
 
 
 # --- Epic Mode ---
@@ -1854,22 +2109,9 @@ def run_epic(config: dict) -> None:
         severity="info",
     )
 
-    # Final: run complete-feature for the epic
-    # (This handles PR creation for the epic branch)
-    complete_prompt = (
-        f"Run /kit-tools:complete-feature for the epic '{epic_name}'. "
-        f"Branch: {config['branch_name']}. "
-        f"All feature specs are archived. Create a PR for the epic branch."
-    )
-    complete_output = run_claude_session(complete_prompt, project_dir)
-
-    if is_session_error(complete_output):
-        log(f"Completion session error: {complete_output[:200]}")
-    else:
-        log("Epic completion done.")
-
-    # Clean up tmux session
-    kill_tmux_session(config)
+    # Complete the epic using the configured strategy
+    validation_clean = is_validation_clean(project_dir)
+    complete_feature(config, state, validation_clean)
 
 
 # --- Main ---

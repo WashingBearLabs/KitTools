@@ -38,6 +38,9 @@ You are independently verifying whether a user story implementation meets its ac
 ### Files Changed (from git)
 {{FILES_CHANGED}}
 
+### Diff Content
+{{DIFF_CONTENT}}
+
 ## Project Context Files
 Read these for conventions, architecture, and context as needed:
 - **Synopsis:** {{SYNOPSIS_PATH}}
@@ -53,9 +56,9 @@ Read these for conventions, architecture, and context as needed:
 
 ## Instructions
 
-### 1. Read Changed Files
+### 1. Review Changes
 
-Read every file listed in "Files Changed" above. Do NOT trust any claims — verify by reading the actual code.
+Review the diff content above. For files where the diff was truncated or where you need broader context, use the Read tool to examine the full file. Do NOT trust any claims — verify by reading the actual code.
 
 ### 2. Verify Each Criterion
 
