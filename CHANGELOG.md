@@ -5,6 +5,17 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.4] - 2026-03-18
+
+### Fixed
+- **Orphaned subprocess cleanup on timeout** — `run_claude_session()` now uses `Popen` with `start_new_session=True` and kills the entire process group (`os.killpg`) on timeout. Previously, timed-out sessions only killed the direct `claude` child process, leaving grandchild processes (pytest, node, etc.) running indefinitely and consuming CPU.
+
+## [2.1.3] - 2026-03-13
+
+### Changed
+- **Smart test scoping** — Story verification now runs only related tests instead of the full suite. Tests are matched by naming convention (e.g., `foo.py` → `test_foo.py`) or explicit `test_mapping` in `TESTING_GUIDE.md`. Full suite runs only at the validate-feature gate, with quiet flags (`-q --tb=line`, `--silent`, `--reporter=dot`).
+- **Test output control** — Agent test runs use quiet flags to suppress per-test PASSED noise while preserving full failure tracebacks. Safety-net `| head -200` caps runaway output without hiding failure details.
+
 ## [2.1.2] - 2026-03-11
 
 ### Added

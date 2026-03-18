@@ -159,6 +159,27 @@ Auto-detect in order:
 
 Test execution timeout: 5 minutes.
 
+### Output Control
+
+Run the full suite with quiet flags to suppress per-test PASSED noise, but preserve full failure output:
+- pytest: `-q --tb=short` (remove `-v` if present) — tracebacks for failures, no PASSED spam
+- jest: default output (verbose on failure only)
+- vitest: default reporter
+
+Pipe through `| head -200` as a safety net for runaway output. Never truncate in a way that hides failure tracebacks or assertion diffs.
+
+### Test Mapping (for story-level targeted tests)
+
+Projects can declare test mappings in `kit_tools/testing/TESTING_GUIDE.md` under a YAML code block:
+
+```yaml
+test_mapping:
+  "src/memory/**": "tests/test_memory*.py"
+  "src/core/**": "tests/test_perception*.py tests/test_context*.py"
+```
+
+The orchestrator uses this (plus heuristic name matching) to run only related tests during story verification. The full suite runs only at the validate-feature gate.
+
 ---
 
 ## Fix Mode Details

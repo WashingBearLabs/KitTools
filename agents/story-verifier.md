@@ -66,6 +66,9 @@ For each acceptance criterion:
 
 - **Does the code actually satisfy this criterion?** Read the relevant code and confirm.
 - **Run the test command** listed above (if available) to check for regressions and passing tests.
+  - If the test command section says "targeted tests", run ONLY those tests. Do NOT run the full test suite during story verification.
+  - Use quiet flags to suppress per-test PASSED lines, but let failure output (tracebacks, assertion diffs) flow in full — you need the details to assess what went wrong.
+  - As a safety net, pipe through `| head -200` to cap runaway output, but never truncate in a way that hides failure details.
 - **Run typecheck/lint commands** if the criteria mention them (e.g., `npx tsc --noEmit`, `npm run lint`).
 - **Cross-reference the feature spec** if a criterion is ambiguous — the feature spec has the full story description and intent.
 - **Check convention adherence** — does the implementation follow the project's stated conventions?

@@ -72,10 +72,14 @@ Spawn via Task tool. Parse findings.
 ## Step 4b: Test Execution
 
 1. **Detect test command** — Check: `package.json`, `pyproject.toml`, `pytest.ini`, `Makefile`, `TESTING_GUIDE.md`
-2. **Run tests** — Execute with 5-minute timeout
+2. **Run tests with minimal output** — Execute with 5-minute timeout. Use quiet flags to suppress per-test PASSED lines:
+   - pytest: add `-q --tb=short` (and remove `-v` if present) — suppresses passing tests, preserves failure tracebacks
+   - jest: default output is fine (only verbose on failure)
+   - vitest: default reporter is fine
+   - Pipe through `| head -200` as a safety net for runaway output, but let failure details (tracebacks, assertion diffs) flow in full
 3. **Report findings:**
    - Pass: info finding with test count
-   - Fail: critical finding with failure summary
+   - Fail: critical finding with failure summary including traceback details
    - No test command: info finding suggesting tests be added
 
 ---

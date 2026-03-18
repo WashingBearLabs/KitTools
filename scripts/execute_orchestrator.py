@@ -662,12 +662,41 @@ def build_verification_prompt(
         files_changed_from_git: File list from `git diff --name-only`, sourced
             by the orchestrator — NOT from the implementer's output.
         diff_stat: Output of `git diff --stat` for the attempt.
-        test_command: Auto-detected test command, or None.
+        test_command: Auto-detected test command (fail-fast), or None.
         spec_path: Path to the feature spec file for cross-reference.
         diff_content: Inline diff content (truncated if over DIFF_CONTENT_MAX).
     """
     template = strip_frontmatter(config["verifier_template"])
     context = config.get("project_context", {})
+
+    # Derive targeted test command from changed files
+    changed_files = [f.strip() for f in files_changed_from_git.split("\n") if f.strip()]
+    targeted_test = detect_related_tests(
+        changed_files, config["project_dir"], test_command
+    )
+
+    # Build the test command section
+    if targeted_test:
+        test_section = (
+            f"**Targeted tests** (based on changed files):\n"
+            f"Run: `{targeted_test}`\n\n"
+            f"**Important:** Only run the targeted command above. Do NOT run the full test suite. "
+            f"Use quiet flags to suppress PASSED lines, but let failure tracebacks flow in full. "
+            f"Pipe through `| head -200` as a safety net for runaway output."
+        )
+        if test_command:
+            test_section += (
+                f"\n\nFull suite command (for reference only — do NOT run during story verification): "
+                f"`{test_command}`"
+            )
+    elif test_command:
+        test_section = (
+            f"Run: `{test_command}`\n\n"
+            f"**Important:** Use quiet flags to suppress PASSED lines, but let failure tracebacks flow in full. "
+            f"Pipe through `| head -200` as a safety net for runaway output."
+        )
+    else:
+        test_section = "No test command detected — skip test step unless criteria explicitly mention tests."
 
     prompt = template
     prompt = prompt.replace("{{STORY_ID}}", story["id"])
@@ -684,10 +713,7 @@ def build_verification_prompt(
     prompt = prompt.replace("{{CONVENTIONS_PATH}}", context.get("conventions", "kit_tools/docs/CONVENTIONS.md"))
     prompt = prompt.replace("{{GOTCHAS_PATH}}", context.get("gotchas", "kit_tools/docs/GOTCHAS.md"))
     prompt = prompt.replace("{{SPEC_PATH}}", spec_path or "Not available")
-    prompt = prompt.replace(
-        "{{TEST_COMMAND}}",
-        f"Run: `{test_command}`" if test_command else "No test command detected — skip test step unless criteria explicitly mention tests."
-    )
+    prompt = prompt.replace("{{TEST_COMMAND}}", test_section)
     # Result file path for the agent to write to
     result_path = os.path.join(config["project_dir"], VERIFY_RESULT_FILE)
     prompt = prompt.replace("{{RESULT_FILE_PATH}}", result_path)
@@ -720,19 +746,31 @@ def run_claude_session(prompt: str, project_dir: str) -> str:
 
     for attempt in range(1, NETWORK_MAX_RETRIES + 1):
         try:
-            result = subprocess.run(
+            proc = subprocess.Popen(
                 ["claude", "-p", prompt, "--dangerously-skip-permissions"],
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=SESSION_TIMEOUT,
                 cwd=project_dir,
                 env=clean_env,
+                start_new_session=True,
             )
 
-            if result.returncode == 0:
-                return result.stdout
+            try:
+                stdout, stderr_out = proc.communicate(timeout=SESSION_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                # Kill the entire process group (claude + all children like pytest, node, etc.)
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except OSError:
+                    proc.kill()
+                proc.wait()
+                return f"SESSION_ERROR: Timed out after {SESSION_TIMEOUT}s"
 
-            stderr = result.stderr.strip()
+            if proc.returncode == 0:
+                return stdout
+
+            stderr = stderr_out.strip()
             is_network = any(kw in stderr.lower() for kw in ("network", "connection", "timeout", "econnrefused"))
 
             # Retry network errors (unless this is the last attempt)
@@ -745,10 +783,8 @@ def run_claude_session(prompt: str, project_dir: str) -> str:
             if is_network:
                 return f"SESSION_ERROR: Network error after {NETWORK_MAX_RETRIES} attempts\n{stderr}"
             prefix = "SESSION_ERROR_PERMANENT" if _is_permanent_error(stderr) else "SESSION_ERROR"
-            return f"{prefix}: Exit code {result.returncode}\n{stderr}\n{result.stdout}"
+            return f"{prefix}: Exit code {proc.returncode}\n{stderr}\n{stdout}"
 
-        except subprocess.TimeoutExpired:
-            return f"SESSION_ERROR: Timed out after {SESSION_TIMEOUT}s"
         except FileNotFoundError:
             return "SESSION_ERROR_PERMANENT: 'claude' command not found. Ensure Claude CLI is installed and in PATH."
 
@@ -1448,6 +1484,147 @@ def complete_feature(config: dict, state: dict, validation_clean: bool) -> None:
 
 
 # --- Test Command Detection ---
+
+
+def parse_test_mapping(project_dir: str) -> dict[str, str]:
+    """Parse test_mapping from TESTING_GUIDE.md if available.
+
+    Looks for a YAML code block under a '## Test Mapping' or 'test_mapping:' section.
+    Returns a dict mapping source glob patterns to test file patterns.
+    """
+    testing_guide = os.path.join(project_dir, "kit_tools", "testing", "TESTING_GUIDE.md")
+    if not os.path.exists(testing_guide):
+        return {}
+    try:
+        with open(testing_guide, "r") as f:
+            content = f.read()
+        # Look for test_mapping in a YAML code block
+        match = re.search(
+            r"```(?:ya?ml)?\s*\n(test_mapping:\s*\n.+?)```",
+            content, re.DOTALL
+        )
+        if match:
+            parsed = yaml.safe_load(match.group(1))
+            if isinstance(parsed, dict) and "test_mapping" in parsed:
+                mapping = parsed["test_mapping"]
+                if isinstance(mapping, dict):
+                    return {str(k): str(v) for k, v in mapping.items()}
+    except (OSError, yaml.YAMLError):
+        pass
+    return {}
+
+
+def detect_related_tests(
+    changed_files: list[str], project_dir: str, test_command: str | None
+) -> str | None:
+    """Derive a targeted test command from changed files.
+
+    Strategy:
+    1. Check TESTING_GUIDE.md for explicit test_mapping
+    2. Apply heuristic matching (source file → test file by naming convention)
+    3. Return targeted command if matching test files exist, else None (caller falls back)
+    """
+    if not changed_files or not test_command:
+        return None
+
+    # Filter to source files (skip configs, docs, test files themselves)
+    source_files = []
+    for f in changed_files:
+        if not f.strip():
+            continue
+        # Skip files that are already tests
+        basename = os.path.basename(f)
+        if basename.startswith("test_") or basename.endswith(("_test.py", ".test.ts", ".test.js", ".test.tsx", ".test.jsx", ".spec.ts", ".spec.js")):
+            continue
+        # Skip non-code files
+        if f.endswith((".md", ".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".txt", ".lock")):
+            continue
+        source_files.append(f)
+
+    if not source_files:
+        return None
+
+    # 1. Try explicit test_mapping from TESTING_GUIDE.md
+    test_mapping = parse_test_mapping(project_dir)
+    matched_tests: set[str] = set()
+
+    if test_mapping:
+        import fnmatch
+        for src_file in source_files:
+            for pattern, test_pattern in test_mapping.items():
+                if fnmatch.fnmatch(src_file, pattern):
+                    # test_pattern may contain multiple space-separated patterns
+                    for tp in test_pattern.split():
+                        matched_tests.add(tp)
+
+    # 2. Heuristic matching for files not caught by explicit mapping
+    import glob as glob_mod
+    for src_file in source_files:
+        basename = os.path.basename(src_file)
+        name_no_ext = os.path.splitext(basename)[0]
+        ext = os.path.splitext(basename)[1]
+
+        candidates = []
+        if ext == ".py":
+            # Python: foo.py → test_foo.py, tests/test_foo.py, tests/**/test_foo.py
+            candidates = [
+                f"**/test_{name_no_ext}.py",
+                f"**/{name_no_ext}_test.py",
+            ]
+        elif ext in (".ts", ".tsx", ".js", ".jsx"):
+            # JS/TS: foo.ts → foo.test.ts, foo.spec.ts, __tests__/foo.test.ts
+            for test_ext in (".test", ".spec"):
+                candidates.append(f"**/{name_no_ext}{test_ext}{ext}")
+
+        for pattern in candidates:
+            matches = glob_mod.glob(
+                os.path.join(project_dir, pattern), recursive=True
+            )
+            for m in matches:
+                matched_tests.add(os.path.relpath(m, project_dir))
+
+    if not matched_tests:
+        return None
+
+    # Build targeted command
+    # Verify matched test files actually exist (glob patterns from mapping may not)
+    existing_tests = []
+    for t in matched_tests:
+        if "*" in t or "?" in t:
+            # It's a glob pattern — check if it matches anything
+            matches = glob_mod.glob(os.path.join(project_dir, t), recursive=True)
+            if matches:
+                existing_tests.append(t)
+        elif os.path.exists(os.path.join(project_dir, t)):
+            existing_tests.append(t)
+
+    if not existing_tests:
+        return None
+
+    # Build the targeted command based on runner type
+    test_files_str = " ".join(sorted(existing_tests))
+    if "pytest" in test_command:
+        return f"python3 -m pytest {test_files_str} -x"
+    elif test_command == "npm test" or "jest" in test_command:
+        # Jest accepts file patterns
+        return f"npx jest {test_files_str} --bail"
+    elif "vitest" in test_command:
+        return f"npx vitest run {test_files_str} --bail 1"
+    else:
+        # Unknown runner — can't scope, return None to fall back
+        return None
+
+
+def make_quiet(test_command: str) -> str:
+    """Add quiet flags for full-suite runs. Suppresses PASSED noise, preserves failure tracebacks."""
+    if not test_command:
+        return test_command
+    if "pytest" in test_command:
+        # Remove -v if present, add -q --tb=short (preserves failure tracebacks)
+        cmd = re.sub(r"\s+-v\b", "", test_command)
+        return f"{cmd} -q --tb=short"
+    # jest and vitest default output already focuses on failures
+    return test_command
 
 
 def detect_test_command(project_dir: str) -> str | None:

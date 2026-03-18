@@ -79,6 +79,7 @@ Write the code changes using Edit and Write tools:
 - Make minimal, focused changes — only what the story requires
 - Do not refactor surrounding code or add features not in the acceptance criteria
 - Use existing patterns from the codebase rather than inventing new ones
+- If you run tests to check your work, only run tests related to the files you changed — do NOT run the full test suite. Use quiet flags (e.g., `-q` for pytest) but let failure tracebacks flow in full. Pipe through `| head -200` as a safety net for runaway output.
 
 ### 4. Commit
 

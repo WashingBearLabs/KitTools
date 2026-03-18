@@ -41,6 +41,7 @@ kit_tools/.pause_execution
 
 # Internal planning (not part of plugin distribution)
 ROADMAP.md
+KITTOOLS_UI_SPEC.md
 
 # Tests (development only, not shipped to users)
 tests/
