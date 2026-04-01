@@ -9,7 +9,7 @@ Supports two modes:
 - Single mode: executes stories from one feature spec on a feature/[name] branch
 - Epic mode: chains multiple feature specs on a shared epic/[name] branch
 
-Launched by the /kit-tools:execute-feature skill for autonomous/guarded modes.
+Launched by the /kit-tools:execute-epic skill for autonomous/guarded modes.
 
 Usage:
     python3 execute_orchestrator.py --config kit_tools/specs/.execution-config.json
@@ -21,6 +21,7 @@ import json
 import os
 import re
 import signal
+import platform
 import subprocess
 import sys
 import time
@@ -48,16 +49,49 @@ NOTIFICATION_FILE = os.path.join("kit_tools", ".execution-notifications")
 
 # --- Notifications ---
 
+# Severity levels that trigger desktop notifications
+DESKTOP_NOTIFY_SEVERITIES = {"critical", "warning"}
+# Notification types that always trigger desktop notifications regardless of severity
+DESKTOP_NOTIFY_TYPES = {"execution_complete", "execution_crashed", "epic_complete"}
+
 
 def get_notification_path(config: dict) -> str:
     """Return absolute path to the notification file."""
     return os.path.join(config["project_dir"], NOTIFICATION_FILE)
 
 
+def send_desktop_notification(title: str, message: str) -> None:
+    """Send an OS-level desktop notification. Best-effort — swallows all errors."""
+    try:
+        system = platform.system()
+        if system == "Darwin":
+            # macOS: use osascript
+            escaped_title = title.replace('"', '\\"')
+            escaped_msg = message.replace('"', '\\"')
+            subprocess.run(
+                ["osascript", "-e",
+                 f'display notification "{escaped_msg}" with title "{escaped_title}"'],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
+        elif system == "Linux":
+            # Linux: use notify-send if available
+            subprocess.run(
+                ["notify-send", title, message],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
+    except Exception:
+        pass
+
+
 def write_notification(
     config: dict, ntype: str, title: str, details: str, severity: str = "info"
 ) -> None:
-    """Append a JSON Lines notification entry. Best-effort — swallows OSError."""
+    """Append a JSON Lines notification entry and send desktop notification for
+    important events. Best-effort — swallows OSError."""
     try:
         path = get_notification_path(config)
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -73,6 +107,12 @@ def write_notification(
             f.write(json.dumps(entry) + "\n")
     except OSError:
         pass
+
+    # Send desktop notification for important events
+    if severity in DESKTOP_NOTIFY_SEVERITIES or ntype in DESKTOP_NOTIFY_TYPES:
+        feature = config.get("feature_name") or config.get("epic_name", "")
+        desktop_title = f"KitTools — {feature}" if feature else "KitTools"
+        send_desktop_notification(desktop_title, details)
 
 
 def kill_tmux_session(config: dict) -> None:

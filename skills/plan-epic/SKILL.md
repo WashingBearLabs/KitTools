@@ -1,9 +1,9 @@
 ---
-name: plan-feature
-description: Brainstorm and plan a new feature, creating a Feature Spec
+name: plan-epic
+description: Brainstorm and plan a new feature as an epic, creating an Epic and one or more Feature Specs
 ---
 
-# Plan Feature
+# Plan Epic
 
 Let's brainstorm and plan a new feature together. This is an interactive process.
 
@@ -11,7 +11,7 @@ Read `REFERENCE.md` in this skill directory for detailed examples, heuristics, a
 
 ## Your Role as Senior Dev
 
-**You are the senior developer.** Push back on scope creep, enforce atomic stories, detect epics early, validate before generating. Your goal is high-quality feature specs that can be implemented successfully.
+**You are the senior developer.** Push back on scope creep, enforce atomic stories, assess scope carefully, validate before generating. Your goal is high-quality feature specs that can be implemented successfully.
 
 ---
 
@@ -19,11 +19,11 @@ Read `REFERENCE.md` in this skill directory for detailed examples, heuristics, a
 
 | File | Required | Purpose |
 |------|----------|---------|
-| `kit_tools/specs/` directory | Yes | Location for new feature spec |
+| `kit_tools/specs/` directory | Yes | Location for new feature spec(s) |
 | `kit_tools/roadmap/BACKLOG.md` | Yes | To add feature reference |
 | `$CLAUDE_PLUGIN_ROOT/templates/specs/FEATURE_SPEC.md` | Yes | Template for new feature spec |
+| `$CLAUDE_PLUGIN_ROOT/templates/specs/EPIC.md` | Yes | Template for epic wrapper |
 | `kit_tools/PRODUCT_VISION.md` | Optional | Product vision for strategic context |
-| `$CLAUDE_PLUGIN_ROOT/templates/specs/EPIC.md` | Optional | Template for epic decomposition |
 
 ---
 
@@ -48,21 +48,21 @@ Ask: **What's the feature?** **What problem does it solve?** **What triggered th
 
 ---
 
-## Step 3: Epic detection (CRITICAL)
+## Step 3: Scope Assessment & Decomposition
 
-Flag as epic if ANY apply: multiple subsystems, scope keywords ("entire", "full", "system"), layer spanning, multiple user types, vague boundaries.
+Assess how many feature specs this work requires. Ask: how many architectural layers are involved? Can this be done in 1 spec or does it span multiple concerns?
 
-### If epic detected
+- **Simple work** → 1 spec (still creates an `epic-*.md` wrapper)
+- **Moderate work** (2-3 layers or distinct concerns) → 2-3 specs
+- **Complex work** → 3-5+ specs decomposed by layer/concern
 
-Stop and tell the user directly. Propose decomposition into session-sized feature specs.
+Present the proposed decomposition to the user and confirm before proceeding. Always create an `epic-*.md` regardless of spec count.
 
-### If NOT an epic
-
-Proceed to Step 4.
+See REFERENCE.md for decomposition guidelines and examples.
 
 ---
 
-## Step 3b: Epic decomposition
+## Step 3b: Decomposition
 
 Break down by **layer and concern**. Present a table with feature spec names, story counts, dependencies. Set `epic`, `epic_seq`, `epic_final` frontmatter correctly. Generate an explicit `kit_tools/specs/epic-[name].md` using the EPIC.md template.
 
@@ -123,7 +123,9 @@ Verify: 3-5 criteria per story, single layer focus, dependencies clear, stories 
 
 ## Step 10: Generate the Feature Spec
 
-Create `kit_tools/specs/feature-[feature-name].md` using the FEATURE_SPEC.md template. Set frontmatter fields including `vision_ref:` (if applicable) and `type:`. See REFERENCE.md for field reference.
+Create `kit_tools/specs/epic-[name].md` FIRST using the EPIC.md template, then create each feature spec as `kit_tools/specs/feature-[feature-name].md` using the FEATURE_SPEC.md template.
+
+All feature specs — including single-spec epics — must have `epic`, `epic_seq`, and `type: epic-child` frontmatter. Set `vision_ref:` if applicable. See REFERENCE.md for field reference.
 
 ---
 
@@ -166,7 +168,7 @@ Update the feature spec's Refinement Notes: research conducted, scope adjustment
 
 ## Step 12: Update tracking files
 
-1. Add feature spec reference to `kit_tools/roadmap/BACKLOG.md`. For epics, group as a section.
+1. Add feature spec reference to `kit_tools/roadmap/BACKLOG.md`. Group epic specs as a section.
 2. Update `kit_tools/roadmap/MILESTONES.md`:
    - Determine priority (P0/P1/P2) based on feature goals and urgency
    - Ask user to confirm placement: "I'd suggest this as a **P1** milestone item. Does that feel right?"
@@ -176,7 +178,9 @@ Update the feature spec's Refinement Notes: research conducted, scope adjustment
 
 ## Step 13: Summary
 
-Report: feature(s) planned, epic decomposition (if any), feature spec location(s), story counts, refinement status, session readiness, dependencies, key decisions, open questions, milestone placement, next steps.
+Report: feature(s) planned, epic decomposition, feature spec location(s), story counts, refinement status, session readiness, dependencies, key decisions, open questions, milestone placement, next steps.
+
+> **Before executing:** Run `/kit-tools:validate-epic` to validate your feature specs before starting autonomous execution. This catches missing stories, vague criteria, and implementation gaps before the coding agent hits them.
 
 ---
 
@@ -184,9 +188,10 @@ Report: feature(s) planned, epic decomposition (if any), feature spec location(s
 
 | Skill | When to use |
 |-------|-------------|
-| `/kit-tools:execute-feature` | To execute feature spec stories |
+| `/kit-tools:validate-epic` | To validate epic and feature specs before execution |
+| `/kit-tools:execute-epic` | To execute feature spec stories |
 | `/kit-tools:complete-feature` | To mark feature spec completed and archive it |
 
 ---
 
-**Note:** This skill creates the feature spec but does NOT change your Active Feature in the scratchpad.
+**Note:** This skill creates the feature spec(s) but does NOT change your Active Feature in the scratchpad.

@@ -1,6 +1,6 @@
 # kit-tools
 
-A documentation framework for AI-assisted development by [WashingBearLabs](https://github.com/WashingBearLabs).
+A framework for AI-assisted development by [WashingBearLabs](https://github.com/WashingBearLabs).
 
 ## What is kit-tools?
 
@@ -9,9 +9,9 @@ kit-tools is a Claude Code plugin that provides:
 - **Structured documentation templates** — Consistent docs across projects
 - **Session management** — Track work across context refreshes
 - **Automation hooks** — Auto-timestamps, scratchpad reminders
-- **Feature planning** — Brainstorm and plan features with guided workflows
+- **Feature planning & execution** — Plan epics, validate specs, and execute stories autonomously
 
-Think of it as a "documentation kit" for your projects, with AI-aware features built in.
+Structured documentation, autonomous execution, and guided workflows — built for Claude Code.
 
 ## Installation
 
@@ -68,18 +68,18 @@ git clone https://github.com/WashingBearLabs/KitTools.git
 | `/kit-tools:seed-project` | Populate templates from codebase exploration |
 | `/kit-tools:seed-template` | Seed a single template with project-specific content |
 | `/kit-tools:validate-seeding` | Validate seeded templates for unfilled placeholders |
-| `/kit-tools:migrate` | Migrate a v1.x project to v2.0+ structure |
 | `/kit-tools:start-session` | Orient and create scratchpad for a work session |
 | `/kit-tools:close-session` | Process notes and update docs at session end |
 | `/kit-tools:checkpoint` | Mid-session checkpoint without closing |
 | `/kit-tools:create-vision` | Define the product vision interactively |
-| `/kit-tools:plan-feature` | Create a Feature Spec for a new feature |
+| `/kit-tools:plan-epic` | Plan a new feature or epic, creating an Epic and Feature Specs |
+| `/kit-tools:validate-epic` | Validate feature specs before execution — completeness, story quality, adversarial review, cross-model second opinion |
+| `/kit-tools:execute-epic` | Execute an epic's feature specs autonomously, supervised, or guarded |
 | `/kit-tools:complete-feature` | Mark a Feature Spec as completed and archive it |
 | `/kit-tools:sync-project` | Full sync between code and docs (`--quick` for audit) |
 | `/kit-tools:validate-feature` | Validate a feature branch against its feature spec (quality, security, compliance) |
 | `/kit-tools:update-kit-tools` | Update project components from latest plugin versions |
-| `/kit-tools:execute-feature` | Execute feature spec stories autonomously, supervised, or guarded |
-| `/kit-tools:execution-status` | Check progress and status of autonomous feature execution |
+| `/kit-tools:execution-status` | Check progress and status of autonomous epic execution |
 | `/kit-tools:sync-symlinks` | Force-refresh skill symlinks after a plugin update |
 
 ## Hooks
@@ -214,18 +214,18 @@ Validation runs automatically after autonomous execution completes, and can be i
 
 ## Feature Planning
 
-Use `/kit-tools:plan-feature` to create Feature Specs:
+Use `/kit-tools:plan-epic` to create epics and feature specs:
 
 1. Optional **Product Vision** for strategic context (define with `/kit-tools:create-vision`)
 2. Interactive questions refine scope and requirements
-3. **Epic detection** — Large features are automatically decomposed into multiple feature specs with an explicit epic file
-4. Generates `feature-[name].md` with:
-   - Overview and goals
+3. **Scope assessment** — Determines how many feature specs the work requires (1 for simple, 2-5+ for complex). All work is structured as an epic, even single-spec features.
+4. Generates `epic-[name].md` + `feature-[name].md` files with:
+   - Epic overview and completion criteria
    - User stories with acceptance criteria (US-XXX format)
    - Out of scope boundaries
    - Technical considerations
 5. Links to backlog and milestone tracking
-6. Captures implementation notes as you work
+6. Run `/kit-tools:validate-epic` before execution to catch gaps early
 
 ### Session-Fit Guidelines
 
@@ -256,19 +256,21 @@ Large features ("epics") are automatically split into focused feature specs with
 ### Feature Spec Lifecycle
 
 ```
-/plan-feature → feature-auth.md (status: active, session_ready: true)
+/plan-epic → epic-auth.md + feature-auth-schema.md + feature-auth-api.md
        ↓
-    Work on feature, check off acceptance criteria
+/validate-epic auth → catch gaps before coding starts
        ↓
-/complete-feature → feature-auth.md moves to specs/archive/
+/execute-epic auth → autonomous execution, story by story
+       ↓
+/complete-feature → feature specs move to specs/archive/
 ```
 
 ### Autonomous Execution
 
-kit-tools can execute feature spec stories autonomously using `/kit-tools:execute-feature`:
+kit-tools can execute feature spec stories autonomously using `/kit-tools:execute-epic`:
 
 ```
-/kit-tools:execute-feature    # Select feature spec, choose execution mode, run
+/kit-tools:execute-epic    # Select epic, choose execution mode, run
 ```
 
 Three execution modes:

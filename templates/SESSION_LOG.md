@@ -50,7 +50,7 @@
 
 ### Accomplished
 - Created initial project structure
-- Set up kit_tools documentation framework
+- Set up kit_tools framework
 - Configured basic infrastructure
 
 ### Documentation Updated

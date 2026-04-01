@@ -1,11 +1,11 @@
 ---
 name: execution-status
-description: Check progress and status of autonomous feature execution
+description: Check progress and status of autonomous epic execution
 ---
 
 # Execution Status
 
-Check on the progress of an autonomous or guarded execution launched by `/kit-tools:execute-feature`. Read-only — this skill inspects state files and logs without modifying anything.
+Check on the progress of an autonomous or guarded execution launched by `/kit-tools:execute-epic`. Read-only — this skill inspects state files and logs without modifying anything.
 
 ---
 
@@ -13,7 +13,7 @@ Check on the progress of an autonomous or guarded execution launched by `/kit-to
 
 Read `kit_tools/specs/.execution-state.json`:
 
-- **Not found:** Report "No execution state found. Run `/kit-tools:execute-feature` to start." and stop.
+- **Not found:** Report "No execution state found. Run `/kit-tools:execute-epic` to start." and stop.
 - **Found:** Continue to Step 2.
 
 Also read `kit_tools/specs/.execution-config.json` to get the `tmux_session` field (the session name used at launch). Check if it's alive:
@@ -127,7 +127,7 @@ Present available actions based on current state using AskUserQuestion:
 
 Warn: "The orchestrator crashed. The process exited unexpectedly."
 
-- **Resume execution** — Suggest running `/kit-tools:execute-feature` (it will detect the existing state and resume)
+- **Resume execution** — Suggest running `/kit-tools:execute-epic` (it will detect the existing state and resume)
 - **Reset state** — Delete `.execution-state.json` to start fresh
 - **View log** — Show full `EXECUTION_LOG.md`
 
@@ -135,7 +135,7 @@ Warn: "The orchestrator crashed. The process exited unexpectedly."
 
 Warn: "The orchestrator is not running but state shows `running`. The process may have crashed or been interrupted."
 
-- **Resume execution** — Suggest running `/kit-tools:execute-feature` (it will detect the existing state and resume)
+- **Resume execution** — Suggest running `/kit-tools:execute-epic` (it will detect the existing state and resume)
 - **Reset state** — Delete `.execution-state.json` to start fresh
 - **View log** — Show full `EXECUTION_LOG.md`
 
@@ -154,7 +154,7 @@ Warn: "The orchestrator is not running but state shows `running`. The process ma
 ### If Failed
 
 - Show failure details from the last story with `status: "failed"` or `status: "retrying"`
-- **Retry** — Suggest `/kit-tools:execute-feature` to resume
+- **Retry** — Suggest `/kit-tools:execute-epic` to resume
 - **View log** — Show full execution log
 
 Ask the user which action to take, then execute it.
@@ -165,6 +165,6 @@ Ask the user which action to take, then execute it.
 
 | Skill | When to use |
 |-------|-------------|
-| `/kit-tools:execute-feature` | To start or resume autonomous execution |
+| `/kit-tools:execute-epic` | To start or resume autonomous execution |
 | `/kit-tools:validate-feature` | To validate the full feature branch after execution |
 | `/kit-tools:complete-feature` | To archive feature spec after all stories pass |

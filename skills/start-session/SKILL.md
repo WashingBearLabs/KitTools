@@ -115,6 +115,10 @@ Check `kit_tools/specs/` for active features:
   - Feature name
   - How many user stories are complete vs total (count `- [x]` vs `- [ ]` in acceptance criteria)
 
+**If no feature specs exist** (no `feature-*.md` or `epic-*.md` files in `kit_tools/specs/`):
+- Note this in the summary: "No active feature specs found."
+- Suggest: "Run `/kit-tools:plan-epic` to plan your first feature, or `/kit-tools:create-vision` to define your product vision first."
+
 ### Milestone tracking
 
 Review `kit_tools/roadmap/`:

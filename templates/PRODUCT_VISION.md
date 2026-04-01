@@ -70,7 +70,7 @@ How will we measure whether this product is succeeding? Be specific and measurab
 <!--
 Major capability areas organized by tier. Each feature area may become one or more feature specs.
 Use tier-prefixed IDs (T1.1, T1.2, T2.1) to avoid cascading renumber pain when adding features.
-Link to feature specs as they are created via /kit-tools:plan-feature.
+Link to feature specs as they are created via /kit-tools:plan-epic.
 -->
 
 ### Tier 1 — Core (MVP)

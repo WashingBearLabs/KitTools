@@ -5,6 +5,38 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-04-01
+
+### Added
+- **New Skill: `/kit-tools:plan-epic`** — Replaces `/kit-tools:plan-feature`. All work is now structured as an epic, even single-spec features. Removes the binary "epic detection" gate in favor of a "scope assessment" step that determines how many feature specs are needed (1 for simple, 2-5+ for complex). Always generates an `epic-*.md` wrapper alongside feature specs.
+- **New Skill: `/kit-tools:validate-epic`** — Pre-execution spec validation. Runs four sequential agent reviews on every feature spec in an epic before handing off to `/kit-tools:execute-epic`. Interactive: presents findings after each agent, lets user revise specs and re-run reviews before proceeding. Produces a go/no-go readiness verdict.
+- **New Skill: `/kit-tools:execute-epic`** — Replaces `/kit-tools:execute-feature`. Epic-first entry point: selects the epic from `epic-*.md` files, derives execution order from the Decomposition table. Retains all three execution modes (supervised, autonomous, guarded) and backwards compatibility for projects without epic files.
+- **New Agent: `spec-completionist-reviewer`** — Reviews a feature spec for completeness: goals with no implementing stories, missing user flows, scope coherence gaps, and vision alignment issues. Writes structured JSON findings.
+- **New Agent: `story-quality-reviewer`** — Reviews each user story for size (split recommendations), detail quality (flags vague criteria), ID format (rejects `US-001a`/`US-001b` — orchestrator incompatible), and integration scope (endpoint, auth, errors, data mapping must all be specified). Per-story verdict table in findings.
+- **New Agent: `salty-engineer-reviewer`** — Adversarial pre-execution review using GAN-style discriminator thinking. Five lenses: "Yeah But What About" (error/loading/empty/scale states), "That's Not How It Works" (integration depth), "PM Said It Would Be Easy" (scope naivety flags), "Deployment Day Nightmare" (migrations, flags, backfill), and "Who Maintains This" (logging, ops, monitoring). Findings written in direct engineer voice.
+- **New Agent: `spec-second-opinion`** — Independent cross-model review using Sonnet. Evaluates architecture decisions, feasibility, over-engineering, and alternative approaches. All alternative and over-engineering findings require explicit trade-off statements. Runs as the 4th review in the validate-epic pipeline.
+
+- **`READ_ME.html`** — Single-file HTML5 documentation page with interactive 8-phase workflow flowchart, skills grid, hooks table, and install guide. Dark theme with phase-colored cards and agent badges.
+
+### Changed
+- **`/kit-tools:plan-epic` (formerly `plan-feature`)** — Step 3 "Epic Detection" removed. Replaced with "Scope Assessment & Decomposition" that always produces an `epic-*.md`. Single-spec epics get a minimal wrapper. All feature specs now use `type: epic-child` frontmatter. Step 13 prompts to run `/kit-tools:validate-epic` before execution.
+- **`/kit-tools:execute-epic` (formerly `execute-feature`)** — Primary entry point is now epic selection from `epic-*.md` files, not individual feature spec selection. Falls back to direct spec listing for backwards compatibility.
+- **`/kit-tools:execution-status`** — Description and body updated to reference `execute-epic`.
+- **`/kit-tools:complete-feature`** — Enhanced learnings capture (Step 3): gotchas → GOTCHAS.md, conventions → CONVENTIONS.md, spec-writing notes → Implementation Notes. Added context-aware next steps and updated Related Skills.
+- **`/kit-tools:seed-project`** — Added Next Steps section and Related Skills table for clear handoff to create-vision or plan-epic.
+- **`/kit-tools:start-session`** — Added guidance when no feature specs exist: suggests plan-epic or create-vision.
+- **`/kit-tools:init-project`**, **`/kit-tools:create-vision`** — Related skill references updated.
+- **`agents/story-implementer.md`**, **`agents/story-verifier.md`** — NOTE blocks updated to reference `execute-epic`.
+- **`scripts/execute_orchestrator.py`** — Desktop notifications on macOS (osascript) and Linux (notify-send) for story failures, execution completion, crashes, and pauses. Fires automatically for critical/warning severity events.
+- **`templates/PRODUCT_VISION.md`**, **`templates/specs/EPIC.md`** — References updated.
+- **`README.md`**, **`KITTOOLS_UI_SPEC.md`** — All `plan-feature`/`execute-feature` references updated. `validate-epic` added to skill table and agents table. Repositioned from "documentation framework" to "framework for AI-assisted development."
+- **`.claude-plugin/plugin.json`** — Description updated to reflect framework positioning.
+
+### Removed
+- **`/kit-tools:plan-feature`** — Replaced by `/kit-tools:plan-epic`
+- **`/kit-tools:execute-feature`** — Replaced by `/kit-tools:execute-epic`
+- **`/kit-tools:migrate`** — Removed. v1.x → v2.0 migration is no longer supported as a dedicated skill.
+
 ## [2.1.4] - 2026-03-18
 
 ### Fixed

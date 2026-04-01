@@ -1,11 +1,11 @@
 ---
-name: execute-feature
-description: Execute feature spec user stories autonomously, with supervision, or in guarded mode
+name: execute-epic
+description: Execute an epic's feature specs autonomously, supervised, or guarded
 ---
 
-# Execute Feature
+# Execute Epic
 
-Execute user stories from a feature spec. Supports three modes: supervised (in-session with review between stories), autonomous (multi-session, runs until complete), and guarded (multi-session, pauses on failures).
+Execute user stories from an epic's feature specs. Supports three modes: supervised (in-session with review between stories), autonomous (multi-session, runs until complete), and guarded (multi-session, pauses on failures).
 
 Read `REFERENCE.md` in this skill directory for detailed schemas, token tables, and edge cases.
 
@@ -13,7 +13,8 @@ Read `REFERENCE.md` in this skill directory for detailed schemas, token tables, 
 
 | File | Required | Purpose |
 |------|----------|---------|
-| `kit_tools/specs/feature-*.md` | Yes | Feature spec with user stories to execute |
+| `kit_tools/specs/epic-*.md` | Yes (primary) | Epic wrapper with decomposition table |
+| `kit_tools/specs/feature-*.md` | Yes | Feature specs with user stories to execute |
 | `$CLAUDE_PLUGIN_ROOT/agents/story-implementer.md` | Yes | Implementation agent template |
 | `$CLAUDE_PLUGIN_ROOT/agents/story-verifier.md` | Yes | Verification agent template |
 | `$CLAUDE_PLUGIN_ROOT/scripts/execute_orchestrator.py` | For autonomous/guarded | Python orchestrator script |
@@ -23,22 +24,24 @@ Read `REFERENCE.md` in this skill directory for detailed schemas, token tables, 
 
 ---
 
-## Step 1: Select Feature Spec
+## Step 1: Select Epic
 
 Check `kit_tools/specs/.execution-state.json`:
 - **`status: running`** — Report progress table, offer monitoring commands
 - **`status: completed`** — Report completion, suggest `/kit-tools:validate-feature`
 - **`status: failed/paused`** — Offer: resume, start fresh, or abort
 
-**If no state:** List active feature specs from `kit_tools/specs/` with completion counts, ask which to execute.
+**If no state:** Check `kit_tools/specs/` for `epic-*.md` files. If found, list them with status (how many specs completed vs. remaining). User selects which epic to execute.
 
-### Epic Detection
+From the selected `epic-*.md`, read the Decomposition table to get the ordered list of feature specs. Check `.execution-state.json` for any running/paused/completed state for each spec.
 
-If selected feature spec has `epic` field: first check for an `epic-*.md` file for ordering, then fall back to scanning feature specs by `epic` frontmatter. Present options:
-- **A.** Execute all remaining, pause between each (recommended)
-- **B.** Execute all remaining non-stop
-- **C.** Execute just this feature spec
+Present options:
+- **A.** Execute all remaining specs, pause between each (recommended)
+- **B.** Execute all remaining specs non-stop
+- **C.** Execute just one specific spec (ask which)
 - **D.** Cancel
+
+**Fallback:** If no `epic-*.md` files are found, fall back to listing feature specs directly from `kit_tools/specs/`. This is a backwards-compatibility path for projects that predate the epic-wrapper convention. In fallback mode, if a selected feature spec has an `epic` frontmatter field, scan for sibling specs by that field to assemble the execution order.
 
 ---
 
@@ -87,7 +90,7 @@ Run checks and report pass/fail for each:
 ## Step 4: Git Branch Setup
 
 - **Epic feature spec:** Branch `epic/[epic-name]`
-- **Standalone feature spec:** Branch `feature/[feature-name]`
+- **Standalone feature spec (fallback):** Branch `feature/[feature-name]`
 
 Create new or checkout existing. Feature/epic name from feature spec frontmatter.
 
@@ -136,9 +139,9 @@ For each uncompleted story:
 
 ### Autonomous/Guarded Mode
 
-1. Write `.execution-config.json` (see REFERENCE.md for schema)
+1. Write `.execution-config.json` using a Python inline script that reads the agent templates via Python file I/O — **never use shell heredocs or `$(cat ...)` substitution to embed template content** (single-quoted heredocs suppress expansion; double-quoted heredocs break on special characters). See REFERENCE.md for the schema and the correct creation pattern.
 2. Check for tmux: `which tmux`
-3. **Derive tmux session name:** `kit-exec-{feature_name}` (e.g., `kit-exec-auth`, `kit-exec-oauth`). For epics: `kit-exec-{epic_name}`. Store as `tmux_session` in `.execution-config.json`.
+3. **Derive tmux session name:** `kit-exec-{epic_name}` (e.g., `kit-exec-oauth`, `kit-exec-auth`). Store as `tmux_session` in `.execution-config.json`.
 4. **Check for name collision:** Run `tmux has-session -t {session_name} 2>/dev/null`. If it exists, **do NOT kill it** — warn the user and append a short suffix (e.g., `-2`) or ask them to choose a name.
 5. **If tmux available:** Launch orchestrator in a detached tmux session:
    ```bash
@@ -176,6 +179,7 @@ For each uncompleted story:
 
 | Skill | When to use |
 |-------|-------------|
-| `/kit-tools:plan-feature` | To create a feature spec before executing |
+| `/kit-tools:plan-epic` | To create an epic and feature specs before executing |
+| `/kit-tools:validate-epic` | To validate epic specs before execution |
 | `/kit-tools:complete-feature` | To archive feature spec after all stories pass |
 | `/kit-tools:validate-feature` | To validate the full feature branch against its feature spec |

@@ -47,9 +47,16 @@ Count acceptance criteria checkboxes. If not 100% complete, warn and ask to conf
 
 ---
 
-## Step 3: Capture final notes
+## Step 3: Capture learnings
 
-Ask user for any final learnings to add to Implementation Notes.
+Ask the user: "Any learnings from this feature worth capturing? Things like patterns that worked well, gotchas discovered during implementation, or spec-writing improvements for next time."
+
+If the user has learnings:
+- **Gotchas or landmines** → Append to `kit_tools/docs/GOTCHAS.md`
+- **Code patterns or conventions** → Append to `kit_tools/docs/CONVENTIONS.md`
+- **Spec-writing notes** (e.g., "integration stories need error-handling criteria") → Add to the feature spec's Implementation Notes section before archiving
+
+If the user has nothing, move on — don't force it.
 
 ---
 
@@ -93,6 +100,20 @@ Move to `kit_tools/specs/archive/`. Create directory if needed.
 
 Report: feature spec archived, completion stats, branch status, files updated, artifacts cleaned.
 
+### Next Steps
+
+Based on the context:
+
+**If this was the final spec in an epic:**
+> "Epic complete! To start your next piece of work, run `/kit-tools:plan-epic`."
+> If milestones exist, add: "Check `kit_tools/roadmap/MILESTONES.md` for what's planned next."
+
+**If more specs remain in the epic:**
+> "Next spec in the epic is ready. Run `/kit-tools:execute-epic` to continue, or `/kit-tools:validate-epic` if specs have been revised."
+
+**If standalone feature:**
+> "Feature complete. Run `/kit-tools:plan-epic` to plan your next feature."
+
 ---
 
 ## Related Skills
@@ -100,5 +121,6 @@ Report: feature spec archived, completion stats, branch status, files updated, a
 | Skill | When to use |
 |-------|-------------|
 | `/kit-tools:validate-feature` | Run before completing |
-| `/kit-tools:execute-feature` | To execute feature spec stories |
-| `/kit-tools:plan-feature` | To start a new feature |
+| `/kit-tools:plan-epic` | Plan the next feature or epic |
+| `/kit-tools:execute-epic` | Continue executing remaining specs in an epic |
+| `/kit-tools:validate-epic` | Re-validate if specs were revised during this feature |

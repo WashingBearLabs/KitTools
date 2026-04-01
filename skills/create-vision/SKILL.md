@@ -214,7 +214,7 @@ Open Questions: N remaining
 
 Suggested next steps:
   - /kit-tools:seed-project — if you haven't seeded yet
-  - /kit-tools:plan-feature — to create feature specs for your vision's feature areas
+  - /kit-tools:plan-epic — to create feature specs for your vision's feature areas
 ```
 
 ---
@@ -225,4 +225,4 @@ Suggested next steps:
 |-------|-------------|
 | `/kit-tools:init-project` | Before this, to set up the kit_tools framework |
 | `/kit-tools:seed-project` | After this, to populate other templates |
-| `/kit-tools:plan-feature` | After this, to create feature specs for vision areas |
+| `/kit-tools:plan-epic` | After this, to create feature specs for vision areas |

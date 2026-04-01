@@ -1,24 +1,25 @@
-# Plan Feature — Reference
+# Plan Epic — Reference
 
-Detailed examples, heuristics, and edge cases for the plan-feature workflow.
+Detailed examples, heuristics, and edge cases for the plan-epic workflow.
 
 ---
 
-## Epic Warning Signs
+## Decomposition Guidelines
 
-| Signal | Example | Why it's a problem |
-|--------|---------|-------------------|
-| **Multiple subsystems** | "Auth with OAuth, session management, and user profiles" | Touches too many areas |
-| **Scope keywords** | "entire", "full", "complete", "from scratch", "system" | Indicates large scope |
-| **Layer spanning** | "Database + API + UI for payments" | Should be separate feature specs per layer |
-| **Multiple user types** | "Admin dashboard AND user dashboard" | Should be separate features |
-| **Vague boundaries** | "Make it production-ready" | Scope is undefined |
+| Scope | Specs | Example |
+|-------|-------|---------|
+| Single layer, simple concern | 1 | Add a settings page, implement a single API endpoint |
+| Two layers or two distinct concerns | 2 | Backend endpoint + frontend UI |
+| Multi-layer feature | 3-4 | Schema + backend + API + UI |
+| System-spanning work | 4-6 | Full auth system, entire data pipeline |
 
-**Note:** Epic = multi-subsystem feature, not just "many stories". A feature spec with 15 well-refined, session-fit stories is fine. A feature spec spanning 3 subsystems with 5 stories is an epic.
+**Note:** Even single-spec work gets an `epic-*.md` wrapper. The wrapper provides epic-level context and is the entry point for `validate-epic` and `execute-epic`.
 
 ---
 
 ## Epic Decomposition Example
+
+Here's how a 4-spec epic looks:
 
 ```
 Epic: "OAuth Authentication System"
@@ -51,21 +52,25 @@ Epic: "OAuth Authentication System"
 # feature-oauth-schema.md
 epic: oauth
 epic_seq: 1
+type: epic-child
 
 # feature-oauth-provider.md
 epic: oauth
 epic_seq: 2
+type: epic-child
 depends_on: [oauth-schema]
 
 # feature-oauth-api.md
 epic: oauth
 epic_seq: 3
+type: epic-child
 depends_on: [oauth-schema, oauth-provider]
 
 # feature-oauth-ui.md
 epic: oauth
 epic_seq: 4
 epic_final: true
+type: epic-child
 depends_on: [oauth-api]
 ```
 
@@ -82,7 +87,7 @@ depends_on: [oauth-api]
 
 ### Too big (split these):
 - "Build the entire dashboard" -> Split into schema, queries, components, filters
-- "Add authentication" -> This is an epic, not a story
+- "Add authentication" -> Split into schema, provider, API, UI specs
 - "Create the settings page" -> Split by settings category
 
 **Rule of thumb:** If you can't describe the change in 2-3 sentences, it's too big.
@@ -181,12 +186,14 @@ US-004: Handle OAuth callback and create session
 | `session_ready` | `true` if all stories pass session-fit checks |
 | `depends_on` | Array of feature names this feature spec depends on |
 | `vision_ref` | Product Vision reference (optional, section in PRODUCT_VISION.md — e.g., "Feature Area 2: User Management") |
-| `type` | `feature` or `epic-child` |
-| `epic` | Epic name (same across all feature specs in epic, empty for standalone) |
-| `epic_seq` | Execution order within epic, 1-based (empty for standalone) |
+| `type` | Always `epic-child` for all feature specs created by plan-epic |
+| `epic` | Epic name (same across all feature specs in epic) |
+| `epic_seq` | Execution order within epic, 1-based |
 | `epic_final` | `true` only on the last feature spec in the epic |
 | `created` | Creation date |
 | `updated` | Last update date |
+
+**Note:** `type: epic-child` is used for all feature specs created by plan-epic — including single-spec epics. The epic-*.md wrapper is always created separately.
 
 ---
 
@@ -206,6 +213,7 @@ Use `/kit-tools:complete-feature` to mark completed and archive.
 
 ```markdown
 ## OAuth Authentication (Epic)
+- [Epic Overview](../specs/epic-oauth.md)
 - [OAuth Schema](../specs/feature-oauth-schema.md) — Database foundation
 - [OAuth Provider](../specs/feature-oauth-provider.md) — Provider integration (depends on: schema)
 - [OAuth API](../specs/feature-oauth-api.md) — Backend endpoints (depends on: schema, provider)

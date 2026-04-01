@@ -3,7 +3,7 @@
   explorer_focus: none
   required_sections: []
   skip_if: always
-  note: Created via plan-feature epic decomposition, not auto-seeded
+  note: Created via plan-epic, not auto-seeded
 -->
 ---
 epic: {{EPIC_NAME}}

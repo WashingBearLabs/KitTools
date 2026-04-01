@@ -8,7 +8,7 @@ capabilities:
 
 # Story Verifier
 
-> **NOTE:** This agent is invoked by the `/kit-tools:execute-feature` skill, which reads this file and interpolates `{{PLACEHOLDER}}` tokens with project context before passing it to the Task tool or `claude -p`. It is not intended for direct invocation.
+> **NOTE:** This agent is invoked by the `/kit-tools:execute-epic` skill, which reads this file and interpolates `{{PLACEHOLDER}}` tokens with project context before passing it to the Task tool or `claude -p`. It is not intended for direct invocation.
 
 ---
 

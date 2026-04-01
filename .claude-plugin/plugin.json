@@ -1,7 +1,7 @@
 {
   "name": "kit-tools",
-  "description": "Documentation framework for AI-assisted development. Provides session management, documentation templates, and automation hooks.",
-  "version": "2.1.4",
+  "description": "Framework for AI-assisted development. Structured documentation, autonomous execution, and guided workflows for Claude Code.",
+  "version": "2.2.0",
   "author": {
     "name": "WashingBearLabs",
     "email": "contact@washingbearlabs.com",

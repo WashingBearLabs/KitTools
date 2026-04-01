@@ -1,11 +1,11 @@
 ---
 name: init-project
-description: Initialize kit_tools documentation framework in the current project
+description: Initialize kit_tools framework in the current project
 ---
 
 # Initialize Project Documentation
 
-Setting up the kit_tools documentation framework in this project.
+Setting up the kit_tools framework in this project.
 
 ## Dependencies
 
@@ -129,8 +129,8 @@ This is optional — user can skip if nothing special.
 ### 0d: Existing documentation check
 
 **If `docs/`, `wiki/`, or similar directories found:**
-- Ask: "I found existing documentation in `[directory]`. Would you like me to migrate it into the kit_tools structure? (I can run `/kit-tools:migrate` instead)"
-- If yes, stop init and suggest running migrate skill instead
+- Ask: "I found existing documentation in `[directory]`. Would you like me to incorporate it into the kit_tools structure during initialization?"
+- If yes, note the directory for reference during template seeding
 
 **If kit_tools/ already exists:**
 - Proceed to Step 1 (existing setup handling)
@@ -495,7 +495,7 @@ Report to the user:
 - Run `/kit-tools:seed-project` next to populate templates with project-specific content
   - The project context gathered in Step 0 (description, tech stack, special considerations) will help seed SYNOPSIS and other templates more accurately
 - Run `/kit-tools:create-vision` to define the product vision (recommended before planning features)
-- Suggested workflow: **init → seed → create-vision → plan-feature**
+- Suggested workflow: **init → seed → create-vision → plan-epic**
 - Run `/kit-tools:update-kit-tools` later to update hooks, templates, or other components as the project grows
 - Run `/kit-tools:validate-feature` after completing a feature to validate the full branch against its feature spec
 
@@ -518,6 +518,5 @@ The templates come from this plugin's `templates/` directory. They are canonical
 | Skill | When to use |
 |-------|-------------|
 | `/kit-tools:seed-project` | After init, to populate templates with project-specific content |
-| `/kit-tools:plan-feature` | To create a feature spec for a new feature in `kit_tools/specs/` |
+| `/kit-tools:plan-epic` | To plan a new feature or epic in `kit_tools/specs/` |
 | `/kit-tools:update-kit-tools` | Later, to update hooks/templates from newer plugin versions |
-| `/kit-tools:migrate` | Instead of init, if project has existing documentation to preserve |

@@ -1,0 +1,1452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KitTools v2.2.0 — AI-Assisted Development Framework</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base:       #070a0f;
+      --bg-surface:    #0c1017;
+      --bg-elevated:   #121820;
+      --bg-card:       #161e2a;
+      --border:        #1e2736;
+      --border-bright: #2a3548;
+
+      --phase-setup:        #3b82f6;
+      --phase-vision:       #a855f7;
+      --phase-session:      #64748b;
+      --phase-planning:     #06b6d4;
+      --phase-prevalid:     #f59e0b;
+      --phase-execution:    #10b981;
+      --phase-postvalid:    #f97316;
+      --phase-completion:   #22c55e;
+
+      --text-primary:  #dde4ee;
+      --text-secondary:#8b96a8;
+      --text-muted:    #536070;
+      --text-code:     #7dd3fc;
+
+      --font-display:  'Outfit', sans-serif;
+      --font-body:     'DM Sans', sans-serif;
+      --font-mono:     'JetBrains Mono', monospace;
+
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      font-size: 15px;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ─── Scrollbar ─── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-base); }
+    ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+
+    /* ─── Header ─── */
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: color-mix(in srgb, var(--bg-base) 85%, transparent);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 40px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .site-header .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+
+    .logo-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 7px;
+      background: linear-gradient(135deg, #3b82f6 0%, #a855f7 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .logo-text {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--text-primary);
+      letter-spacing: -0.3px;
+    }
+
+    .header-badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 2px 8px;
+      background: color-mix(in srgb, var(--phase-planning) 15%, transparent);
+      color: var(--phase-planning);
+      border: 1px solid color-mix(in srgb, var(--phase-planning) 30%, transparent);
+      border-radius: 20px;
+      letter-spacing: 0.3px;
+    }
+
+    .header-nav {
+      margin-left: auto;
+      display: flex;
+      gap: 4px;
+    }
+
+    .header-nav a {
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      padding: 5px 10px;
+      border-radius: var(--radius-sm);
+      transition: color 0.15s, background 0.15s;
+    }
+
+    .header-nav a:hover { color: var(--text-primary); background: var(--bg-elevated); }
+
+    /* ─── Hero ─── */
+    .hero {
+      padding: 80px 40px 60px;
+      max-width: 900px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .hero-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    .hero-title {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(42px, 6vw, 68px);
+      line-height: 1.05;
+      letter-spacing: -2px;
+      background: linear-gradient(135deg, #e6edf3 0%, #8b96a8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 20px;
+    }
+
+    .hero-sub {
+      font-size: 18px;
+      color: var(--text-secondary);
+      max-width: 560px;
+      margin: 0 auto 36px;
+      line-height: 1.6;
+      font-weight: 300;
+    }
+
+    .hero-install {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-bright);
+      border-radius: var(--radius-md);
+      padding: 12px 18px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-code);
+      cursor: pointer;
+      transition: border-color 0.2s;
+      user-select: all;
+    }
+
+    .hero-install:hover { border-color: var(--phase-planning); }
+
+    .install-label {
+      font-family: var(--font-body);
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      border-right: 1px solid var(--border-bright);
+      padding-right: 12px;
+      flex-shrink: 0;
+    }
+
+    /* ─── Section wrapper ─── */
+    .section {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 40px 80px;
+    }
+
+    .section-title {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 28px;
+      letter-spacing: -0.5px;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+
+    .section-desc {
+      color: var(--text-secondary);
+      font-size: 15px;
+      margin-bottom: 40px;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      max-width: 1100px;
+      margin: 0 auto 80px;
+    }
+
+    /* ─────────────────────────────────────────────
+       WORKFLOW FLOWCHART
+    ───────────────────────────────────────────── */
+
+    .workflow-section {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 0 40px 80px;
+    }
+
+    .workflow-section .section-title { text-align: center; }
+    .workflow-section .section-desc  { text-align: center; margin-bottom: 56px; }
+
+    .flow-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+
+    /* Phase card */
+    .phase {
+      width: 100%;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .phase::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 4px;
+      background: var(--phase-color);
+      border-radius: 4px 0 0 4px;
+    }
+
+    .phase-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 20px 14px 22px;
+      border-bottom: 1px solid var(--border);
+      background: color-mix(in srgb, var(--phase-color) 6%, var(--bg-card));
+    }
+
+    .phase-num {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      color: var(--phase-color);
+      background: color-mix(in srgb, var(--phase-color) 15%, transparent);
+      border: 1px solid color-mix(in srgb, var(--phase-color) 25%, transparent);
+      padding: 2px 7px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+
+    .phase-name {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--phase-color);
+      flex: 1;
+    }
+
+    .phase-tag {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    .phase-body {
+      padding: 16px 20px 16px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* Step within a phase */
+    .step {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+    }
+
+    .step-cmd {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--phase-color);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .step-cmd-text {
+      flex: 1;
+    }
+
+    .step-desc {
+      font-size: 12.5px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      line-height: 1.5;
+    }
+
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    /* Agent badge */
+    .badge-agent {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      padding: 2px 8px 2px 6px;
+      background: color-mix(in srgb, var(--phase-color) 10%, var(--bg-card));
+      border: 1px solid color-mix(in srgb, var(--phase-color) 20%, transparent);
+      color: color-mix(in srgb, var(--phase-color) 90%, var(--text-primary));
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+
+    .badge-agent::before {
+      content: '◈';
+      font-size: 9px;
+      opacity: 0.8;
+    }
+
+    /* Output artifact badge */
+    .badge-out {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      padding: 2px 8px 2px 6px;
+      background: color-mix(in srgb, #e6edf3 6%, transparent);
+      border: 1px solid var(--border-bright);
+      color: var(--text-secondary);
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+
+    .badge-out::before {
+      content: '→';
+      opacity: 0.5;
+      font-size: 9px;
+    }
+
+    /* Pass/Fail indicators */
+    .badge-pass {
+      background: color-mix(in srgb, var(--phase-execution) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--phase-execution) 25%, transparent);
+      color: var(--phase-execution);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 20px;
+    }
+
+    .badge-fail {
+      background: color-mix(in srgb, #ef4444 12%, transparent);
+      border: 1px solid color-mix(in srgb, #ef4444 25%, transparent);
+      color: #f87171;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 20px;
+    }
+
+    /* Story loop sub-diagram */
+    .story-loop {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-bright);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      position: relative;
+    }
+
+    .story-loop-title {
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      font-family: var(--font-mono);
+    }
+
+    .story-loop-row {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      position: relative;
+    }
+
+    .loop-node {
+      flex: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--border-bright);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      text-align: center;
+    }
+
+    .loop-node-label {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--phase-execution);
+      display: block;
+    }
+
+    .loop-node-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+      display: block;
+      margin-top: 2px;
+    }
+
+    .loop-arrow {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0 8px;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+
+    .loop-arrow-line {
+      width: 28px;
+      height: 1px;
+      background: var(--border-bright);
+      position: relative;
+    }
+
+    .loop-arrow-line::after {
+      content: '';
+      position: absolute;
+      right: -1px;
+      top: -3px;
+      width: 0; height: 0;
+      border-top: 3.5px solid transparent;
+      border-bottom: 3.5px solid transparent;
+      border-left: 5px solid var(--border-bright);
+    }
+
+    .loop-label {
+      font-size: 9.5px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    /* The retry loop SVG */
+    .retry-container {
+      position: relative;
+      margin-top: 8px;
+    }
+
+    .retry-path {
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+    }
+
+    .retry-legend {
+      display: flex;
+      gap: 12px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+
+    .retry-legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    /* Connector between phases */
+    .connector {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 4px 0;
+      gap: 0;
+    }
+
+    .connector-line {
+      width: 1px;
+      height: 28px;
+      background: linear-gradient(to bottom, var(--border-bright), var(--border));
+    }
+
+    .connector-arrow {
+      width: 0; height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 7px solid var(--border-bright);
+      margin-top: -1px;
+    }
+
+    /* Feedback paths (revision / next-epic) */
+    .feedback-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      background: var(--bg-elevated);
+      border: 1px dashed var(--border-bright);
+      border-radius: var(--radius-sm);
+      margin-top: 4px;
+    }
+
+    .feedback-banner.loop-back {
+      border-color: color-mix(in srgb, var(--phase-completion) 35%, transparent);
+      background: color-mix(in srgb, var(--phase-completion) 5%, transparent);
+    }
+
+    .feedback-banner.revision {
+      border-color: color-mix(in srgb, var(--phase-prevalid) 35%, transparent);
+      background: color-mix(in srgb, var(--phase-prevalid) 5%, transparent);
+    }
+
+    .feedback-icon {
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .feedback-text {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .feedback-text strong {
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+
+    /* ─── Modes row ─── */
+    .modes-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .mode-badge {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      padding: 3px 9px;
+      border-radius: 4px;
+      border: 1px solid;
+    }
+
+    .mode-badge.supervised {
+      background: color-mix(in srgb, #3b82f6 10%, transparent);
+      border-color: color-mix(in srgb, #3b82f6 25%, transparent);
+      color: #93c5fd;
+    }
+    .mode-badge.autonomous {
+      background: color-mix(in srgb, #10b981 10%, transparent);
+      border-color: color-mix(in srgb, #10b981 25%, transparent);
+      color: #6ee7b7;
+    }
+    .mode-badge.guarded {
+      background: color-mix(in srgb, #f59e0b 10%, transparent);
+      border-color: color-mix(in srgb, #f59e0b 25%, transparent);
+      color: #fcd34d;
+    }
+
+    /* ─── Content Sections ─── */
+    .content-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 12px;
+    }
+
+    .skill-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      transition: border-color 0.2s;
+    }
+
+    .skill-card:hover { border-color: var(--border-bright); }
+
+    .skill-cmd {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-code);
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .skill-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* Phase category label on skill cards */
+    .skill-phase-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 6px;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+
+    /* Hooks table */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+    }
+
+    .data-table th {
+      text-align: left;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      padding: 0 12px 12px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 500;
+    }
+
+    .data-table th:first-child { padding-left: 0; }
+
+    .data-table td {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    .data-table td:first-child { padding-left: 0; }
+    .data-table tr:last-child td { border-bottom: none; }
+
+    .data-table tr:hover td { background: var(--bg-elevated); }
+
+    .hook-name {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-code);
+      white-space: nowrap;
+    }
+
+    .hook-trigger {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    /* Project types grid */
+    .types-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 10px;
+    }
+
+    .type-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+    }
+
+    .type-name {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .type-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .type-templates {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* Philosophy callout */
+    .callout {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-bright);
+      border-left: 3px solid var(--phase-vision);
+      border-radius: var(--radius-md);
+      padding: 20px 24px;
+      margin-bottom: 24px;
+    }
+
+    .callout p {
+      color: var(--text-secondary);
+      line-height: 1.7;
+      font-size: 14.5px;
+    }
+
+    .callout p + p { margin-top: 12px; }
+
+    .callout strong { color: var(--text-primary); }
+
+    /* Session-fit table */
+    .metric-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+
+    .metric-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      text-align: center;
+    }
+
+    .metric-value {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 32px;
+      color: var(--phase-execution);
+      display: block;
+      letter-spacing: -1px;
+    }
+
+    .metric-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Install block */
+    .install-block {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-bright);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+
+    .install-block-header {
+      background: var(--bg-card);
+      padding: 8px 16px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .install-block pre {
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      color: var(--text-code);
+      line-height: 1.8;
+      overflow-x: auto;
+    }
+
+    .install-block .comment { color: var(--text-muted); }
+    .install-block .cmd { color: #a5f3fc; }
+
+    /* ─── Footer ─── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    footer .footer-brand {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    footer .footer-brand span {
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    footer .footer-links {
+      display: flex;
+      gap: 20px;
+    }
+
+    footer .footer-links a {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    footer .footer-links a:hover { color: var(--text-secondary); }
+
+    /* Responsive */
+    @media (max-width: 700px) {
+      .site-header { padding: 0 20px; }
+      .hero { padding: 48px 20px 40px; }
+      .section, .workflow-section { padding-left: 20px; padding-right: 20px; }
+      .metric-row { grid-template-columns: 1fr; }
+      .content-grid { grid-template-columns: 1fr; }
+      .types-grid { grid-template-columns: 1fr 1fr; }
+      footer { padding: 24px 20px; flex-direction: column; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════ HEADER ═══════════════ -->
+<header class="site-header">
+  <a href="#" class="logo">
+    <div class="logo-icon">🦝</div>
+    <span class="logo-text">KitTools</span>
+  </a>
+  <span class="header-badge">v2.2.0</span>
+  <nav class="header-nav">
+    <a href="#workflow">Workflow</a>
+    <a href="#skills">Skills</a>
+    <a href="#hooks">Hooks</a>
+    <a href="#install">Install</a>
+    <a href="#philosophy">Philosophy</a>
+  </nav>
+</header>
+
+<!-- ═══════════════ HERO ═══════════════ -->
+<div class="hero">
+  <p class="hero-eyebrow">WashingBearLabs · Claude Code Plugin</p>
+  <h1 class="hero-title">Kit&shy;Tools</h1>
+  <p class="hero-sub">A framework for AI-assisted development. Structured documentation, autonomous execution, and guided workflows — built for Claude Code.</p>
+  <div class="hero-install">
+    <span class="install-label">Install</span>
+    /plugin install kit-tools@washingbearlabs
+  </div>
+</div>
+
+<!-- ═══════════════ WORKFLOW ═══════════════ -->
+<section id="workflow" class="workflow-section">
+  <h2 class="section-title">Complete Workflow</h2>
+  <p class="section-desc">From first idea to merged code — every step, every agent, every command.</p>
+
+  <div class="flow-stack">
+
+    <!-- ─── PHASE 1: SETUP ─── -->
+    <div class="phase" style="--phase-color: var(--phase-setup)">
+      <div class="phase-header">
+        <span class="phase-num">01</span>
+        <span class="phase-name">Project Setup</span>
+        <span class="phase-tag">one-time per project</span>
+      </div>
+      <div class="phase-body">
+        <div class="step">
+          <div class="step-cmd"><span class="step-cmd-text">/kit-tools:init-project</span></div>
+          <div class="step-desc">Select project type (API, Web App, Full Stack, CLI, Library, Mobile) — scaffolds the <code>kit_tools/</code> directory with tailored templates.</div>
+          <div class="badges">
+            <span class="badge-out">kit_tools/ scaffold</span>
+            <span class="badge-out">CLAUDE.md</span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-cmd"><span class="step-cmd-text">/kit-tools:seed-project</span></div>
+          <div class="step-desc">Claude explores your codebase and fills every template with project-specific content. Runs in tiers by complexity.</div>
+          <div class="badges">
+            <span class="badge-agent">generic-explorer</span>
+            <span class="badge-agent">generic-seeder ×N</span>
+            <span class="badge-out">populated docs</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div class="connector-line"></div><div class="connector-arrow"></div></div>
+
+    <!-- ─── PHASE 2: VISION ─── -->
+    <div class="phase" style="--phase-color: var(--phase-vision)">
+      <div class="phase-header">
+        <span class="phase-num">02</span>
+        <span class="phase-name">Vision</span>
+        <span class="phase-tag">one-time or per major initiative</span>
+      </div>
+      <div class="phase-body">
+        <div class="step">
+          <div class="step-cmd"><span class="step-cmd-text">/kit-tools:create-vision</span></div>
+          <div class="step-desc">Guided conversation to define target users, value proposition, feature areas, constraints, and build order. Runs 3 sequential AI reviews.</div>
+          <div class="badges">
+            <span class="badge-agent">vision-reviewer — completeness</span>
+            <span class="badge-agent">vision-reviewer — feasibility</span>
+            <span class="badge-agent">vision-reviewer — spec-readiness</span>
+            <span class="badge-out">PRODUCT_VISION.md</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div class="connector-line"></div><div class="connector-arrow"></div></div>
+
+    <!-- ─── PHASE 3: SESSION ─── -->
+    <div class="phase" style="--phase-color: var(--phase-session)">
+      <div class="phase-header">
+        <span class="phase-num">03</span>
+        <span class="phase-name">Session Lifecycle</span>
+        <span class="phase-tag">every work session</span>
+      </div>
+      <div class="phase-body">
+        <div class="step">
+          <div class="step-cmd"><span class="step-cmd-text">/kit-tools:start-session</span></div>
+          <div class="step-desc">Orient Claude to the project state, check for orphaned notes, create scratchpad. Auto-triggered hook creates SESSION_SCRATCH.md.</div>
+          <div class="badges">
+            <span class="badge-out">SESSION_SCRATCH.md</span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-desc" style="margin-bottom: 0;">Work happens — hooks auto-update doc timestamps, surface execution notifications, and remind to capture notes before context compaction.</div>
+        </div>
+        <div class="step">
+          <div class="step-cmd">
+            <span class="step-cmd-text">/kit-tools:checkpoint</span>
+            <span style="color: var(--text-muted); font-size: 11px;">mid-session</span>
+          </div>
+          <div class="step-desc" style="margin-bottom: 0;">Snapshot notes mid-session without closing. Or use <code style="color: var(--text-code); font-family: var(--font-mono); font-size: 11px;">/kit-tools:close-session</code> to process all notes → permanent docs and delete the scratchpad.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div class="connector-line"></div><div class="connector-arrow"></div></div>
+
+    <!-- ─── PHASE 4: PLANNING ─── -->
+    <div class="phase" style="--phase-color: var(--phase-planning)">
+      <div class="phase-header">
+        <span class="phase-num">04</span>
+        <span class="phase-name">Planning</span>
+        <span class="phase-tag">per epic</span>
+      </div>
+      <div class="phase-body">
+        <div class="step">
+          <div class="step-cmd"><span class="step-cmd-text">/kit-tools:plan-epic</span></div>
+          <div class="step-desc">Interactive brainstorm → scope assessment → decomposition into session-fit feature specs. Everything is an epic — single-spec features get a minimal wrapper.</div>
+          <div class="badges">
+            <span class="badge-out">epic-*.md</span>
+            <span class="badge-out">feature-*.md ×N</span>
+          </div>
+        </div>
+        <div class="step" style="background: var(--bg-surface);">
+          <div class="step-desc" style="margin-bottom: 8px; font-size: 11.5px; color: var(--text-muted);">DECOMPOSITION EXAMPLE</div>
+          <div style="display: flex; flex-direction: column; gap: 4px; font-family: var(--font-mono); font-size: 11px;">
+            <span style="color: var(--phase-planning);">epic-oauth.md</span>
+            <span style="padding-left: 16px; color: var(--text-secondary);">├── feature-oauth-schema.md <span style="color: var(--text-muted);">(seq 1, no deps)</span></span>
+            <span style="padding-left: 16px; color: var(--text-secondary);">├── feature-oauth-api.md <span style="color: var(--text-muted);">(seq 2, depends_on: schema)</span></span>
+            <span style="padding-left: 16px; color: var(--text-secondary);">└── feature-oauth-ui.md <span style="color: var(--text-muted);">(seq 3, depends_on: api)</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div class="connector-line"></div><div class="connector-arrow"></div></div>
+
+    <!-- ─── PHASE 5: PRE-EXECUTION VALIDATION ─── -->
+    <div class="phase" style="--phase-color: var(--phase-prevalid)">
+      <div class="phase-header">
+        <span class="phase-num">05</span>
+        <span class="phase-name">Pre-Execution Validation</span>
+        <span class="phase-tag">quality gate before coding</span>
+      </div>
+      <div class="phase-body">
+        <div class="step">
+          <div class="step-cmd"><span class="step-cmd-text">/kit-tools:validate-epic</span></div>
+          <div class="step-desc">Four sequential agent reviews per feature spec. Each review pauses for user revision before continuing. The 4th review uses Sonnet for cross-model validation.</div>
+          <div class="badges">
+            <span class="badge-agent">spec-completionist-reviewer</span>
+            <span class="badge-agent">story-quality-reviewer</span>
+            <span class="badge-agent">salty-engineer-reviewer</span>
+            <span class="badge-agent">spec-second-opinion <span style="font-size:9px;opacity:0.7;">(Sonnet)</span></span>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px;">
+          <div class="step" style="text-align: center;">
+            <div style="font-size: 10.5px; color: var(--phase-prevalid); font-family: var(--font-mono); margin-bottom: 4px;">Review 1</div>
+            <div style="font-size: 11px; color: var(--text-secondary);">Are we missing any features or flows?</div>
+          </div>
+          <div class="step" style="text-align: center;">
+            <div style="font-size: 10.5px; color: var(--phase-prevalid); font-family: var(--font-mono); margin-bottom: 4px;">Review 2</div>
+            <div style="font-size: 11px; color: var(--text-secondary);">Story IDs, sizing, detail, integrations</div>
+          </div>
+          <div class="step" style="text-align: center;">
+            <div style="font-size: 10.5px; color: var(--phase-prevalid); font-family: var(--font-mono); margin-bottom: 4px;">Review 3</div>
+            <div style="font-size: 11px; color: var(--text-secondary);">Adversarial GAN-style engineer review</div>
+          </div>
+          <div class="step" style="text-align: center;">
+            <div style="font-size: 10.5px; color: var(--phase-prevalid); font-family: var(--font-mono); margin-bottom: 4px;">Review 4</div>
+            <div style="font-size: 11px; color: var(--text-secondary);">Cross-model architecture & alternatives</div>
+          </div>
+        </div>
+        <div class="feedback-banner revision">
+          <span class="feedback-icon">↩</span>
+          <span class="feedback-text">Revision needed? Spec is updated in-session, then reviews re-run — back to <strong>/kit-tools:plan-epic</strong> for structural changes</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div class="connector-line"></div><div class="connector-arrow"></div></div>
+
+    <!-- ─── PHASE 6: EXECUTION ─── -->
+    <div class="phase" style="--phase-color: var(--phase-execution)">
+      <div class="phase-header">
+        <span class="phase-num">06</span>
+        <span class="phase-name">Execution</span>
+        <span class="phase-tag">per story, autonomous loop</span>
+      </div>
+      <div class="phase-body">
+        <div class="step">
+          <div class="step-cmd"><span class="step-cmd-text">/kit-tools:execute-epic</span></div>
+          <div class="step-desc">Select epic, choose mode, launch. The orchestrator processes each story on an isolated git branch.</div>
+          <div class="modes-row" style="margin-top: 6px;">
+            <span class="mode-badge supervised">Supervised</span>
+            <span class="mode-badge autonomous">Autonomous</span>
+            <span class="mode-badge guarded">Guarded</span>
+          </div>
+        </div>
+
+        <!-- Story loop diagram -->
+        <div class="story-loop">
+          <div class="story-loop-title">Per-story loop</div>
+          <div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 0;">
+            <div class="loop-node">
+              <span class="loop-node-label">story-implementer</span>
+              <span class="loop-node-sub">implements story</span>
+            </div>
+            <div class="loop-arrow">
+              <div class="loop-arrow-line"></div>
+            </div>
+            <div class="loop-node">
+              <span class="loop-node-label">story-verifier</span>
+              <span class="loop-node-sub">checks criteria</span>
+            </div>
+          </div>
+
+          <!-- PASS / FAIL indicators -->
+          <div style="display: flex; justify-content: space-between; margin-top: 8px; padding: 0 2px;">
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted);">
+              <span style="color: #f87171; font-family: var(--font-mono); font-size: 10px; border: 1px solid color-mix(in srgb, #ef4444 25%, transparent); padding: 2px 7px; border-radius: 10px; background: color-mix(in srgb, #ef4444 10%, transparent);">FAIL</span>
+              → retry (loops back, up to max retries)
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted);">
+              <span style="color: #6ee7b7; font-family: var(--font-mono); font-size: 10px; border: 1px solid color-mix(in srgb, #10b981 25%, transparent); padding: 2px 7px; border-radius: 10px; background: color-mix(in srgb, #10b981 10%, transparent);">PASS</span>
+              → next story ↓
+            </div>
+          </div>
+        </div>
+
+        <div class="step" style="background: var(--bg-surface);">
+          <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px; font-family: var(--font-mono); letter-spacing: 0.5px;">MONITORING</div>
+          <div class="badges">
+            <span class="badge-agent">/kit-tools:execution-status</span>
+            <span class="badge-out">tmux attach -t kit-exec-&lt;name&gt;</span>
+            <span class="badge-out">touch .pause_execution</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div class="connector-line"></div><div class="connector-arrow"></div></div>
+
+    <!-- ─── PHASE 7: POST-EXECUTION VALIDATION ─── -->
+    <div class="phase" style="--phase-color: var(--phase-postvalid)">
+      <div class="phase-header">
+        <span class="phase-num">07</span>
+        <span class="phase-name">Post-Execution Validation</span>
+        <span class="phase-tag">auto-runs after execution</span>
+      </div>
+      <div class="phase-body">
+        <div class="step">
+          <div class="step-cmd"><span class="step-cmd-text">/kit-tools:validate-feature</span></div>
+          <div class="step-desc">Four parallel review passes against the full branch diff (<code style="color:var(--text-code);font-family:var(--font-mono);font-size:11px;">git diff main...HEAD</code>). Critical findings auto-fixed, remainder logged.</div>
+          <div class="badges">
+            <span class="badge-agent">code-quality-validator</span>
+            <span class="badge-agent">security-reviewer</span>
+            <span class="badge-agent">feature-compliance-reviewer</span>
+            <span class="badge-agent">feature-fixer (auto-fix)</span>
+            <span class="badge-out">AUDIT_FINDINGS.md</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div class="connector-line"></div><div class="connector-arrow"></div></div>
+
+    <!-- ─── PHASE 8: COMPLETION ─── -->
+    <div class="phase" style="--phase-color: var(--phase-completion)">
+      <div class="phase-header">
+        <span class="phase-num">08</span>
+        <span class="phase-name">Completion</span>
+      </div>
+      <div class="phase-body">
+        <div class="step">
+          <div class="step-cmd"><span class="step-cmd-text">/kit-tools:complete-feature</span></div>
+          <div class="step-desc">Archive completed feature specs, create PR or merge to main, clean up execution artifacts.</div>
+          <div class="badges">
+            <span class="badge-out">specs/archive/</span>
+            <span class="badge-out">GitHub PR</span>
+            <span class="badge-out">merge to main</span>
+          </div>
+        </div>
+        <div class="feedback-banner loop-back">
+          <span class="feedback-icon">↺</span>
+          <span class="feedback-text">Next epic? Return to <strong>/kit-tools:plan-epic</strong> — Phase 4</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end .flow-stack -->
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ SKILLS ═══════════════ -->
+<section id="skills" class="section">
+  <h2 class="section-title">Skills</h2>
+  <p class="section-desc">18 skills covering the full development lifecycle — from project setup to epic completion.</p>
+
+  <div class="content-grid">
+
+    <div class="skill-card">
+      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-setup)"></span>/kit-tools:init-project</span>
+      <span class="skill-desc">Initialize kit_tools with project-type presets. Scaffolds the documentation structure tailored to your stack.</span>
+    </div>
+
+    <div class="skill-card">
+      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-setup)"></span>/kit-tools:seed-project</span>
+      <span class="skill-desc">Populate all templates from codebase exploration. Claude reads your code and fills docs with real content.</span>
+    </div>
+
+    <div class="skill-card">
+      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-setup)"></span>/kit-tools:seed-template</span>
+      <span class="skill-desc">Seed or re-seed a single template. Supports <code>--force</code>, <code>--no-cache</code>, <code>--validate</code>.</span>
+    </div>
+
+    <div class="skill-card">
+      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-setup)"></span>/kit-tools:validate-seeding</span>
+      <span class="skill-desc">Validate all seeded templates for unfilled placeholders and incomplete sections.</span>
+    </div>
+
+    <div class="skill-card">
+      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-vision)"></span>/kit-tools:create-vision</span>
+      <span class="skill-desc">Define the product vision through guided conversation with 3-pass AI review. Produces PRODUCT_VISION.md.</span>
+    </div>
+
+    <div class="skill-card">
+      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-session)"></span>/kit-tools:start-session</span>
+      <span class="skill-desc">Orient Claude to the project, check for orphaned notes, create session scratchpad. Run at the top of every session.</span>
+    </div>
+
+    <div class="skill-card">
+      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-session)"></span>/kit-tools:close-session</span>
+      <span class="skill-desc">Process scratchpad notes into permanent docs and delete the scratchpad. Run at the end of every session.</span>
+    </div>
+
+    <div class="skill-card">
+      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-session)"></span>/kit-tools:checkpoint</span>
+      <span class="skill-desc">Mid-session checkpoint — save progress to docs without fully closing. Useful before context approaches limits.</span>
+    </div>
+
+    <div class="skill-card">
+      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-planning)"></span>/kit-tools:plan-epic</span>
+      <span class="skill-desc">Brainstorm and plan a new feature or epic. Creates epic-*.md wrapper plus decomposed feature-*.md specs.</span>
+    </div>
+
+    <div class="skill-card">
+      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-prevalid)"></span>/kit-tools:validate-epic</span>
+      <span class="skill-desc">Pre-execution quality gate. Four agent reviews (completeness, story quality, adversarial engineering, cross-model second opinion) per spec.</span>
+    </div>
+
+    <div class="skill-card">
+      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-execution)"></span>/kit-tools:execute-epic</span>
+      <span class="skill-desc">Execute an epic's feature specs in supervised, autonomous, or guarded mode. Managed by the Python orchestrator.</span>
+    </div>
+
+    <div class="skill-card">
+      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-execution)"></span>/kit-tools:execution-status</span>
+      <span class="skill-desc">Check progress, errors, and available actions for a running autonomous execution. Read-only — inspects state files.</span>
+    </div>
+
+    <div class="skill-card">
+      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-postvalid)"></span>/kit-tools:validate-feature</span>
+      <span class="skill-desc">Validate the completed branch against its feature spec. Code quality, security, and compliance — 4 parallel passes.</span>
+    </div>
+
+    <div class="skill-card">
+      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-completion)"></span>/kit-tools:complete-feature</span>
+      <span class="skill-desc">Mark a feature spec as completed, archive it, and handle the PR or merge. Works for mid-epic and final specs.</span>
+    </div>
+
+    <div class="skill-card">
+      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-session)"></span>/kit-tools:sync-project</span>
+      <span class="skill-desc">Full sync between code and docs via drift detection. Use <code>--quick</code> for a lightweight audit.</span>
+    </div>
+
+    <div class="skill-card">
+      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-setup)"></span>/kit-tools:update-kit-tools</span>
+      <span class="skill-desc">Check if your project's hooks and templates are behind the plugin. Selectively pull in updates.</span>
+    </div>
+
+    <div class="skill-card">
+      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-setup)"></span>/kit-tools:sync-symlinks</span>
+      <span class="skill-desc">Force-refresh skill symlinks after a plugin update. Fixes autocomplete when symlinks go stale.</span>
+    </div>
+
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ HOOKS ═══════════════ -->
+<section id="hooks" class="section">
+  <h2 class="section-title">Automation Hooks</h2>
+  <p class="section-desc">Eight hooks run automatically in response to Claude Code events — no commands required.</p>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Hook</th>
+        <th>Trigger</th>
+        <th>What it does</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="hook-name">create_scratchpad</span></td>
+        <td><span class="hook-trigger">SessionStart</span></td>
+        <td>Creates SESSION_SCRATCH.md if kit_tools/ exists in the project</td>
+      </tr>
+      <tr>
+        <td><span class="hook-name">sync_skill_symlinks</span></td>
+        <td><span class="hook-trigger">SessionStart</span></td>
+        <td>Verifies skill symlinks against installed_plugins.json — fixes stale symlinks after plugin updates</td>
+      </tr>
+      <tr>
+        <td><span class="hook-name">update_doc_timestamps</span></td>
+        <td><span class="hook-trigger">PostToolUse (Edit/Write)</span></td>
+        <td>Updates "Last updated" date in any kit_tools doc that Claude modifies</td>
+      </tr>
+      <tr>
+        <td><span class="hook-name">detect_phase_completion</span></td>
+        <td><span class="hook-trigger">PostToolUse (Edit)</span></td>
+        <td>Detects when all criteria in a feature spec are checked; suggests /kit-tools:validate-feature</td>
+      </tr>
+      <tr>
+        <td><span class="hook-name">validate_seeded_template</span></td>
+        <td><span class="hook-trigger">PostToolUse (Edit/Write)</span></td>
+        <td>Checks edited templates for unfilled placeholder tokens and flags them inline</td>
+      </tr>
+      <tr>
+        <td><span class="hook-name">remind_scratchpad_before_compact</span></td>
+        <td><span class="hook-trigger">PreCompact</span></td>
+        <td>Reminds Claude to capture key notes before context is summarized; adds compaction marker</td>
+      </tr>
+      <tr>
+        <td><span class="hook-name">check_execution_notifications</span></td>
+        <td><span class="hook-trigger">UserPromptSubmit</span></td>
+        <td>Surfaces execution notifications (completions, failures, crashes, pauses) on the user's next message</td>
+      </tr>
+      <tr>
+        <td><span class="hook-name">remind_close_session</span></td>
+        <td><span class="hook-trigger">Stop</span></td>
+        <td>Reminds to run /kit-tools:close-session if the scratchpad has unprocessed notes</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ INSTALL ═══════════════ -->
+<section id="install" class="section">
+  <h2 class="section-title">Installation</h2>
+  <p class="section-desc">Install from the WashingBearLabs marketplace or directly from a local clone.</p>
+
+  <div class="install-block">
+    <div class="install-block-header">Marketplace (recommended)</div>
+    <pre><span class="comment"># 1. Add the WashingBearLabs marketplace</span>
+<span class="cmd">/plugin marketplace add WashingBearLabs/WashingBearLabsMarketplace</span>
+
+<span class="comment"># 2. Install the plugin</span>
+<span class="cmd">/plugin install kit-tools@washingbearlabs</span></pre>
+  </div>
+
+  <div class="install-block">
+    <div class="install-block-header">Local clone</div>
+    <pre><span class="cmd">git clone https://github.com/WashingBearLabs/KitTools.git</span>
+<span class="cmd">/plugin install ./KitTools</span></pre>
+  </div>
+
+  <h3 style="font-family: var(--font-display); font-size: 18px; font-weight: 600; margin-bottom: 20px; margin-top: 40px; letter-spacing: -0.3px;">Project Types</h3>
+  <div class="types-grid">
+    <div class="type-card">
+      <div class="type-name">API / Backend</div>
+      <div class="type-desc">REST, GraphQL, microservices</div>
+      <div class="type-templates">Core + API + Data + Ops</div>
+    </div>
+    <div class="type-card">
+      <div class="type-name">Web App</div>
+      <div class="type-desc">React, Vue, Next.js</div>
+      <div class="type-templates">Core + Deployment + CI</div>
+    </div>
+    <div class="type-card">
+      <div class="type-name">Full Stack</div>
+      <div class="type-desc">Frontend + Backend</div>
+      <div class="type-templates">Everything</div>
+    </div>
+    <div class="type-card">
+      <div class="type-name">CLI Tool</div>
+      <div class="type-desc">Command-line apps</div>
+      <div class="type-templates">Core (minimal)</div>
+    </div>
+    <div class="type-card">
+      <div class="type-name">Library</div>
+      <div class="type-desc">npm, PyPI packages</div>
+      <div class="type-templates">Core + API docs</div>
+    </div>
+    <div class="type-card">
+      <div class="type-name">Mobile</div>
+      <div class="type-desc">iOS / Android apps</div>
+      <div class="type-templates">Core + Services</div>
+    </div>
+    <div class="type-card">
+      <div class="type-name">Custom</div>
+      <div class="type-desc">Pick templates manually</div>
+      <div class="type-templates">Your choice</div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ SESSION FIT ═══════════════ -->
+<section class="section">
+  <h2 class="section-title">Session-Fit Guidelines</h2>
+  <p class="section-desc">Feature specs are sized for reliable autonomous execution — one story per Claude session.</p>
+
+  <div class="metric-row">
+    <div class="metric-card">
+      <span class="metric-value">5–7</span>
+      <span class="metric-label">Stories per feature spec (max 7)</span>
+    </div>
+    <div class="metric-card">
+      <span class="metric-value">3–5</span>
+      <span class="metric-label">Criteria per story (max 6)</span>
+    </div>
+    <div class="metric-card">
+      <span class="metric-value">≤35</span>
+      <span class="metric-label">Total criteria per spec</span>
+    </div>
+  </div>
+
+  <p style="color: var(--text-secondary); font-size: 13.5px;">Specs exceeding these limits are flagged <code style="color:var(--text-code);font-family:var(--font-mono);font-size:11.5px;">session_ready: false</code> and should be decomposed before execution. The <strong style="color:var(--text-primary);">validate-epic</strong> skill enforces these bounds automatically.</p>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════ PHILOSOPHY ═══════════════ -->
+<section id="philosophy" class="section" style="max-width: 800px;">
+  <h2 class="section-title">Philosophy</h2>
+  <p class="section-desc">Why KitTools exists.</p>
+
+  <div class="callout">
+    <p><strong>AI assistants are most effective when they have structured, comprehensive context about a codebase.</strong> Instead of repeatedly explaining your project in chat, maintain living documentation that gives Claude immediate understanding of architecture, patterns, and conventions.</p>
+    <p>Good documentation prevents Claude from making decisions that violate existing patterns, enables effective troubleshooting with log locations and debug procedures, and reduces errors by surfacing gotchas and known issues upfront.</p>
+    <p>The documentation also benefits human developers — but it's <strong>optimized for AI consumption</strong>.</p>
+  </div>
+
+  <div class="callout" style="border-left-color: var(--phase-planning);">
+    <p><strong>Template vs. Instance.</strong> Plugin templates are canonical versions that update with the plugin. Your project's <code style="color:var(--text-code);font-family:var(--font-mono);font-size:12px;">kit_tools/</code> directory is yours to customize — plugin updates never overwrite your docs. Pull in improvements selectively with <code style="color:var(--text-code);font-family:var(--font-mono);font-size:12px;">/kit-tools:update-kit-tools</code>.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ FOOTER ═══════════════ -->
+<footer>
+  <div class="footer-brand">
+    KitTools <span>v2.2.0 · GPL-3.0</span>
+  </div>
+  <div style="font-size: 12px; color: var(--text-muted); text-align: center;">
+    Built with care by <a href="https://www.washingbearlabs.com" style="color: var(--text-secondary); font-weight: 700; text-decoration: none;">WashingBearLabs</a>
+  </div>
+  <div class="footer-links">
+    <a href="https://github.com/WashingBearLabs/KitTools">GitHub</a>
+    <a href="https://www.washingbearlabs.com/docs">Docs</a>
+    <a href="CHANGELOG.md">Changelog</a>
+    <a href="LICENSE">License</a>
+  </div>
+</footer>
+
+</body>
+</html>

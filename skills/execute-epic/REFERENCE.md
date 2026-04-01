@@ -1,12 +1,14 @@
-# Execute Feature — Reference
+# Execute Epic — Reference
 
-Detailed formats, schemas, and examples for the execute-feature workflow. Read this for edge cases and detailed field descriptions.
+Detailed formats, schemas, and examples for the execute-epic workflow. Read this for edge cases and detailed field descriptions.
 
 ---
 
 ## Execution Config Schema
 
-### Standalone Feature Spec (no epic)
+### Standalone Feature Spec (legacy/fallback path)
+
+Used when no `epic-*.md` is found and a feature spec is selected directly. This is a backwards-compatibility path — epic config is now standard.
 
 ```json
 {
@@ -31,6 +33,8 @@ Detailed formats, schemas, and examples for the execute-feature workflow. Read t
 ```
 
 ### Epic (multiple feature specs in sequence)
+
+This is the standard path. Derived from the selected `epic-*.md` wrapper.
 
 ```json
 {
@@ -77,6 +81,68 @@ Detailed formats, schemas, and examples for the execute-feature workflow. Read t
 When `epic_specs` is present, the orchestrator runs in epic mode. When absent, it runs in single-feature-spec mode. Exclude already-completed/archived feature specs from `epic_specs`.
 
 `completion_strategy` controls post-execution behavior: `"pr"` (push + create GitHub PR, recommended), `"merge"` (auto-merge to main, blocked if validation finds critical issues), or `"none"` (leave branch as-is). Default: `"pr"`.
+
+---
+
+## Config Creation Pattern
+
+**Always use Python to create `.execution-config.json`.** Never use shell heredocs or `$(cat ...)` to embed template content — single-quoted heredocs suppress command substitution entirely, and double-quoted heredocs break on backslashes, backticks, and `$` signs in the template files.
+
+The correct approach reads agent templates via Python file I/O:
+
+```python
+import json, os, sys
+
+plugin_root = sys.argv[1]   # passed as first argument from the skill
+project_dir = sys.argv[2]   # absolute path to the project
+
+with open(f"{plugin_root}/agents/story-implementer.md") as f:
+    impl_template = f.read()
+with open(f"{plugin_root}/agents/story-verifier.md") as f:
+    verif_template = f.read()
+
+config = {
+    # --- fill remaining fields from skill context ---
+    "project_dir": project_dir,
+    "mode": "autonomous",           # or "guarded"
+    "max_retries": None,
+    "tmux_session": "kit-exec-<name>",
+    "completion_strategy": "pr",
+    "implementer_template": impl_template,
+    "verifier_template": verif_template,
+    "project_context": {
+        "synopsis": "kit_tools/SYNOPSIS.md",
+        "code_arch": "kit_tools/arch/CODE_ARCH.md",
+        "conventions": "kit_tools/docs/CONVENTIONS.md",
+        "gotchas": "kit_tools/docs/GOTCHAS.md",
+        "spec_overview": "... inline overview text ..."
+    },
+    # epic fields (omit for standalone):
+    # "epic_name": "...",
+    # "epic_pause_between_specs": True,
+    # "epic_specs": [...]
+}
+
+output_path = f"{project_dir}/kit_tools/specs/.execution-config.json"
+with open(output_path, "w") as f:
+    json.dump(config, f, indent=2)
+
+print(f"Config written to {output_path}")
+```
+
+**How to invoke from the skill:**
+
+Write the script to a temp file, then execute it — avoid inline `-c` strings for multi-line scripts:
+
+```bash
+cat > /tmp/kit_write_config.py << 'PYEOF'
+<script content — safe because PYEOF wraps Python source, not file contents>
+PYEOF
+python3 /tmp/kit_write_config.py "$CLAUDE_PLUGIN_ROOT" "$(pwd)"
+rm /tmp/kit_write_config.py
+```
+
+The critical constraint is that `implementer_template` and `verifier_template` are populated by Python `open()` calls inside the script, not by shell substitution before the script runs.
 
 ---
 
@@ -168,20 +234,21 @@ These tokens are used in the agent templates and interpolated by this skill (sup
 
 ## Epic Flow Details
 
-### Epic detection
+### Epic selection
 
-After selecting a feature spec, read its frontmatter. If the `epic` field is present and non-empty:
+Check `kit_tools/specs/` for `epic-*.md` files. Each epic wrapper contains a Decomposition table listing the ordered feature specs. Read the wrapper to get:
 
-1. Check for an `epic-*.md` file in `kit_tools/specs/` for ordering; fall back to scanning feature specs by `epic` frontmatter
-2. Also scan `kit_tools/specs/archive/` for completed feature specs in the same epic
-3. Order all by `epic_seq`
-4. Determine which are already completed (archived)
+1. Epic name and description
+2. Ordered list of feature specs with `epic_seq`
+3. Which specs are already completed (check `kit_tools/specs/archive/` for archived copies)
+
+Present the list with completion status so the user can choose an epic to execute.
 
 ### Epic user options
 
 - **A. Execute all remaining, pause between each** — Sets `epic_pause_between_specs: true`. Pauses after each feature spec (validate + tag + archive).
 - **B. Execute all remaining non-stop** — No stops between feature specs.
-- **C. Execute just this feature spec** — Standalone on the `epic/[name]` branch.
+- **C. Execute just one specific spec** — Standalone on the `epic/[name]` branch.
 
 ### Epic orchestrator behavior
 
@@ -262,7 +329,7 @@ Claude Code prevents running `claude -p` from within an existing Claude session 
 
 ### tmux session naming
 
-- **Session name pattern:** `kit-exec-{feature_name}` (e.g., `kit-exec-auth`, `kit-exec-processing-pipeline`). For epics: `kit-exec-{epic_name}`.
+- **Session name pattern:** `kit-exec-{epic_name}` (e.g., `kit-exec-oauth`, `kit-exec-processing-pipeline`). For fallback single-spec mode: `kit-exec-{feature_name}`.
 - The session name is stored in `.execution-config.json` as `tmux_session` so that `execution-status` can find it.
 - If the derived session name already exists (`tmux has-session -t {name}`), append a suffix (e.g., `-2`) or ask the user.
 - The orchestrator kills its own tmux session on completion via `kill_tmux_session()`, so no manual cleanup is needed.

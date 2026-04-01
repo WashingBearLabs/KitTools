@@ -354,3 +354,23 @@ Throughout seeding, maintain a progress display:
 # Preview what would be seeded
 /kit-tools:seed-project --dry-run
 ```
+
+---
+
+## Next Steps
+
+After seeding completes:
+
+- **Define your product vision** — Run `/kit-tools:create-vision` to articulate goals, feature areas, and build order. This gives planning skills strategic context.
+- **Plan your first feature** — Run `/kit-tools:plan-epic` to create an epic and feature specs. If you have a vision, the planner will reference it automatically.
+
+---
+
+## Related Skills
+
+| Skill | When to use |
+|-------|-------------|
+| `/kit-tools:create-vision` | Define product vision before planning features |
+| `/kit-tools:plan-epic` | Plan features and epics from your seeded docs |
+| `/kit-tools:validate-seeding` | Re-validate seeded templates for unfilled placeholders |
+| `/kit-tools:seed-template` | Seed a single template individually |
