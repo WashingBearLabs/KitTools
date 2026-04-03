@@ -5,6 +5,13 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2026-04-03
+
+### Changed
+- **`/kit-tools:validate-feature` → `/kit-tools:validate-implementation`** — Renamed to better reflect that this skill validates the implementation (code on a branch), not the feature spec itself. No behavioral changes.
+- **`/kit-tools:complete-feature` → `/kit-tools:complete-implementation`** — Renamed for consistency with the epic-forward workflow. No behavioral changes.
+- All cross-references updated across skills, agents, hooks, orchestrator, templates, and documentation.
+
 ## [2.2.0] - 2026-04-01
 
 ### Added
@@ -22,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`/kit-tools:plan-epic` (formerly `plan-feature`)** — Step 3 "Epic Detection" removed. Replaced with "Scope Assessment & Decomposition" that always produces an `epic-*.md`. Single-spec epics get a minimal wrapper. All feature specs now use `type: epic-child` frontmatter. Step 13 prompts to run `/kit-tools:validate-epic` before execution.
 - **`/kit-tools:execute-epic` (formerly `execute-feature`)** — Primary entry point is now epic selection from `epic-*.md` files, not individual feature spec selection. Falls back to direct spec listing for backwards compatibility.
 - **`/kit-tools:execution-status`** — Description and body updated to reference `execute-epic`.
-- **`/kit-tools:complete-feature`** — Enhanced learnings capture (Step 3): gotchas → GOTCHAS.md, conventions → CONVENTIONS.md, spec-writing notes → Implementation Notes. Added context-aware next steps and updated Related Skills.
+- **`/kit-tools:complete-implementation`** — Enhanced learnings capture (Step 3): gotchas → GOTCHAS.md, conventions → CONVENTIONS.md, spec-writing notes → Implementation Notes. Added context-aware next steps and updated Related Skills.
 - **`/kit-tools:seed-project`** — Added Next Steps section and Related Skills table for clear handoff to create-vision or plan-epic.
 - **`/kit-tools:start-session`** — Added guidance when no feature specs exist: suggests plan-epic or create-vision.
 - **`/kit-tools:init-project`**, **`/kit-tools:create-vision`** — Related skill references updated.
@@ -45,15 +52,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.1.3] - 2026-03-13
 
 ### Changed
-- **Smart test scoping** — Story verification now runs only related tests instead of the full suite. Tests are matched by naming convention (e.g., `foo.py` → `test_foo.py`) or explicit `test_mapping` in `TESTING_GUIDE.md`. Full suite runs only at the validate-feature gate, with quiet flags (`-q --tb=line`, `--silent`, `--reporter=dot`).
+- **Smart test scoping** — Story verification now runs only related tests instead of the full suite. Tests are matched by naming convention (e.g., `foo.py` → `test_foo.py`) or explicit `test_mapping` in `TESTING_GUIDE.md`. Full suite runs only at the validate-implementation gate, with quiet flags (`-q --tb=line`, `--silent`, `--reporter=dot`).
 - **Test output control** — Agent test runs use quiet flags to suppress per-test PASSED noise while preserving full failure tracebacks. Safety-net `| head -200` caps runaway output without hiding failure details.
 
 ## [2.1.2] - 2026-03-11
 
 ### Added
 - **Inline diff for verifier** — Verifier agent now receives the full diff content inline (up to 20KB), reducing tool calls and speeding up verification. Truncated diffs include a stat summary and instruct the verifier to use the Read tool for full files.
-- **Fail-fast test flags** — Verifier test commands now include fail-fast flags for known runners: pytest (`-x`), jest/npm test (`--bail`), vitest (`--bail 1`). The full test suite (without fail-fast) is preserved for validate-feature.
-- **Completion strategy** — New `completion_strategy` config option (`"pr"`, `"merge"`, or `"none"`) controls post-execution behavior. The orchestrator now handles completion directly in Python instead of spawning a `claude -p` session for `/kit-tools:complete-feature`.
+- **Fail-fast test flags** — Verifier test commands now include fail-fast flags for known runners: pytest (`-x`), jest/npm test (`--bail`), vitest (`--bail 1`). The full test suite (without fail-fast) is preserved for validate-implementation.
+- **Completion strategy** — New `completion_strategy` config option (`"pr"`, `"merge"`, or `"none"`) controls post-execution behavior. The orchestrator now handles completion directly in Python instead of spawning a `claude -p` session for `/kit-tools:complete-implementation`.
   - `"pr"` (default): pushes branch and creates a GitHub PR via `gh`
   - `"merge"`: auto-merges to main (blocked if validation finds critical issues, falls back to PR)
   - `"none"`: leaves branch as-is
@@ -62,9 +69,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Pre-attempt HEAD capture** — Diff commands for the verifier now use explicit two-dot syntax (`{pre_attempt_head}..HEAD`) instead of three-dot merge-base syntax, eliminating ambiguity in multi-commit scenarios
 - **Verifier review instructions** — Step 1 updated from "Read Changed Files" to "Review Changes", reflecting the inline diff workflow
-- **`complete-feature` skill** — Added note that autonomous/guarded mode handles completion via the orchestrator; skill is for manual/supervised use or fallback
+- **`complete-implementation` skill** — Added note that autonomous/guarded mode handles completion via the orchestrator; skill is for manual/supervised use or fallback
 - **`execute-feature` skill** — Added Step 2b (completion strategy selection) and pre-flight check 10 (gh auth verification when PR strategy selected)
-- **Epic completion** — `run_epic()` no longer spawns a `claude -p` complete-feature session; uses `complete_feature()` directly
+- **Epic completion** — `run_epic()` no longer spawns a `claude -p` complete-implementation session; uses `complete_feature()` directly
 
 ## [2.1.1] - 2026-03-07
 
@@ -173,7 +180,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **New Agent: `prd-compliance-reviewer.md`** — Dedicated PRD compliance review agent
   - Checks acceptance criteria coverage, functional requirements, scope creep, and intent alignment
-  - Runs as a parallel subagent in validate-feature (previously inline in the skill session)
+  - Runs as a parallel subagent in validate-implementation (previously inline in the skill session)
   - Standard FINDING output format with `category: compliance`
 - **Diff summarization for validators** — Large diffs are now truncated per-file before being passed to validator agents
   - 60KB budget split across files; truncation notice instructs agents to Read full files
@@ -198,9 +205,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Auto-resumes and writes a notification after timeout
 
 ### Changed
-- **validate-feature Step 5** — PRD compliance review now runs as a subagent (prd-compliance-reviewer) instead of inline
+- **validate-implementation Step 5** — PRD compliance review now runs as a subagent (prd-compliance-reviewer) instead of inline
   - Steps 3, 4, and 5 can all run in parallel
-- **validate-feature/REFERENCE.md** — Added PRD compliance agent interpolation table and large diff handling section
+- **validate-implementation/REFERENCE.md** — Added PRD compliance agent interpolation table and large diff handling section
 
 ## [1.6.5] - 2026-02-26
 
@@ -289,7 +296,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Auto-Detect Test Command** — `detect_test_command()` finds the project's test runner
   - Checks: `package.json`, `pyproject.toml`, `pytest.ini`, `Makefile`, `TESTING_GUIDE.md`
   - Skips npm default "no test specified" placeholder
-- **Test Execution in Validation** — `/kit-tools:validate-feature` Step 4b runs the test suite
+- **Test Execution in Validation** — `/kit-tools:validate-implementation` Step 4b runs the test suite
   - Failed tests logged as critical findings; passing tests noted in summary
   - Graceful fallback if no test command detected
 - **Auto-Injected Test Criteria** — `/kit-tools:plan-feature` adds test criteria to every code story
@@ -319,8 +326,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Skill Structure** — 4 pipeline skills split into SKILL.md (workflow) + REFERENCE.md (details)
   - `execute-feature`: 509 -> 139 lines SKILL.md + 226 lines REFERENCE.md
   - `plan-feature`: 647 -> 177 lines SKILL.md + 211 lines REFERENCE.md
-  - `validate-feature`: 414 -> 141 lines SKILL.md + 159 lines REFERENCE.md
-  - `complete-feature`: 293 -> 101 lines SKILL.md + 127 lines REFERENCE.md
+  - `validate-implementation`: 414 -> 141 lines SKILL.md + 159 lines REFERENCE.md
+  - `complete-implementation`: 293 -> 101 lines SKILL.md + 127 lines REFERENCE.md
 - **PRD Template** — Updated to v1.3.0 with Implementation Hints section and test criteria
 
 ### Fixed
@@ -353,7 +360,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Git tags mark each PRD checkpoint (`[epic]/[feature]-complete`)
   - Resume support: skips already-completed PRDs on restart
   - Cross-PRD learnings carried forward to subsequent PRD story prompts
-- **Epic-Aware Completion** — `/kit-tools:complete-feature` handles mid-epic and final-epic PRDs
+- **Epic-Aware Completion** — `/kit-tools:complete-implementation` handles mid-epic and final-epic PRDs
   - Mid-epic: tag + archive only, no PR or artifact cleanup
   - Final epic PRD: PR references all PRDs and checkpoint tags
 - **Pause Between PRDs** — New `epic_pause_between_prds` config option
@@ -379,7 +386,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.5.2] - 2026-02-07
 
 ### Added
-- **New Skill: `/kit-tools:validate-feature`** — Full branch-level validation against PRD
+- **New Skill: `/kit-tools:validate-implementation`** — Full branch-level validation against PRD
   - Reviews entire `git diff main...HEAD` — all changes across the feature, not just recent edits
   - Three independent review passes: code quality, security, and PRD compliance
   - PRD compliance checks acceptance criteria coverage, functional requirements, and scope creep
@@ -396,17 +403,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **`code-quality-validator.md`** — Narrowed to quality-only (removed security and intent alignment passes)
-- **`execute-feature/SKILL.md`** — Completion messaging now directs to validate-feature
-- **`complete-feature/SKILL.md`** — Added execution artifact cleanup (Step 7), feature branch handling with PR/merge option (Step 8), validate-feature in Related Skills
-- **`close-session/SKILL.md`** — Replaced validate-feature invocation with inline quality check using code-quality-validator agent directly (session-level diff, not branch-level)
-- **`checkpoint/SKILL.md`** — Replaced validate-feature invocation with inline quality check using code-quality-validator agent directly
-- **`detect_phase_completion.py`** — Suggests validate-feature instead of validate-phase
-- **`init-project/SKILL.md`** — References updated to validate-feature
+- **`execute-feature/SKILL.md`** — Completion messaging now directs to validate-implementation
+- **`complete-implementation/SKILL.md`** — Added execution artifact cleanup (Step 7), feature branch handling with PR/merge option (Step 8), validate-implementation in Related Skills
+- **`close-session/SKILL.md`** — Replaced validate-implementation invocation with inline quality check using code-quality-validator agent directly (session-level diff, not branch-level)
+- **`checkpoint/SKILL.md`** — Replaced validate-implementation invocation with inline quality check using code-quality-validator agent directly
+- **`detect_phase_completion.py`** — Suggests validate-implementation instead of validate-phase
+- **`init-project/SKILL.md`** — References updated to validate-implementation
 - **`README.md`** — Skills table, hooks table, and "Code Quality Validation" section rewritten as "Feature Validation"
-- **`templates/AUDIT_FINDINGS.md`** — References updated to validate-feature
+- **`templates/AUDIT_FINDINGS.md`** — References updated to validate-implementation
 
 ### Removed
-- **`/kit-tools:validate-phase`** — Replaced by validate-feature (branch-level validation)
+- **`/kit-tools:validate-phase`** — Replaced by validate-implementation (branch-level validation)
 
 ## [1.5.1] - 2026-02-06
 
@@ -447,7 +454,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **PRD Template** — `ralph_ready` field renamed to `session_ready`
 - **`/kit-tools:plan-feature`** — Removed Ralph references, uses `session_ready` and `execute-feature`
-- **`/kit-tools:complete-feature`** — Removed Ralph cleanup step, updated Related Skills
+- **`/kit-tools:complete-implementation`** — Removed Ralph cleanup step, updated Related Skills
 
 ### Removed
 - **`/kit-tools:export-ralph`** — Replaced by native `execute-feature`
@@ -489,7 +496,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `kit_tools/prd/` directory for PRD files with YAML frontmatter
   - `kit_tools/prd/archive/` for completed PRDs
   - PRD template with user stories (US-XXX), acceptance criteria, functional requirements (FR-X)
-- **New Skill: `/kit-tools:complete-feature`** — Mark PRD as completed and archive it
+- **New Skill: `/kit-tools:complete-implementation`** — Mark PRD as completed and archive it
 - **New Skill: `/kit-tools:export-ralph`** — Convert KitTools PRD to ralph's prd.json format
 - **New Skill: `/kit-tools:import-learnings`** — Import ralph progress.txt learnings back to PRD
 - **Ralph Integration** — Optional integration with the ralph autonomous agent system

@@ -147,8 +147,8 @@ Warn: "The orchestrator is not running but state shows `running`. The process ma
 
 ### If Completed
 
-- **Validate** — Suggest `/kit-tools:validate-feature`
-- **Complete** — Suggest `/kit-tools:complete-feature`
+- **Validate** — Suggest `/kit-tools:validate-implementation`
+- **Complete** — Suggest `/kit-tools:complete-implementation`
 - **View log** — Show full execution log
 
 ### If Failed
@@ -166,5 +166,5 @@ Ask the user which action to take, then execute it.
 | Skill | When to use |
 |-------|-------------|
 | `/kit-tools:execute-epic` | To start or resume autonomous execution |
-| `/kit-tools:validate-feature` | To validate the full feature branch after execution |
-| `/kit-tools:complete-feature` | To archive feature spec after all stories pass |
+| `/kit-tools:validate-implementation` | To validate the full feature branch after execution |
+| `/kit-tools:complete-implementation` | To archive feature spec after all stories pass |

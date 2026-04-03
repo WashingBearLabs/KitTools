@@ -1,6 +1,6 @@
-# Validate Feature — Reference
+# Validate Implementation — Reference
 
-Detailed formats, agent interpolation details, and edge cases for the validate-feature workflow.
+Detailed formats, agent interpolation details, and edge cases for the validate-implementation workflow.
 
 ---
 
@@ -178,7 +178,7 @@ test_mapping:
   "src/core/**": "tests/test_perception*.py tests/test_context*.py"
 ```
 
-The orchestrator uses this (plus heuristic name matching) to run only related tests during story verification. The full suite runs only at the validate-feature gate.
+The orchestrator uses this (plus heuristic name matching) to run only related tests during story verification. The full suite runs only at the validate-implementation gate.
 
 ---
 

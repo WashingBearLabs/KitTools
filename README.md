@@ -75,9 +75,9 @@ git clone https://github.com/WashingBearLabs/KitTools.git
 | `/kit-tools:plan-epic` | Plan a new feature or epic, creating an Epic and Feature Specs |
 | `/kit-tools:validate-epic` | Validate feature specs before execution — completeness, story quality, adversarial review, cross-model second opinion |
 | `/kit-tools:execute-epic` | Execute an epic's feature specs autonomously, supervised, or guarded |
-| `/kit-tools:complete-feature` | Mark a Feature Spec as completed and archive it |
+| `/kit-tools:complete-implementation` | Mark a Feature Spec as completed and archive it |
 | `/kit-tools:sync-project` | Full sync between code and docs (`--quick` for audit) |
-| `/kit-tools:validate-feature` | Validate a feature branch against its feature spec (quality, security, compliance) |
+| `/kit-tools:validate-implementation` | Validate a feature branch against its feature spec (quality, security, compliance) |
 | `/kit-tools:update-kit-tools` | Update project components from latest plugin versions |
 | `/kit-tools:execution-status` | Check progress and status of autonomous epic execution |
 | `/kit-tools:sync-symlinks` | Force-refresh skill symlinks after a plugin update |
@@ -91,7 +91,7 @@ kit-tools includes automation hooks that run automatically:
 | `create_scratchpad` | SessionStart | Creates SESSION_SCRATCH.md if kit_tools exists |
 | `sync_skill_symlinks` | SessionStart | Syncs skill symlinks (verifies against `installed_plugins.json`) |
 | `update_doc_timestamps` | PostToolUse (Edit/Write) | Updates "Last Updated" in kit_tools docs |
-| `detect_phase_completion` | PostToolUse (Edit) | Notes feature spec criteria and milestone task completions; suggests validate-feature when all criteria are done |
+| `detect_phase_completion` | PostToolUse (Edit) | Notes feature spec criteria and milestone task completions; suggests validate-implementation when all criteria are done |
 | `validate_seeded_template` | PostToolUse (Edit/Write) | Validates seeded templates for unfilled placeholders |
 | `remind_scratchpad_before_compact` | PreCompact | Reminds to capture notes, adds compaction marker |
 | `check_execution_notifications` | UserPromptSubmit | Surfaces execution notifications (completions, failures, crashes, pauses) on next user message |
@@ -199,7 +199,7 @@ kit-tools encourages a session-based workflow:
 
 ## Feature Validation
 
-Use `/kit-tools:validate-feature` to validate an entire feature branch against its feature spec:
+Use `/kit-tools:validate-implementation` to validate an entire feature branch against its feature spec:
 
 1. Captures the full branch diff (`git diff main...HEAD`) — all changes across the feature
 2. Runs three independent review passes:
@@ -262,7 +262,7 @@ Large features ("epics") are automatically split into focused feature specs with
        ↓
 /execute-epic auth → autonomous execution, story by story
        ↓
-/complete-feature → feature specs move to specs/archive/
+/complete-implementation → feature specs move to specs/archive/
 ```
 
 ### Autonomous Execution

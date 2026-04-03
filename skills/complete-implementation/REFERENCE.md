@@ -1,6 +1,6 @@
-# Complete Feature — Reference
+# Complete Implementation — Reference
 
-Detailed formats, epic handling, and edge cases for the complete-feature workflow.
+Detailed formats, epic handling, and edge cases for the complete-implementation workflow.
 
 ---
 

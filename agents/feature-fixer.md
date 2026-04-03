@@ -1,5 +1,5 @@
 ---
-description: Applies targeted fixes for validation findings. Used by the validate-feature skill in autonomous mode — contains placeholder tokens that must be interpolated before invocation.
+description: Applies targeted fixes for validation findings. Used by the validate-implementation skill in autonomous mode — contains placeholder tokens that must be interpolated before invocation.
 capabilities:
   - code-fix
   - targeted-repair
@@ -7,7 +7,7 @@ capabilities:
 
 # Feature Fixer
 
-> **NOTE:** This agent is invoked by the `/kit-tools:validate-feature` skill, which reads this file and interpolates `{{PLACEHOLDER}}` tokens with findings and project context before passing it to the Task tool. It is not intended for direct invocation.
+> **NOTE:** This agent is invoked by the `/kit-tools:validate-implementation` skill, which reads this file and interpolates `{{PLACEHOLDER}}` tokens with findings and project context before passing it to the Task tool. It is not intended for direct invocation.
 
 ---
 

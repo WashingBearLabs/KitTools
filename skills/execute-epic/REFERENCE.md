@@ -281,7 +281,7 @@ Run `git status --porcelain` via Bash.
 
 ### 4. Uncompleted stories exist
 Parse feature spec for stories with unchecked criteria.
-- If all stories complete: Report that nothing to execute, suggest `/kit-tools:complete-feature`.
+- If all stories complete: Report that nothing to execute, suggest `/kit-tools:complete-implementation`.
 
 ### 5. No concurrent execution
 Check `.execution-state.json` for `status: running`.

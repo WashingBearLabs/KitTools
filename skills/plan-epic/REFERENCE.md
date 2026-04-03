@@ -205,7 +205,7 @@ US-004: Handle OAuth callback and create session
 | `on-hold` | Paused, not currently prioritized |
 | `completed` | All stories done, moved to `specs/archive/` |
 
-Use `/kit-tools:complete-feature` to mark completed and archive.
+Use `/kit-tools:complete-implementation` to mark completed and archive.
 
 ---
 

@@ -190,7 +190,7 @@ Report: feature(s) planned, epic decomposition, feature spec location(s), story 
 |-------|-------------|
 | `/kit-tools:validate-epic` | To validate epic and feature specs before execution |
 | `/kit-tools:execute-epic` | To execute feature spec stories |
-| `/kit-tools:complete-feature` | To mark feature spec completed and archive it |
+| `/kit-tools:complete-implementation` | To mark feature spec completed and archive it |
 
 ---
 

@@ -2121,7 +2121,7 @@ def run_single_spec(config: dict) -> None:
     log("All stories complete!")
 
     # Mark completed and log BEFORE spawning validation.
-    # validate-feature -> complete-feature will clean up state files,
+    # validate-implementation -> complete-implementation will clean up state files,
     # so we must not write to them after the validation session returns.
     state["status"] = "completed"
     save_state(state, config)
@@ -2134,12 +2134,12 @@ def run_single_spec(config: dict) -> None:
         severity="info",
     )
 
-    # Run feature validation (may auto-invoke complete-feature)
+    # Run implementation validation (may auto-invoke complete-implementation)
     spec_basename = os.path.basename(spec_path)
     branch = config["branch_name"]
-    log("Running feature validation...")
+    log("Running implementation validation...")
     validate_prompt = (
-        f"Run /kit-tools:validate-feature for feature spec {spec_basename}. "
+        f"Run /kit-tools:validate-implementation for feature spec {spec_basename}. "
         f"Mode: autonomous. Branch: {branch}."
     )
     validate_output = run_claude_session(validate_prompt, project_dir)
@@ -2147,7 +2147,7 @@ def run_single_spec(config: dict) -> None:
     if is_session_error(validate_output):
         log(f"Validation session error: {validate_output[:200]}")
     else:
-        log("Feature validation complete.")
+        log("Implementation validation complete.")
 
     # Determine if validation was clean
     validation_clean = not is_session_error(validate_output) and is_validation_clean(project_dir)
@@ -2253,9 +2253,9 @@ def run_epic(config: dict) -> None:
         # Feature spec stories complete — validate
         log(f"  All stories complete for {spec_basename}. Validating...")
         validate_prompt = (
-            f"Run /kit-tools:validate-feature for feature spec {spec_basename}. "
+            f"Run /kit-tools:validate-implementation for feature spec {spec_basename}. "
             f"Mode: autonomous. Branch: {config['branch_name']}. "
-            f"This is part of an epic — do NOT invoke complete-feature."
+            f"This is part of an epic — do NOT invoke complete-implementation."
         )
         validate_output = run_claude_session(validate_prompt, project_dir)
         state["sessions"]["total"] += 1
@@ -2265,7 +2265,7 @@ def run_epic(config: dict) -> None:
             log(f"  Validation error: {validate_output[:200]}")
             # Continue anyway — validation is informational
 
-        # Check for pause file (created by validate-feature if critical findings exist)
+        # Check for pause file (created by validate-implementation if critical findings exist)
         if pause_file_exists(project_dir):
             log(f"  Critical validation findings for {spec_basename}. Pausing.")
             wait_for_pause_removal(project_dir, config=config)

@@ -262,4 +262,4 @@ Overall readiness: [ready / needs-work / not-ready]
 |-------|-------------|
 | `/kit-tools:plan-epic` | To create or refine the epic and feature specs |
 | `/kit-tools:execute-epic` | After validation — to execute the epic |
-| `/kit-tools:validate-feature` | After execution — to validate code quality on the completed branch |
+| `/kit-tools:validate-implementation` | After execution — to validate code quality on the completed branch |

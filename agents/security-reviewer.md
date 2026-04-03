@@ -1,12 +1,12 @@
 ---
-description: Reviews code changes for security vulnerabilities. Used by the validate-feature skill — contains placeholder tokens that must be interpolated before invocation.
+description: Reviews code changes for security vulnerabilities. Used by the validate-implementation skill — contains placeholder tokens that must be interpolated before invocation.
 capabilities:
   - security-audit
 ---
 
 # Security Reviewer
 
-> **NOTE:** This agent is invoked by the `/kit-tools:validate-feature` skill, which reads this file and interpolates `{{PLACEHOLDER}}` tokens with project context before passing it to the Task tool. It is not intended for direct invocation.
+> **NOTE:** This agent is invoked by the `/kit-tools:validate-implementation` skill, which reads this file and interpolates `{{PLACEHOLDER}}` tokens with project context before passing it to the Task tool. It is not intended for direct invocation.
 
 ---
 

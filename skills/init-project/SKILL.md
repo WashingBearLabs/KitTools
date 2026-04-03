@@ -497,7 +497,7 @@ Report to the user:
 - Run `/kit-tools:create-vision` to define the product vision (recommended before planning features)
 - Suggested workflow: **init → seed → create-vision → plan-epic**
 - Run `/kit-tools:update-kit-tools` later to update hooks, templates, or other components as the project grows
-- Run `/kit-tools:validate-feature` after completing a feature to validate the full branch against its feature spec
+- Run `/kit-tools:validate-implementation` after completing a feature to validate the full branch against its feature spec
 
 ## Adding Templates Later
 

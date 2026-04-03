@@ -1,9 +1,9 @@
 ---
-name: validate-feature
+name: validate-implementation
 description: Validate a feature branch against its feature spec with code quality, security, and compliance checks
 ---
 
-# Validate Feature
+# Validate Implementation
 
 Run a comprehensive validation of a feature branch against its feature spec. Reviews the entire branch diff for code quality, security, testing, and feature spec compliance.
 
@@ -139,9 +139,9 @@ If autonomous mode AND critical findings remain:
 
 ### Next step
 
-- **Autonomous (no criticals):** Auto-invoke `/kit-tools:complete-feature`
+- **Autonomous (no criticals):** Auto-invoke `/kit-tools:complete-implementation`
 - **Autonomous (criticals):** Pause until `.pause_execution` removed
-- **Other modes:** Suggest `/kit-tools:complete-feature`
+- **Other modes:** Suggest `/kit-tools:complete-implementation`
 
 ---
 

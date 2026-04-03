@@ -50,7 +50,7 @@ If working on a feature with a feature spec (`kit_tools/specs/feature-*.md`):
 - **Capture Implementation Notes** — Ask the user:
   > "Any learnings or gotchas from today's work that should be captured in the feature spec's Implementation Notes section?"
 - Add any discovered learnings to the `## Implementation Notes` section
-- If all user stories are complete, note that the feature spec may be ready for `/kit-tools:complete-feature`
+- If all user stories are complete, note that the feature spec may be ready for `/kit-tools:complete-implementation`
 
 ### 1b: Update milestone tracking
 
@@ -88,7 +88,7 @@ If validation finds issues, fix them before proceeding. This prevents incomplete
 
 ## Step 3: Quick code quality check
 
-Run a lightweight quality check on the session's code changes. This is NOT the full feature validation — use `/kit-tools:validate-feature` for that after executing a feature.
+Run a lightweight quality check on the session's code changes. This is NOT the full feature validation — use `/kit-tools:validate-implementation` for that after executing a feature.
 
 ### 3a: Get the session diff
 
@@ -138,4 +138,4 @@ Provide a brief summary of:
 - What documentation was updated
 - Audit findings summary (N critical, N warning, N info) — if validator was run
 - Any open items or recommended next steps
-- If a feature spec is complete, remind user about `/kit-tools:complete-feature`
+- If a feature spec is complete, remind user about `/kit-tools:complete-implementation`

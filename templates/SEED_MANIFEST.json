@@ -304,7 +304,7 @@
       "validated_at": null,
       "validation_result": null,
       "validation_issues": [],
-      "skipped_reason": "skip_if: always — populated by validate-feature skill"
+      "skipped_reason": "skip_if: always — populated by validate-implementation skill"
     },
     "SESSION_LOG.md": {
       "tier": 5,

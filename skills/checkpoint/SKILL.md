@@ -82,7 +82,7 @@ Skip this step if only SESSION_LOG and TODO files were updated.
 
 ## Step 4: Quick code quality check (if applicable)
 
-Run a lightweight quality check on code changes since the last checkpoint. This is NOT the full feature validation — use `/kit-tools:validate-feature` for that after executing a feature.
+Run a lightweight quality check on code changes since the last checkpoint. This is NOT the full feature validation — use `/kit-tools:validate-implementation` for that after executing a feature.
 
 - Check `git diff` for non-documentation code changes
 - **Skip this step** if the checkpoint is documentation-only (no code files changed)

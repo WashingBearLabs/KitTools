@@ -8,7 +8,7 @@ When a checkbox is marked complete (- [ ] → - [x]) in:
 - kit_tools/specs/*.md (feature spec acceptance criteria)
 - kit_tools/roadmap/MILESTONES.md (milestone tasks)
 
-Outputs an advisory message. Suggests /kit-tools:validate-feature only when all feature spec criteria are complete.
+Outputs an advisory message. Suggests /kit-tools:validate-implementation only when all feature spec criteria are complete.
 """
 import json
 import re
@@ -66,9 +66,9 @@ def main():
             message = f"Acceptance criteria completed in {filename}."
             if completed_count > 0:
                 message = f"{completed_count} acceptance criteria completed in {filename}."
-            # Only suggest validate-feature if no unchecked criteria remain
+            # Only suggest validate-implementation if no unchecked criteria remain
             if new_unchecked == 0:
-                message += " All criteria complete — consider running `/kit-tools:validate-feature`."
+                message += " All criteria complete — consider running `/kit-tools:validate-implementation`."
         else:
             # Roadmap TODO task completed
             message = f"Task(s) completed in {filename}."

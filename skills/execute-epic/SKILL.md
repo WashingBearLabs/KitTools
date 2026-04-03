@@ -28,7 +28,7 @@ Read `REFERENCE.md` in this skill directory for detailed schemas, token tables, 
 
 Check `kit_tools/specs/.execution-state.json`:
 - **`status: running`** — Report progress table, offer monitoring commands
-- **`status: completed`** — Report completion, suggest `/kit-tools:validate-feature`
+- **`status: completed`** — Report completion, suggest `/kit-tools:validate-implementation`
 - **`status: failed/paused`** — Offer: resume, start fresh, or abort
 
 **If no state:** Check `kit_tools/specs/` for `epic-*.md` files. If found, list them with status (how many specs completed vs. remaining). User selects which epic to execute.
@@ -171,7 +171,7 @@ For each uncompleted story:
 - Update state to `completed`
 - Write summary to `EXECUTION_LOG.md`
 - Report: stories completed, total attempts, session count
-- Suggest `/kit-tools:validate-feature`
+- Suggest `/kit-tools:validate-implementation`
 
 ---
 
@@ -181,5 +181,5 @@ For each uncompleted story:
 |-------|-------------|
 | `/kit-tools:plan-epic` | To create an epic and feature specs before executing |
 | `/kit-tools:validate-epic` | To validate epic specs before execution |
-| `/kit-tools:complete-feature` | To archive feature spec after all stories pass |
-| `/kit-tools:validate-feature` | To validate the full feature branch against its feature spec |
+| `/kit-tools:complete-implementation` | To archive feature spec after all stories pass |
+| `/kit-tools:validate-implementation` | To validate the full feature branch against its feature spec |

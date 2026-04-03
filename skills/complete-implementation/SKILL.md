@@ -1,9 +1,9 @@
 ---
-name: complete-feature
+name: complete-implementation
 description: Mark a feature spec as completed and archive it
 ---
 
-# Complete Feature
+# Complete Implementation
 
 Mark a feature spec as completed and move it to the archive. Run when all user stories are implemented and verified.
 
@@ -120,7 +120,7 @@ Based on the context:
 
 | Skill | When to use |
 |-------|-------------|
-| `/kit-tools:validate-feature` | Run before completing |
+| `/kit-tools:validate-implementation` | Run before completing |
 | `/kit-tools:plan-epic` | Plan the next feature or epic |
 | `/kit-tools:execute-epic` | Continue executing remaining specs in an epic |
 | `/kit-tools:validate-epic` | Re-validate if specs were revised during this feature |
