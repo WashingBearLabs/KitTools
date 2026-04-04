@@ -5,6 +5,29 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.2] - 2026-04-04
+
+### Added
+- **New Skill: `/kit-tools:optimize-tests`** — Full test suite audit with six dimensions: mapping completeness, stale test detection, coverage overlap, performance profiling, KitTools convention alignment, and suite verification. Produces a structured report with actionable findings.
+- **New Agent: `test-optimizer`** — Audits project test suites and produces structured JSON reports. Reports findings but does not modify files.
+- **Orchestrator: failure type classification** — New `classify_failure()` function categorizes failures into `TIMEOUT_IMPL`, `TIMEOUT_VERIFY`, `TEST_FAILURE`, `VERDICT_FAIL`, `SESSION_ERROR`, or `UNKNOWN`. Stored in execution state for structured retry context.
+- **Orchestrator: structured retry context** — New `build_retry_context()` replaces generic retry messages with failure-type-specific guidance. Timeout failures suggest scope reduction; test failures include the failing test name; verdict failures include per-criterion status.
+- **Orchestrator: pre-flight checks** — New `pre_flight_check()` runs before each story's first attempt. Warns about oversized stories (>6 criteria) and test mapping gaps for files referenced in acceptance criteria.
+- **Orchestrator: cross-story regression detection** — New `run_regression_check()` runs after story merge. Tests prior stories' changed files via direct subprocess (not a Claude session). On regression: reverts merge, halts execution with critical notification. Capped at 10 prior stories and 30 test files.
+- **Orchestrator: learnings persistence across epics** — New JSONL-based persistent learnings file (`kit_tools/.execution-learnings.jsonl`). Up to 10 learnings persisted per execution, 5 injected into future epics. File-locked for concurrent safety, capped at 50 entries.
+- **Orchestrator: test mapping gap detection** — New `check_test_mapping_gaps()` warns about changed source files without explicit test_mapping entries. Uses fnmatch for glob pattern matching. Deduplicated across stories within an epic.
+- **Verifier: `pass_with_warnings` verdict** — Verifier can now return a third verdict for non-blocking concerns (style, naming, minor optimization). Triggers merge like `pass` but accumulates warnings in execution state for later review.
+- **Verifier: `tests_passed` boolean** — Verifier result schema now includes a structured `tests_passed` field for reliable failure classification (replaces prose-scraping heuristic).
+
+### Changed
+- **Orchestrator: `detect_related_tests()` rewrite** — Complete rewrite with three-tier matching: T0 (explicit test_mapping), T1 (heuristic). Returns a dict with separate `t0`/`t1` commands instead of a single string. Directory-scoped matching preferred over global `**/` globs. Match caps: 3 for global heuristic, 5 for directory-scoped.
+- **Orchestrator: extended source file filter** — `__init__.py`, migration files, Dockerfiles, Makefiles, CI config, and other non-logic files are now excluded from test detection.
+- **Orchestrator: adaptive session timeouts** — New `run_claude_session()` timeout parameter with separate `IMPL_SESSION_TIMEOUT` (900s) and `VERIFY_SESSION_TIMEOUT` (600s) defaults. Optional `size: S/M/L/XL` in spec frontmatter scales timeouts.
+- **Orchestrator: `update_state_story()` extended** — Now accepts `failure_type`, `warnings`, and `files_changed` parameters for richer execution state.
+- **Verifier prompt: tiered test commands** — Test section now presents T0 and T1 commands separately with priority guidance. Full suite labeled as T2 (feature validation only).
+- **`spec-completionist-reviewer` agent** — New dimension 5: "Integration & Wiring Completeness" checks for UI gaps, unwired artifacts, cross-layer connection breaks, missing configuration, and scope narrowness.
+- **`story-quality-reviewer` agent** — New dimensions: "Anti-Pattern Detection" (vague verbs, compound criteria, unbounded scope) and "Story Ordering" (dependency ordering checks between stories).
+
 ## [2.2.1] - 2026-04-03
 
 ### Changed

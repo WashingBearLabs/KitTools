@@ -81,6 +81,30 @@ For each story, note whether implementation hints are:
 - Generic ("follow existing patterns", "use the service layer"): flag as info with a suggestion to name the specific file
 - Absent entirely: flag as info if the story is complex enough to benefit from guidance
 
+### 6. Anti-Pattern Detection
+
+Check each acceptance criterion for patterns that predict implementation failures:
+
+- **Vague verbs**: "handle appropriately", "support all", "manage properly" — flag with a concrete rewrite
+- **Unbounded scope**: "all edge cases", "every scenario", "complete coverage" — flag with specific cases to cover
+- **Missing locations**: "add a new endpoint", "create a service" without naming the file or module — flag with a suggestion to specify the path
+- **Compound criteria**: Criteria where "and" connects **distinct system boundaries** (e.g., "validates input AND sends notification"). Do NOT flag "and" connecting steps in a single operation (e.g., "token is refreshed and stored"). For flagged compound criteria, suggest specific split points.
+  - True positive: "Creates the model AND adds API routes AND updates the UI" (3 layers)
+  - False positive: "File exists and contains the correct schema" (single concern)
+- **Implicit dependencies**: "Use the new auth middleware" without specifying which story creates it
+
+Flag anti-patterns as **warning** severity with category `"anti-pattern"`. Quote the exact problematic text.
+
+### 7. Story Ordering
+
+Check whether stories are ordered correctly by dependency:
+
+- If story N's criteria reference artifacts (files, classes, modules) that appear to be created by story N+1 or later, flag as a **warning** with category `"ordering-issue"`
+- Common patterns to check: model definitions should come before service code, service code before route handlers, source files before their tests
+- Suggest a reordering if an issue is found
+
+This check is advisory — false positives are acceptable. The heuristic is imperfect because criteria text doesn't always name the exact artifacts being created.
+
 ---
 
 ## Output Format

@@ -93,7 +93,8 @@ Write to: `{{RESULT_FILE_PATH}}`
 ```json
 {
   "story_id": "{{STORY_ID}}",
-  "verdict": "pass|fail",
+  "verdict": "pass|pass_with_warnings|fail",
+  "tests_passed": true,
   "criteria": [
     {
       "criterion": "Text of criterion",
@@ -102,6 +103,7 @@ Write to: `{{RESULT_FILE_PATH}}`
       "issue": "Description of problem (if failed, else null)"
     }
   ],
+  "warnings": ["Non-blocking concern (only for pass_with_warnings, else empty array)"],
   "overall_notes": "Any broader observations",
   "recommendations": "What to fix on retry (if fail, else null)"
 }
@@ -110,6 +112,28 @@ Write to: `{{RESULT_FILE_PATH}}`
 Use the Write tool to create this file. Ensure it is valid JSON.
 
 After writing the result file, output a brief human-readable summary (for monitoring via `tail -f`).
+
+### Verdict Guidelines
+
+Use `pass_with_warnings` when:
+- All acceptance criteria are functionally met
+- You notice non-blocking issues (style, naming, minor optimization)
+- Tests pass but coverage could be better
+- Implementation works but has a minor code smell
+
+Use `pass` when:
+- All criteria are met with no concerns
+
+Use `fail` only when:
+- A functional acceptance criterion is not met
+- Tests fail
+- The implementation introduces a bug or regression
+- A security concern exists
+
+The `tests_passed` field must always be set:
+- `true` if all test commands executed successfully (exit code 0)
+- `false` if any test command failed
+- Set this based on actual test execution results, not on your assessment of test quality
 
 ## Critical Rules
 

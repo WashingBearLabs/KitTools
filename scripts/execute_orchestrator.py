@@ -32,6 +32,12 @@ import yaml
 # --- Constants ---
 
 SESSION_TIMEOUT = 900  # 15 minutes per claude session
+IMPL_SESSION_TIMEOUT = 900  # implementation sessions
+VERIFY_SESSION_TIMEOUT = 600  # verification sessions (smaller task)
+HEURISTIC_MATCH_CAP = 3  # max heuristic test file matches before skipping
+DIR_SCOPE_MATCH_CAP = 5  # max directory-scoped heuristic matches
+REGRESSION_TEST_FILE_CAP = 30  # max test files for regression check
+REGRESSION_TIMEOUT = 120  # seconds for regression subprocess
 PAUSE_POLL_INTERVAL = 10  # seconds between pause file checks
 NETWORK_RETRY_WAIT = 30  # seconds between network retries
 NETWORK_MAX_RETRIES = 3
@@ -242,13 +248,17 @@ def get_state_path(config: dict) -> str:
 def update_state_story(
     state: dict, story_id: str, status: str, attempt: int,
     learnings: list | None = None, failure: str | None = None,
-    spec_key: str | None = None
+    spec_key: str | None = None, failure_type: str | None = None,
+    warnings: list | None = None, files_changed: list | None = None,
 ) -> None:
     """Update a story's entry in the execution state.
 
     Args:
         spec_key: If set, update state["specs"][spec_key]["stories"][story_id] (epic mode).
                  If None, update state["stories"][story_id] (single mode).
+        failure_type: Classified failure type (TIMEOUT_IMPL, TIMEOUT_VERIFY, etc.)
+        warnings: List of non-blocking warning strings from pass_with_warnings verdicts.
+        files_changed: List of changed file paths (stored for regression detection).
     """
     if spec_key is not None:
         stories_dict = state["specs"][spec_key].setdefault("stories", {})
@@ -269,6 +279,12 @@ def update_state_story(
             entry["learnings"] = existing[-20:]
     if failure:
         entry["last_failure"] = failure
+    if failure_type:
+        entry["failure_type"] = failure_type
+    if warnings is not None:
+        entry["warnings"] = warnings
+    if files_changed is not None:
+        entry["files_changed"] = files_changed
 
     stories_dict[story_id] = entry
 
@@ -582,6 +598,99 @@ def strip_frontmatter(text: str) -> str:
     return text
 
 
+def classify_failure(
+    impl_output: str, verify_output: str | None,
+    verdict: dict | None
+) -> str:
+    """Classify a story failure into a structured type for retry context.
+
+    Returns one of: TIMEOUT_IMPL, TIMEOUT_VERIFY, TEST_FAILURE, VERDICT_FAIL,
+    SESSION_ERROR, UNKNOWN.
+    """
+    # Implementation session timeout
+    if impl_output.startswith("SESSION_ERROR:") and "Timed out" in impl_output:
+        return "TIMEOUT_IMPL"
+    # Implementation session error (non-timeout)
+    if impl_output.startswith(("SESSION_ERROR:", "SESSION_ERROR_PERMANENT:")):
+        return "SESSION_ERROR"
+    # Verification session timeout
+    if verify_output and verify_output.startswith("SESSION_ERROR:") and "Timed out" in verify_output:
+        return "TIMEOUT_VERIFY"
+    # Verification session error (non-timeout)
+    if verify_output and verify_output.startswith(("SESSION_ERROR:", "SESSION_ERROR_PERMANENT:")):
+        return "SESSION_ERROR"
+    # Verdict-based classification
+    if verdict and verdict.get("verdict") == "fail":
+        # Use structured tests_passed field if available (preferred)
+        tests_passed = verdict.get("tests_passed")
+        if tests_passed is False:
+            return "TEST_FAILURE"
+        elif tests_passed is True:
+            return "VERDICT_FAIL"
+        # tests_passed not set — fall back to UNKNOWN
+        return "VERDICT_FAIL"  # Default assumption: criteria not met
+    return "UNKNOWN"
+
+
+def build_retry_context(
+    state: dict, story: dict, attempt: int, spec_key: str | None = None
+) -> str:
+    """Build structured retry context based on failure type.
+
+    Replaces the generic retry context with failure-type-specific guidance.
+    """
+    if spec_key is not None:
+        stories_dict = state.get("specs", {}).get(spec_key, {}).get("stories", {})
+    else:
+        stories_dict = state.get("stories", {})
+    story_state = stories_dict.get(story["id"], {})
+
+    failure_type = story_state.get("failure_type", "UNKNOWN")
+    failure = story_state.get("last_failure", "Unknown failure")
+    prev_learnings = story_state.get("learnings", [])
+
+    lines = [
+        f"**Attempt:** {attempt}",
+        f"**Failure type:** {failure_type}",
+        "",
+    ]
+
+    # Failure-type-specific guidance
+    if failure_type == "TIMEOUT_IMPL":
+        lines.append("**What to change this attempt:**")
+        lines.append("- Prioritize the minimum viable implementation — skip non-critical polish")
+        lines.append("- The previous attempt timed out during implementation")
+        lines.append("- Focus on getting all acceptance criteria met with minimal code")
+    elif failure_type == "TIMEOUT_VERIFY":
+        lines.append("**What to change this attempt:**")
+        lines.append("- Add explicit test_mapping entries for changed files before committing")
+        lines.append("- The previous attempt timed out during test verification")
+        lines.append("- Keep changes minimal to reduce verification scope")
+    elif failure_type == "TEST_FAILURE":
+        lines.append("**What to change this attempt:**")
+        lines.append("- Tests failed on the previous attempt — fix the failing code")
+        lines.append(f"- Previous failure details: {failure[:500]}")
+    elif failure_type == "VERDICT_FAIL":
+        lines.append("**What to change this attempt:**")
+        lines.append("- Tests passed but acceptance criteria were not fully met")
+        lines.append(f"- Verifier feedback: {failure[:500]}")
+        # Include per-criterion status if available from verifier
+    elif failure_type == "SESSION_ERROR":
+        lines.append("**What to change this attempt:**")
+        lines.append("- Previous attempt had a session error (likely transient) — retry with the same approach")
+    else:
+        lines.append("**What to change this attempt:**")
+        lines.append("- Failure could not be classified — review the previous attempt diff and retry with a fresh approach")
+
+    if prev_learnings:
+        lines.append("")
+        lines.append("**Learnings from previous attempts:**")
+        for l in prev_learnings:
+            lines.append(f"- {l}")
+
+    return "\n".join(lines)
+
+
 def gather_prior_learnings(state: dict, current_story_id: str, spec_key: str | None = None) -> list[str]:
     """Gather learnings from completed stories.
 
@@ -609,6 +718,145 @@ def gather_prior_learnings(state: dict, current_story_id: str, spec_key: str | N
     return prior_learnings
 
 
+PERSISTENT_LEARNINGS_FILE = os.path.join("kit_tools", ".execution-learnings.jsonl")
+PERSISTENT_LEARNINGS_MAX = 50
+PERSISTENT_LEARNINGS_INJECT = 5
+
+
+def _get_persistent_learnings_path(project_dir: str) -> str:
+    """Return absolute path to persistent learnings file."""
+    return os.path.join(project_dir, PERSISTENT_LEARNINGS_FILE)
+
+
+def _read_persistent_learnings(path: str | None) -> list[dict]:
+    """Read persistent learnings from JSONL file. Returns list of learning dicts."""
+    if not path or not os.path.exists(path):
+        return []
+    try:
+        entries = []
+        with open(path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        entries.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+        return entries
+    except OSError:
+        return []
+
+
+def persist_learnings(project_dir: str, state: dict) -> None:
+    """Persist top learnings from current execution to JSONL file.
+
+    Appends up to 10 learnings (most recent stories first), deduplicates by exact text,
+    and caps file at PERSISTENT_LEARNINGS_MAX entries. Uses fcntl for file locking.
+    """
+    import fcntl
+
+    path = _get_persistent_learnings_path(project_dir)
+
+    # Gather all learnings from current run
+    all_learnings = []
+    stories_sources = {}  # learning text -> (story_id, spec)
+
+    # Support both single and epic state structures
+    if "specs" in state:
+        for spec_name, spec_data in state.get("specs", {}).items():
+            for sid, sdata in spec_data.get("stories", {}).items():
+                for learning in sdata.get("learnings", []):
+                    if learning and learning not in stories_sources:
+                        all_learnings.append(learning)
+                        stories_sources[learning] = (sid, spec_name)
+    else:
+        for sid, sdata in state.get("stories", {}).items():
+            for learning in sdata.get("learnings", []):
+                if learning and learning not in stories_sources:
+                    all_learnings.append(learning)
+                    stories_sources[learning] = (sid, state.get("spec", "unknown"))
+
+    if not all_learnings:
+        return
+
+    # Take up to 10 most recent (list is in order of story completion)
+    new_entries = []
+    today = now_iso()[:10]
+    for learning_text in all_learnings[-10:]:
+        source = stories_sources.get(learning_text, ("unknown", "unknown"))
+        new_entries.append({
+            "text": learning_text,
+            "source": f"{source[0]} ({source[1]})",
+            "date": today,
+        })
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    try:
+        # Lock file for concurrent safety
+        fd = os.open(path, os.O_RDWR | os.O_CREAT)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            f = os.fdopen(fd, "r+")
+
+            # Read existing entries
+            existing = []
+            f.seek(0)
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        existing.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+
+            # Deduplicate by exact text match
+            existing_texts = {e.get("text") for e in existing}
+            for entry in new_entries:
+                if entry["text"] not in existing_texts:
+                    existing.append(entry)
+                    existing_texts.add(entry["text"])
+
+            # Cap at max
+            if len(existing) > PERSISTENT_LEARNINGS_MAX:
+                existing = existing[-PERSISTENT_LEARNINGS_MAX:]
+
+            # Rewrite file
+            f.seek(0)
+            f.truncate()
+            for entry in existing:
+                f.write(json.dumps(entry) + "\n")
+            f.flush()
+        finally:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            except OSError:
+                pass
+            # fd is closed by fdopen
+    except OSError as e:
+        log(f"  WARNING: Could not persist learnings: {e}")
+
+
+def inject_persistent_learnings(project_dir: str, prior_learnings: list[str]) -> list[str]:
+    """Add persistent cross-epic learnings to the prior learnings list.
+
+    Injects up to PERSISTENT_LEARNINGS_INJECT entries, labeled with [From prior epic].
+    """
+    path = _get_persistent_learnings_path(project_dir)
+    persistent = _read_persistent_learnings(path)
+    if not persistent:
+        return prior_learnings
+
+    # Take most recent persistent learnings
+    injected = []
+    for entry in persistent[-PERSISTENT_LEARNINGS_INJECT:]:
+        text = entry.get("text", "")
+        if text and text not in prior_learnings:
+            injected.append(f"[From prior epic: {entry.get('source', 'unknown')}] {text}")
+
+    return injected + prior_learnings
+
+
 def build_implementation_prompt(
     story: dict, config: dict, state: dict, attempt: int,
     feature_name: str | None = None, spec_path: str | None = None,
@@ -626,25 +874,14 @@ def build_implementation_prompt(
     feat_name = feature_name or config.get("feature_name", "feature")
     spec = spec_path or config.get("spec_path", "")
 
-    # Gather learnings from previous stories
+    # Gather learnings from previous stories + persistent cross-epic learnings
     prior_learnings = gather_prior_learnings(state, story["id"], spec_key)
+    prior_learnings = inject_persistent_learnings(config["project_dir"], prior_learnings)
 
-    # Build retry context
+    # Build structured retry context based on failure type
     retry_context = ""
     if attempt > 1:
-        if spec_key is not None:
-            stories_dict = state.get("specs", {}).get(spec_key, {}).get("stories", {})
-        else:
-            stories_dict = state.get("stories", {})
-        story_state = stories_dict.get(story["id"], {})
-        failure = story_state.get("last_failure", "Unknown failure")
-        prev_learnings = story_state.get("learnings", [])
-        retry_context = (
-            f"This is retry attempt {attempt}.\n\n"
-            f"Previous failure:\n{failure}\n\n"
-            f"Learnings from previous attempts:\n"
-            + "\n".join(f"- {l}" for l in prev_learnings)
-        )
+        retry_context = build_retry_context(state, story, attempt, spec_key)
 
     # Build previous attempt diff context
     previous_diff = ""
@@ -709,34 +946,54 @@ def build_verification_prompt(
     template = strip_frontmatter(config["verifier_template"])
     context = config.get("project_context", {})
 
-    # Derive targeted test command from changed files
+    # Derive targeted test commands from changed files (T0=explicit, T1=heuristic)
     changed_files = [f.strip() for f in files_changed_from_git.split("\n") if f.strip()]
-    targeted_test = detect_related_tests(
+    test_tiers = detect_related_tests(
         changed_files, config["project_dir"], test_command
     )
+    t0_cmd = test_tiers["t0"]
+    t1_cmd = test_tiers["t1"]
 
-    # Build the test command section
-    if targeted_test:
+    # Build the test command section with tier awareness
+    quiet_note = (
+        "Use quiet flags to suppress PASSED lines, but let failure tracebacks flow in full. "
+        "Pipe through `| head -200` as a safety net for runaway output."
+    )
+    if t0_cmd and t1_cmd:
         test_section = (
-            f"**Targeted tests** (based on changed files):\n"
-            f"Run: `{targeted_test}`\n\n"
-            f"**Important:** Only run the targeted command above. Do NOT run the full test suite. "
-            f"Use quiet flags to suppress PASSED lines, but let failure tracebacks flow in full. "
-            f"Pipe through `| head -200` as a safety net for runaway output."
+            f"**T0 — Targeted tests** (explicitly mapped):\n"
+            f"Run first: `{t0_cmd}`\n\n"
+            f"**T1 — Broader matches** (heuristic, run if T0 passes and session time permits):\n"
+            f"Run second: `{t1_cmd}`\n\n"
+            f"**Important:** Run T0 first. Only run T1 if T0 passes and you have time remaining. "
+            f"Do NOT run the full test suite. {quiet_note}"
         )
-        if test_command:
-            test_section += (
-                f"\n\nFull suite command (for reference only — do NOT run during story verification): "
-                f"`{test_command}`"
-            )
+    elif t0_cmd:
+        test_section = (
+            f"**T0 — Targeted tests** (explicitly mapped):\n"
+            f"Run: `{t0_cmd}`\n\n"
+            f"**Important:** Only run the targeted command above. Do NOT run the full test suite. {quiet_note}"
+        )
+    elif t1_cmd:
+        test_section = (
+            f"**T1 — Heuristic matches** (no explicit test_mapping available):\n"
+            f"Run: `{t1_cmd}`\n\n"
+            f"**Note:** No explicit test_mapping entries found — these are heuristic matches only.\n"
+            f"**Important:** Do NOT run the full test suite. {quiet_note}"
+        )
     elif test_command:
         test_section = (
             f"Run: `{test_command}`\n\n"
-            f"**Important:** Use quiet flags to suppress PASSED lines, but let failure tracebacks flow in full. "
-            f"Pipe through `| head -200` as a safety net for runaway output."
+            f"**Important:** {quiet_note}"
         )
     else:
         test_section = "No test command detected — skip test step unless criteria explicitly mention tests."
+
+    if test_command and (t0_cmd or t1_cmd):
+        test_section += (
+            f"\n\nT2 — Full suite (for feature validation only, do NOT run during story verification): "
+            f"`{test_command}`"
+        )
 
     prompt = template
     prompt = prompt.replace("{{STORY_ID}}", story["id"])
@@ -775,7 +1032,28 @@ def is_session_error(output: str) -> bool:
     return output.startswith("SESSION_ERROR:") or output.startswith("SESSION_ERROR_PERMANENT:")
 
 
-def run_claude_session(prompt: str, project_dir: str) -> str:
+def get_size_timeouts(spec_path: str | None) -> tuple[int, int]:
+    """Read optional size hint from spec frontmatter and return (impl_timeout, verify_timeout).
+
+    Supported sizes: S, M (default), L, XL. Unrecognized values log a warning and use M.
+    """
+    size_map = {
+        "S": (600, 300),
+        "M": (IMPL_SESSION_TIMEOUT, VERIFY_SESSION_TIMEOUT),
+        "L": (1500, 900),
+        "XL": (1800, 1200),
+    }
+    if not spec_path or not os.path.exists(spec_path):
+        return size_map["M"]
+    fm = parse_spec_frontmatter(spec_path)
+    size = str(fm.get("size", "M")).upper()
+    if size in size_map:
+        return size_map[size]
+    log(f"  WARNING: Unrecognized size '{fm.get('size')}' in spec frontmatter — using M defaults")
+    return size_map["M"]
+
+
+def run_claude_session(prompt: str, project_dir: str, timeout: int = SESSION_TIMEOUT) -> str:
     """Execute a claude -p session and capture output.
 
     Retries up to NETWORK_MAX_RETRIES times for network errors.
@@ -797,7 +1075,7 @@ def run_claude_session(prompt: str, project_dir: str) -> str:
             )
 
             try:
-                stdout, stderr_out = proc.communicate(timeout=SESSION_TIMEOUT)
+                stdout, stderr_out = proc.communicate(timeout=timeout)
             except subprocess.TimeoutExpired:
                 # Kill the entire process group (claude + all children like pytest, node, etc.)
                 try:
@@ -805,7 +1083,7 @@ def run_claude_session(prompt: str, project_dir: str) -> str:
                 except OSError:
                     proc.kill()
                 proc.wait()
-                return f"SESSION_ERROR: Timed out after {SESSION_TIMEOUT}s"
+                return f"SESSION_ERROR: Timed out after {timeout}s"
 
             if proc.returncode == 0:
                 return stdout
@@ -946,10 +1224,17 @@ def read_verification_result(project_dir: str) -> tuple[dict | None, str]:
             result["verdict"] = str(result["verdict"]).lower()
         else:
             return None, "Verification result missing 'verdict' field"
-        if result["verdict"] not in ("pass", "fail"):
+        if result["verdict"] not in ("pass", "pass_with_warnings", "fail"):
             return None, f"Verification result has invalid 'verdict': {result['verdict']}"
         if not isinstance(result.get("criteria"), list):
             return None, "Verification result missing or invalid 'criteria' list"
+        # Validate warnings field if present (must be array of strings)
+        if "warnings" in result:
+            if not isinstance(result["warnings"], list):
+                log(f"  Note: verification result has non-list 'warnings' field — discarding")
+                result["warnings"] = []
+            else:
+                result["warnings"] = [str(w) for w in result["warnings"] if w]
         for optional in ("overall_notes", "recommendations"):
             if optional not in result:
                 log(f"  Note: verification result missing optional field '{optional}'")
@@ -1554,105 +1839,362 @@ def parse_test_mapping(project_dir: str) -> dict[str, str]:
     return {}
 
 
-def detect_related_tests(
-    changed_files: list[str], project_dir: str, test_command: str | None
-) -> str | None:
-    """Derive a targeted test command from changed files.
+def _filter_source_files(changed_files: list[str]) -> list[str]:
+    """Filter changed files to source-code-only files for test detection.
 
-    Strategy:
-    1. Check TESTING_GUIDE.md for explicit test_mapping
-    2. Apply heuristic matching (source file → test file by naming convention)
-    3. Return targeted command if matching test files exist, else None (caller falls back)
+    Skips: test files, non-code files, __init__.py, migrations, CI config,
+    Dockerfiles, Makefiles, and other non-logic files.
     """
-    if not changed_files or not test_command:
-        return None
-
-    # Filter to source files (skip configs, docs, test files themselves)
     source_files = []
     for f in changed_files:
         if not f.strip():
             continue
-        # Skip files that are already tests
         basename = os.path.basename(f)
+        # Skip files that are already tests
         if basename.startswith("test_") or basename.endswith(("_test.py", ".test.ts", ".test.js", ".test.tsx", ".test.jsx", ".spec.ts", ".spec.js")):
             continue
-        # Skip non-code files
+        # Skip non-code files by extension
         if f.endswith((".md", ".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".txt", ".lock")):
             continue
+        # Skip __init__.py (usually just imports)
+        if basename == "__init__.py":
+            continue
+        # Skip by path component (migrations, CI config)
+        path_parts = f.replace("\\", "/").split("/")
+        if any(p in ("migrations", "alembic", ".github", ".gitlab-ci") for p in path_parts):
+            continue
+        # Skip by basename (extensionless config files)
+        if basename in ("Dockerfile", "Makefile", "Procfile", ".dockerignore", ".gitlab-ci.yml"):
+            continue
         source_files.append(f)
+    return source_files
 
-    if not source_files:
+
+def _resolve_test_files(patterns: set[str], project_dir: str) -> list[str]:
+    """Resolve a set of test file paths/globs to existing files."""
+    import glob as glob_mod
+    existing = []
+    for t in patterns:
+        if "*" in t or "?" in t:
+            matches = glob_mod.glob(os.path.join(project_dir, t), recursive=True)
+            if matches:
+                existing.append(t)
+        elif os.path.exists(os.path.join(project_dir, t)):
+            existing.append(t)
+    return existing
+
+
+def _build_test_command(test_files: list[str], test_command: str) -> str | None:
+    """Build a targeted test command for the given test files and runner."""
+    if not test_files:
         return None
+    test_files_str = " ".join(sorted(test_files))
+    if "pytest" in test_command:
+        return f"python3 -m pytest {test_files_str} -x"
+    elif test_command == "npm test" or "jest" in test_command:
+        return f"npx jest {test_files_str} --bail"
+    elif "vitest" in test_command:
+        return f"npx vitest run {test_files_str} --bail 1"
+    return None
 
-    # 1. Try explicit test_mapping from TESTING_GUIDE.md
+
+def detect_related_tests(
+    changed_files: list[str], project_dir: str, test_command: str | None
+) -> dict[str, str | None]:
+    """Derive targeted test commands from changed files with tiered matching.
+
+    Returns a dict with:
+      - "t0": command for explicitly-mapped tests (highest confidence), or None
+      - "t1": command for heuristic-matched tests (lower confidence), or None
+
+    Strategy:
+    1. Check TESTING_GUIDE.md for explicit test_mapping → T0
+    2. Heuristic: directory-scoped first, then global fallback → T1
+    3. Apply match caps: HEURISTIC_MATCH_CAP (global), DIR_SCOPE_MATCH_CAP (dir-scoped)
+    """
+    result: dict[str, str | None] = {"t0": None, "t1": None}
+    if not changed_files or not test_command:
+        return result
+
+    source_files = _filter_source_files(changed_files)
+    if not source_files:
+        return result
+
+    import fnmatch as fnmatch_mod
+    import glob as glob_mod
+
+    # --- T0: Explicit test_mapping ---
     test_mapping = parse_test_mapping(project_dir)
-    matched_tests: set[str] = set()
+    t0_tests: set[str] = set()
 
     if test_mapping:
-        import fnmatch
         for src_file in source_files:
             for pattern, test_pattern in test_mapping.items():
-                if fnmatch.fnmatch(src_file, pattern):
-                    # test_pattern may contain multiple space-separated patterns
+                if fnmatch_mod.fnmatch(src_file, pattern):
                     for tp in test_pattern.split():
-                        matched_tests.add(tp)
+                        if tp:  # skip empty mappings (config-only files mapped to "")
+                            t0_tests.add(tp)
 
-    # 2. Heuristic matching for files not caught by explicit mapping
-    import glob as glob_mod
+    # --- T1: Heuristic matching (directory-scoped first, then global) ---
+    t1_dir_tests: set[str] = set()
+    t1_global_tests: set[str] = set()
+
     for src_file in source_files:
         basename = os.path.basename(src_file)
         name_no_ext = os.path.splitext(basename)[0]
         ext = os.path.splitext(basename)[1]
+        parent_name = os.path.basename(os.path.dirname(src_file))
 
-        candidates = []
         if ext == ".py":
-            # Python: foo.py → test_foo.py, tests/test_foo.py, tests/**/test_foo.py
-            candidates = [
-                f"**/test_{name_no_ext}.py",
-                f"**/{name_no_ext}_test.py",
-            ]
+            # Directory-scoped: check same directory and tests/test_{parent}_{name}.py
+            src_dir = os.path.dirname(src_file)
+            dir_candidates = []
+            if src_dir:
+                dir_candidates.append(os.path.join(src_dir, f"test_{name_no_ext}.py"))
+                dir_candidates.append(os.path.join(src_dir, f"{name_no_ext}_test.py"))
+            if parent_name:
+                dir_candidates.append(f"tests/test_{parent_name}_{name_no_ext}.py")
+
+            found_dir_match = False
+            for candidate in dir_candidates:
+                if os.path.exists(os.path.join(project_dir, candidate)):
+                    # Don't add if already in T0 (explicit always wins)
+                    if candidate not in t0_tests:
+                        t1_dir_tests.add(candidate)
+                    found_dir_match = True
+
+            # Global fallback only if no directory-scoped match found
+            if not found_dir_match:
+                for pattern in [f"**/test_{name_no_ext}.py", f"**/{name_no_ext}_test.py"]:
+                    matches = glob_mod.glob(os.path.join(project_dir, pattern), recursive=True)
+                    for m in matches:
+                        rel = os.path.relpath(m, project_dir)
+                        if rel not in t0_tests:
+                            t1_global_tests.add(rel)
+
         elif ext in (".ts", ".tsx", ".js", ".jsx"):
-            # JS/TS: foo.ts → foo.test.ts, foo.spec.ts, __tests__/foo.test.ts
+            # JS/TS: directory-scoped first
+            src_dir = os.path.dirname(src_file)
+            found_dir_match = False
             for test_ext in (".test", ".spec"):
-                candidates.append(f"**/{name_no_ext}{test_ext}{ext}")
+                if src_dir:
+                    candidate = os.path.join(src_dir, f"{name_no_ext}{test_ext}{ext}")
+                    if os.path.exists(os.path.join(project_dir, candidate)):
+                        if candidate not in t0_tests:
+                            t1_dir_tests.add(candidate)
+                        found_dir_match = True
 
-        for pattern in candidates:
-            matches = glob_mod.glob(
-                os.path.join(project_dir, pattern), recursive=True
-            )
-            for m in matches:
-                matched_tests.add(os.path.relpath(m, project_dir))
+            if not found_dir_match:
+                for test_ext in (".test", ".spec"):
+                    pattern = f"**/{name_no_ext}{test_ext}{ext}"
+                    matches = glob_mod.glob(os.path.join(project_dir, pattern), recursive=True)
+                    for m in matches:
+                        rel = os.path.relpath(m, project_dir)
+                        if rel not in t0_tests:
+                            t1_global_tests.add(rel)
 
-    if not matched_tests:
-        return None
+    # Apply match caps
+    if len(t1_dir_tests) > DIR_SCOPE_MATCH_CAP:
+        log(f"  WARNING: directory-scoped heuristic matched {len(t1_dir_tests)} test files — "
+            f"exceeds cap of {DIR_SCOPE_MATCH_CAP}. Skipping heuristic matches.")
+        t1_dir_tests.clear()
+        t1_global_tests.clear()
+    elif len(t1_global_tests) > HEURISTIC_MATCH_CAP:
+        # Log which source files caused the over-match
+        log(f"  WARNING: global heuristic matched {len(t1_global_tests)} test files — "
+            f"exceeds cap of {HEURISTIC_MATCH_CAP}. Skipping global matches. "
+            f"Add explicit test_mapping entries.")
+        t1_global_tests.clear()
 
-    # Build targeted command
-    # Verify matched test files actually exist (glob patterns from mapping may not)
-    existing_tests = []
-    for t in matched_tests:
-        if "*" in t or "?" in t:
-            # It's a glob pattern — check if it matches anything
-            matches = glob_mod.glob(os.path.join(project_dir, t), recursive=True)
-            if matches:
-                existing_tests.append(t)
-        elif os.path.exists(os.path.join(project_dir, t)):
-            existing_tests.append(t)
+    # Merge heuristic results (dir-scoped preferred, global as supplement)
+    t1_tests = t1_dir_tests | t1_global_tests
 
-    if not existing_tests:
-        return None
+    # Resolve to existing files and build commands
+    t0_existing = _resolve_test_files(t0_tests, project_dir)
+    t1_existing = _resolve_test_files(t1_tests, project_dir)
 
-    # Build the targeted command based on runner type
-    test_files_str = " ".join(sorted(existing_tests))
-    if "pytest" in test_command:
-        return f"python3 -m pytest {test_files_str} -x"
-    elif test_command == "npm test" or "jest" in test_command:
-        # Jest accepts file patterns
-        return f"npx jest {test_files_str} --bail"
-    elif "vitest" in test_command:
-        return f"npx vitest run {test_files_str} --bail 1"
+    result["t0"] = _build_test_command(t0_existing, test_command)
+    result["t1"] = _build_test_command(t1_existing, test_command)
+
+    return result
+
+
+def pre_flight_check(story: dict, config: dict, state: dict, spec_key: str | None = None) -> list[str]:
+    """Run lightweight pre-flight checks before story implementation.
+
+    Returns a list of warning strings. Does not block execution.
+    Skips if pre_flight_warnings already populated in state (resumption-safe).
+    """
+    # Check if already run (resumption-safe)
+    if spec_key is not None:
+        stories_dict = state.get("specs", {}).get(spec_key, {}).get("stories", {})
     else:
-        # Unknown runner — can't scope, return None to fall back
-        return None
+        stories_dict = state.get("stories", {})
+    story_state = stories_dict.get(story["id"], {})
+    if story_state.get("pre_flight_warnings") is not None:
+        return story_state["pre_flight_warnings"]
+
+    warnings = []
+
+    # Check 1: Criteria count
+    criteria_count = len(story.get("criteria", []))
+    if criteria_count > 6:
+        msg = f"WARNING: {story['id']} has {criteria_count} criteria — consider splitting"
+        warnings.append(msg)
+        log(f"  {msg}")
+
+    # Check 2: Test mapping gaps for referenced file paths in criteria
+    project_dir = config["project_dir"]
+    test_mapping = parse_test_mapping(project_dir)
+    if test_mapping:
+        import fnmatch as fnmatch_mod
+        # Extract file paths mentioned in acceptance criteria text
+        criteria_text = story.get("criteria_text", "")
+        # Simple heuristic: look for path-like strings (containing / and a file extension)
+        path_pattern = re.compile(r'[\w./]+/[\w.]+\.\w+')
+        referenced_files = path_pattern.findall(criteria_text)
+        for ref_file in referenced_files:
+            covered = any(fnmatch_mod.fnmatch(ref_file, p) for p in test_mapping)
+            if not covered:
+                msg = f"Pre-flight: {ref_file} referenced in criteria lacks test_mapping entry"
+                warnings.append(msg)
+                log(f"  {msg}")
+
+    # Store warnings in state
+    update_state_story(
+        state, story["id"], story_state.get("status", "pending"),
+        story_state.get("attempts", 0), spec_key=spec_key
+    )
+    if spec_key is not None:
+        state["specs"][spec_key].setdefault("stories", {}).setdefault(story["id"], {})["pre_flight_warnings"] = warnings
+    else:
+        state.setdefault("stories", {}).setdefault(story["id"], {})["pre_flight_warnings"] = warnings
+
+    return warnings
+
+
+def check_test_mapping_gaps(
+    changed_files_str: str, project_dir: str, warned_files: set[str]
+) -> list[str]:
+    """Check if changed source files have explicit test_mapping coverage.
+
+    Returns a list of warning messages for unmapped files.
+    Deduplicates across calls via warned_files set (modified in place).
+    """
+    if not changed_files_str:
+        return []
+    testing_guide = os.path.join(project_dir, "kit_tools", "testing", "TESTING_GUIDE.md")
+    if not os.path.exists(testing_guide):
+        return []  # No TESTING_GUIDE.md — skip silently
+
+    test_mapping = parse_test_mapping(project_dir)
+    if not test_mapping:
+        return []
+
+    import fnmatch as fnmatch_mod
+    warnings = []
+    source_files = _filter_source_files(
+        [f.strip() for f in changed_files_str.split("\n") if f.strip()]
+    )
+
+    for src_file in source_files:
+        if src_file in warned_files:
+            continue  # Already warned in a prior story
+        # Check if any mapping pattern covers this file
+        covered = any(
+            fnmatch_mod.fnmatch(src_file, pattern)
+            for pattern in test_mapping
+        )
+        if not covered:
+            msg = f"Add test_mapping entry for {src_file} in TESTING_GUIDE.md"
+            warnings.append(msg)
+            warned_files.add(src_file)
+            log(f"  WARNING: {msg}")
+
+    return warnings
+
+
+def run_regression_check(
+    project_dir: str, state: dict, current_story_id: str,
+    test_command: str | None, spec_key: str | None = None
+) -> tuple[bool, str]:
+    """Run regression tests from prior completed stories after a merge.
+
+    Returns (passed, message). If passed is False, the merge should be reverted.
+    Uses direct subprocess — not a Claude session.
+    """
+    if not test_command or "pytest" not in test_command:
+        return True, "Skipped — no pytest command detected"
+
+    # Gather files_changed from prior completed stories
+    if spec_key is not None:
+        stories_dict = state.get("specs", {}).get(spec_key, {}).get("stories", {})
+    else:
+        stories_dict = state.get("stories", {})
+
+    # Collect up to 10 most recent completed stories' files
+    prior_files: list[str] = []
+    story_count = 0
+    for sid, sdata in reversed(list(stories_dict.items())):
+        if sid == current_story_id:
+            continue
+        if sdata.get("status") != "completed":
+            continue
+        files = sdata.get("files_changed", [])
+        prior_files.extend(files)
+        story_count += 1
+        if story_count >= 10:
+            break
+
+    if not prior_files:
+        return True, "Skipped — no prior stories with files_changed"
+
+    # Resolve test files through global test_mapping
+    import fnmatch as fnmatch_mod
+    test_mapping = parse_test_mapping(project_dir)
+    if not test_mapping:
+        return True, "Skipped — no test_mapping available"
+
+    regression_tests: set[str] = set()
+    source_files = _filter_source_files(prior_files)
+    for src_file in source_files:
+        for pattern, test_pattern in test_mapping.items():
+            if fnmatch_mod.fnmatch(src_file, pattern):
+                for tp in test_pattern.split():
+                    if tp:
+                        regression_tests.add(tp)
+
+    # Resolve to existing files
+    existing = _resolve_test_files(regression_tests, project_dir)
+    if not existing:
+        return True, "Skipped — no regression test files resolved"
+
+    # Cap at REGRESSION_TEST_FILE_CAP
+    if len(existing) > REGRESSION_TEST_FILE_CAP:
+        existing = sorted(existing)[:REGRESSION_TEST_FILE_CAP]
+        log(f"  Regression: capped at {REGRESSION_TEST_FILE_CAP} test files")
+
+    test_files_str = " ".join(sorted(existing))
+    cmd = f"python3 -m pytest {test_files_str} -x -q --tb=short"
+    log(f"  Regression check: {len(existing)} test files from {story_count} prior stories")
+
+    try:
+        result = subprocess.run(
+            cmd, shell=True, cwd=project_dir,
+            capture_output=True, text=True, timeout=REGRESSION_TIMEOUT
+        )
+        if result.returncode == 0:
+            return True, f"Passed ({len(existing)} test files)"
+        # Tests failed — regression detected
+        output_lines = (result.stdout + result.stderr).strip().split("\n")
+        partial = "\n".join(output_lines[:50])
+        return False, f"REGRESSION: tests failed\n{partial}"
+    except subprocess.TimeoutExpired:
+        log(f"  WARNING: Regression check timed out after {REGRESSION_TIMEOUT}s — skipping")
+        return True, f"Timed out after {REGRESSION_TIMEOUT}s — skipped (best-effort)"
+    except OSError as e:
+        log(f"  WARNING: Regression check error: {e}")
+        return True, f"Error: {e} — skipped"
 
 
 def make_quiet(test_command: str) -> str:
@@ -1799,11 +2341,20 @@ def execute_spec_stories(
     if test_command:
         log(f"  Detected test command: {test_command}")
 
+    # Compute size-based timeouts from spec frontmatter
+    impl_timeout, verify_timeout = get_size_timeouts(spec_path)
+    if impl_timeout != IMPL_SESSION_TIMEOUT or verify_timeout != VERIFY_SESSION_TIMEOUT:
+        size_fm = parse_spec_frontmatter(spec_path) if spec_path and os.path.exists(spec_path) else {}
+        log(f"  Story size: {size_fm.get('size', 'M')}, impl timeout: {impl_timeout}s, verify timeout: {verify_timeout}s")
+
     # Determine which stories_state dict to use for find_next_uncompleted_story
     if spec_key is not None:
         stories_state = state["specs"][spec_key]
     else:
         stories_state = state
+
+    # Track files already warned about for mapping gaps (dedup across stories)
+    _warned_mapping_files: set[str] = set()
 
     while True:
         # Check pause file between stories
@@ -1860,6 +2411,11 @@ def execute_spec_stories(
             # Clean result files before each attempt
             clean_result_files(project_dir)
 
+            # --- Pre-flight checks (first attempt only) ---
+            if attempt == 1:
+                pre_flight_check(story, config, state, spec_key)
+                save_state(state, config)
+
             # --- Capture pre-attempt HEAD for unambiguous diffs ---
             pre_attempt_head = get_head_commit(project_dir)
 
@@ -1881,7 +2437,8 @@ def execute_spec_stories(
 
             # Estimate input tokens
             prompt_chars = len(prompt)
-            impl_output = run_claude_session(prompt, project_dir)
+            log(f"  Session timeout: {impl_timeout}s (implementation)")
+            impl_output = run_claude_session(prompt, project_dir, timeout=impl_timeout)
             output_chars = len(impl_output)
 
             state["sessions"]["total"] += 1
@@ -1895,12 +2452,13 @@ def execute_spec_stories(
 
             # Check for session errors
             if impl_output.startswith("SESSION_ERROR_PERMANENT:"):
-                log(f"  Permanent session error: {impl_output[:200]}")
+                f_type = classify_failure(impl_output, None, None)
+                log(f"  Permanent session error [{f_type}]: {impl_output[:200]}")
                 learnings = [f"Permanent error: {impl_output[:200]}"]
                 log_story_failure(story, attempt, config, impl_output[:500], learnings)
                 update_state_story(
                     state, story["id"], "failed", attempt, learnings, impl_output[:500],
-                    spec_key=spec_key
+                    spec_key=spec_key, failure_type=f_type
                 )
                 state["status"] = "failed"
                 save_state(state, config)
@@ -1915,12 +2473,13 @@ def execute_spec_stories(
                 sys.exit(1)
 
             if impl_output.startswith("SESSION_ERROR:"):
-                log(f"  Implementation session error: {impl_output[:200]}")
+                f_type = classify_failure(impl_output, None, None)
+                log(f"  Implementation session error [{f_type}]: {impl_output[:200]}")
                 learnings = [f"Session error: {impl_output[:200]}"]
                 log_story_failure(story, attempt, config, impl_output[:500], learnings)
                 update_state_story(
                     state, story["id"], "retrying", attempt, learnings, impl_output[:500],
-                    spec_key=spec_key
+                    spec_key=spec_key, failure_type=f_type
                 )
                 save_state(state, config)
                 # Delete the failed attempt branch (no diff to capture on session error)
@@ -1938,6 +2497,9 @@ def execute_spec_stories(
                 ["diff", "--name-only", f"{pre_attempt_head}..HEAD"], project_dir
             )
             files_changed_from_git = git_files_result.stdout.strip() if git_files_result.returncode == 0 else ""
+
+            # --- Check test mapping gaps (informational, deduped across stories) ---
+            check_test_mapping_gaps(files_changed_from_git, project_dir, _warned_mapping_files)
 
             # --- Get diff stat (for verifier) ---
             diff_stat_result = run_git(
@@ -1969,7 +2531,8 @@ def execute_spec_stories(
             verify_prompt = check_and_trim_prompt(verify_prompt, "verification")
 
             verify_prompt_chars = len(verify_prompt)
-            verify_output = run_claude_session(verify_prompt, project_dir)
+            log(f"  Session timeout: {verify_timeout}s (verification)")
+            verify_output = run_claude_session(verify_prompt, project_dir, timeout=verify_timeout)
             verify_output_chars = len(verify_output)
 
             state["sessions"]["total"] += 1
@@ -1981,13 +2544,15 @@ def execute_spec_stories(
 
             # --- Check for verification session errors ---
             if is_session_error(verify_output):
-                log(f"  Verification session error: {verify_output[:200]}")
+                f_type = classify_failure("", verify_output, None)
+                log(f"  Verification session error [{f_type}]: {verify_output[:200]}")
                 learnings = extract_learnings_from_results(impl_result, None)
                 learnings.append(f"Verify session error: {verify_output[:200]}")
                 log_story_failure(story, attempt, config, verify_output[:500], learnings)
                 update_state_story(
                     state, story["id"], "retrying", attempt,
-                    learnings, verify_output[:500], spec_key=spec_key
+                    learnings, verify_output[:500], spec_key=spec_key,
+                    failure_type=f_type
                 )
                 save_state(state, config)
                 attempt_diff = delete_attempt_branch(project_dir, feature_branch, attempt_branch)
@@ -2016,9 +2581,13 @@ def execute_spec_stories(
                 clean_result_files(project_dir)
                 continue
 
-            if verdict["verdict"] == "pass":
+            if verdict["verdict"] in ("pass", "pass_with_warnings"):
                 learnings = extract_learnings_from_results(impl_result, verdict)
-                log(f"  {story['id']} PASSED (attempt {attempt})")
+                verdict_warnings = verdict.get("warnings", []) if verdict["verdict"] == "pass_with_warnings" else []
+                if verdict_warnings:
+                    log(f"  {story['id']} PASSED with {len(verdict_warnings)} warnings (attempt {attempt})")
+                else:
+                    log(f"  {story['id']} PASSED (attempt {attempt})")
                 # Merge attempt branch into feature branch
                 merge_ok = merge_attempt_branch(project_dir, feature_branch, attempt_branch)
                 if not merge_ok:
@@ -2036,6 +2605,37 @@ def execute_spec_stories(
                     save_state(state, config)
                     clean_result_files(project_dir)
                     continue
+                # Run cross-story regression check
+                reg_passed, reg_msg = run_regression_check(
+                    project_dir, state, story["id"], fail_fast_test, spec_key
+                )
+                if not reg_passed:
+                    log(f"  REGRESSION detected after merging {story['id']}!")
+                    log(f"  {reg_msg[:300]}")
+                    # Revert the merge to keep feature branch clean
+                    merge_head = get_head_commit(project_dir)
+                    run_git(["revert", "--no-edit", merge_head], project_dir, check=True)
+                    log(f"  Reverted merge commit {merge_head[:8]}")
+                    update_state_story(
+                        state, story["id"], "failed", attempt,
+                        [f"Regression: {reg_msg[:200]}"],
+                        f"Regression detected: {reg_msg[:500]}",
+                        spec_key=spec_key, failure_type="REGRESSION"
+                    )
+                    state["status"] = "failed"
+                    save_state(state, config)
+                    write_notification(
+                        config, "regression_detected",
+                        f"Regression detected after {story['id']}",
+                        f"{story['id']}: {reg_msg[:200]}",
+                        severity="critical",
+                    )
+                    commit_tracking_files(project_dir, feature_name)
+                    clean_result_files(project_dir)
+                    sys.exit(1)
+                elif "Skipped" not in reg_msg:
+                    log(f"  Regression check: {reg_msg}")
+
                 # Update feature spec checkboxes on the feature branch
                 if update_spec_checkboxes(spec_path, story["id"]):
                     log(f"  Updated feature spec checkboxes for {story['id']}")
@@ -2044,9 +2644,13 @@ def execute_spec_stories(
                         ["commit", "-m", f"chore({feature_name}): mark {story['id']} criteria complete"],
                         project_dir, check=True
                     )
+                # Store files_changed for regression detection
+                changed_file_list = [f.strip() for f in files_changed_from_git.split("\n") if f.strip()]
                 log_story_success(story, attempt, config, learnings, feature_name=feature_name)
                 update_state_story(
-                    state, story["id"], "completed", attempt, learnings, spec_key=spec_key
+                    state, story["id"], "completed", attempt, learnings,
+                    spec_key=spec_key, warnings=verdict_warnings,
+                    files_changed=changed_file_list
                 )
                 save_state(state, config)
                 write_notification(
@@ -2060,12 +2664,14 @@ def execute_spec_stories(
             else:
                 failure_details = verdict.get("recommendations", "Verification failed")
                 learnings = extract_learnings_from_results(impl_result, verdict)
-                log(f"  {story['id']} FAILED verification (attempt {attempt})")
+                f_type = classify_failure("", verify_output, verdict)
+                log(f"  {story['id']} FAILED verification (attempt {attempt}) [{f_type}]")
                 log(f"  Reason: {str(failure_details)[:200]}")
                 log_story_failure(story, attempt, config, str(failure_details), learnings)
                 update_state_story(
                     state, story["id"], "retrying", attempt,
-                    learnings, str(failure_details), spec_key=spec_key
+                    learnings, str(failure_details), spec_key=spec_key,
+                    failure_type=f_type
                 )
                 save_state(state, config)
                 # Capture diff as retry context, then delete attempt branch
@@ -2126,6 +2732,7 @@ def run_single_spec(config: dict) -> None:
     state["status"] = "completed"
     save_state(state, config)
     log_completion(config, state)
+    persist_learnings(project_dir, state)
     feature_label = config.get("feature_name", "feature")
     write_notification(
         config, "execution_complete",
@@ -2319,6 +2926,7 @@ def run_epic(config: dict) -> None:
     state["status"] = "completed"
     save_state(state, config)
     log_completion(config, state)
+    persist_learnings(project_dir, state)
     write_notification(
         config, "execution_complete",
         "Epic complete",

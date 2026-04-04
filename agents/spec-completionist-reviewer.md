@@ -27,7 +27,7 @@ Read the full feature spec at: `{{SPEC_PATH}}`
 
 ## Review Instructions
 
-Read the feature spec thoroughly before making any findings. Then evaluate across all five dimensions.
+Read the feature spec thoroughly before making any findings. Then evaluate across all six dimensions.
 
 ### 1. Goals → Stories Coverage
 
@@ -63,7 +63,25 @@ Only evaluate this dimension if vision context was provided (i.e., `{{VISION_CON
 
 If vision context is not available, skip this dimension entirely — do not manufacture findings.
 
-### 5. Internal Consistency
+### 5. Integration & Wiring Completeness
+
+Ask: "If every story in this spec passes, is the feature actually usable end-to-end — or are there loose ends?"
+
+Look for features that are built but never connected:
+
+- **UI completeness**: If the feature has user-facing behavior, does the spec include stories for the UI/UX layer? Are specific UI components, pages, or views named — or does the spec stop at the backend and assume the frontend "just works"? A backend endpoint without a UI story that calls it is a hanging wire. Flag as **warning** if UI is implied by the goals but no story covers it, or if UI stories exist but lack specifics (which components, which pages, what states: loading/empty/error/success).
+
+- **Consumer wiring**: If a story creates a new function, service, API endpoint, event, or data structure — does another story in this spec (or a named dependency) actually consume it? A new service method with no caller, an event emitted with no subscriber, a database field with no reader — these are dead code on delivery. Flag as **warning** for each artifact created but never consumed within the spec's scope.
+
+- **Cross-layer connection**: Trace the feature from data layer → business logic → API/route → UI (whichever layers apply). If any layer is present but the connection to the next layer is missing, flag it. Example: a spec creates a model and a service but no route exposes it — the feature exists in code but is unreachable. Flag as **critical** if the entire delivery path is broken, **warning** if one connection is missing.
+
+- **Configuration & activation**: Does the feature require any configuration, feature flags, environment variables, or admin setup to actually work? If so, is there a story covering that setup? A feature that's fully coded but requires a manual config change to activate is a deployment surprise. Flag as **warning**.
+
+- **Scope narrowness check**: Step back and ask — does this spec touch all the parts of the application it *should* touch given the stated goals? If the goal says "users can do X" but the spec only modifies the backend, the scope is too narrow. If the goal implies changes to multiple services but the spec only touches one, the scope is too narrow. Flag as **warning** with specific suggestions for what's missing.
+
+Do NOT flag integration gaps that are explicitly listed in Out of Scope — only flag gaps that the spec's own goals imply but don't deliver.
+
+### 6. Internal Consistency
 
 Look for contradictions within the spec itself:
 - Do Goals, Out of Scope, and User Stories tell a coherent story, or do they pull in different directions?
@@ -85,7 +103,7 @@ Write your findings as a JSON file to `{{RESULT_FILE_PATH}}`.
   "findings": [
     {
       "severity": "critical|warning|info",
-      "category": "missing-story|goal-uncovered|scope-gap|missing-flow|vision-misalignment|open-question|inconsistency",
+      "category": "missing-story|goal-uncovered|scope-gap|missing-flow|vision-misalignment|open-question|inconsistency|unwired-artifact|missing-ui|missing-consumer|scope-too-narrow",
       "location": "Goals|Out of Scope|User Stories|Overall|US-001",
       "description": "Specific description of the gap or issue.",
       "suggestion": "Actionable suggestion for resolving it."
