@@ -113,6 +113,96 @@ If the file doesn't exist, report "No execution log found."
 
 ---
 
+## Step 3b: Supervisor Assessment (monitoring mode only)
+
+Check `.execution-config.json` for `"monitor": true`. If not set, skip to Step 4.
+
+If monitoring is active **and** the orchestrator is running, read the health snapshot:
+
+### Read Health Data
+
+Read `kit_tools/specs/.execution-health.json`. If missing, note "No health data yet — orchestrator may not have completed its first attempt" and skip to Step 4.
+
+### Health Checks
+
+Assess these conditions in order:
+
+1. **Heartbeat staleness** — If `heartbeat` is more than 20 minutes old, the orchestrator may be hung.
+   - Read the execution log tail for clues (stuck on tests? waiting on API?)
+   - Check if tmux session is responsive: `tmux has-session -t {session_name}`
+   - If tmux is dead: report crash, suggest resume
+   - If tmux is alive but heartbeat stale: likely hung on a long-running session. Log a warning but do not intervene yet — the session timeout will eventually fire.
+
+2. **Memory usage** — If `memory_mb` exceeds 2000 MB (2 GB), warn about high memory usage. This is informational — the process cleanup fixes in 2.2.3 should prevent runaway memory, but flag it for awareness.
+
+3. **Consecutive failures** — Apply graduated intervention:
+   - **1-2 failures:** Note the pattern, no action needed. The orchestrator handles retries.
+   - **3+ failures on the same story (retries exhausted):** The orchestrator has given up on this story and will stop or move on depending on mode. Assess whether a split would help:
+     - Read the feature spec to understand the story's scope
+     - Read the execution log for failure patterns (timeout → scope too large, test failure → specific issue, verdict fail → criteria unclear)
+     - **If the story is too large** (timeout failures, many criteria): Write a `split_story` control action to `kit_tools/specs/.execution-control.json`
+     - **If the failures are non-scope-related** (same test keeps failing, API issue, etc.): Write a `pause` control action with a clear reason, so the user can investigate
+   - **Intervention already attempted** (check `last_control_action` in health file): If a prior split or correction didn't help, write a `pause` control action — escalate to the user.
+
+### Writing Control Actions
+
+When the supervisor decides to intervene, write the action to `kit_tools/specs/.execution-control.json`. The orchestrator reads and consumes this file between story attempts.
+
+**Split story format:**
+```json
+{
+  "action": "split_story",
+  "story_id": "US-003",
+  "reason": "Timed out 3x — scope too large for single implementation session",
+  "new_stories": [
+    {
+      "id": "US-010",
+      "title": "First part of original story",
+      "description": "Focused description...",
+      "criteria": ["- [ ] Criterion 1", "- [ ] Criterion 2"],
+      "hints": "Implementation approach..."
+    },
+    {
+      "id": "US-011",
+      "title": "Second part of original story",
+      "description": "Focused description...",
+      "criteria": ["- [ ] Criterion 3", "- [ ] Criterion 4"],
+      "hints": "Implementation approach..."
+    }
+  ]
+}
+```
+
+**Important:** New story IDs must be major numbers (US-010, US-011, etc.) — never sub-letters (US-003a). Pick IDs higher than any existing story to avoid collisions.
+
+**Pause format:**
+```json
+{
+  "action": "pause",
+  "reason": "Story US-003 has failed 3x after supervisor split — needs human investigation"
+}
+```
+
+**Skip story format:**
+```json
+{
+  "action": "skip_story",
+  "story_id": "US-003",
+  "reason": "Blocked by external dependency — skip and continue with remaining stories"
+}
+```
+
+### Supervisor Report
+
+After assessment, always report:
+- Health status (OK / warning / intervention needed)
+- What action was taken (if any)
+- Next check in ~30 minutes (from CronCreate)
+
+If no intervention is needed, keep the report brief — one or two lines of status.
+
+---
+
 ## Step 4: Available Actions
 
 Present available actions based on current state using AskUserQuestion:

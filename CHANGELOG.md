@@ -5,7 +5,17 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.2.3] - 2026-04-06
+## [2.3.0] - 2026-04-06
+
+### Added
+- **Supervisor monitoring mode** — Optional `--monitor` flag for autonomous and guarded execution modes. When enabled, the OG Claude session stays active as a supervisor, polling orchestrator health every 30 minutes via CronCreate. The supervisor reads a health snapshot file (`.execution-health.json`) and can write control actions to a control file (`.execution-control.json`) — no system commands needed from the permission-bound session.
+- **Health snapshots** — Orchestrator writes `.execution-health.json` after every story attempt with heartbeat timestamp, memory usage, child PIDs, current story, consecutive failures, and completion progress. Supervisor reads this to assess orchestrator health without running system commands.
+- **Supervisor control file** — Orchestrator checks `.execution-control.json` between story attempts and executes supervisor instructions: `split_story`, `pause`, `skip_story`, or `abort`. Control file is consumed (deleted) after reading to prevent re-processing.
+- **Story splitting** — Supervisor can split oversized stories by writing a `split_story` control action with full story definitions. Orchestrator applies the split to the feature spec, updates execution state, and commits. New stories must use major IDs (US-010, not US-003a).
+- **Graduated intervention** — Supervisor follows an escalation path: 1-2 failures → observe, 3+ failures (retries exhausted) → split or correct, intervention fails → pause and escalate to user.
+- **24-hour safety net** — Orchestrator self-terminates after 24 hours of continuous execution with a critical notification.
+- **Test metrics tracking** — New `kit_tools/testing/test-metrics.json` file tracks per-file test pass/fail counts, durations, timeouts, and last run dates across orchestration runs. Aggregated deterministically by the orchestrator from verifier results and regression checks. Portable JSON — no external dependencies.
+- **Verifier: `tests_run` result field** — Verifier result schema extended with a `tests_run` array reporting which test files were executed, pass/fail status, and duration. Fed into test metrics for observability.
 
 ### Fixed
 - **Orchestrator: orphaned process cleanup on normal exit** — `run_claude_session()` now kills the entire process group after every session completes, not just on timeout. Previously, child processes (pytest, vitest, node workers) spawned by Claude sessions survived after the session exited normally, accumulating across stories and eventually exhausting system memory.

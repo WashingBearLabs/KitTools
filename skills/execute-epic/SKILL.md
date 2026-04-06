@@ -54,6 +54,21 @@ Present options:
 
 ---
 
+## Step 2a: Monitoring (Autonomous/Guarded only)
+
+If the user selected Autonomous or Guarded mode, ask:
+
+> **Enable supervisor monitoring?** This keeps the current Claude session active as a supervisor, checking orchestrator health every 30 minutes. The supervisor can detect crashes, kill runaway processes, split oversized stories, and pause execution if problems persist.
+>
+> - **A. Yes** (recommended for long-running epics)
+> - **B. No** — fire and forget
+
+Store as `monitor: true/false` in `.execution-config.json`. Default: `false`.
+
+Skip this step for Supervised mode (the user is already present).
+
+---
+
 ## Step 2b: Completion Strategy
 
 After all stories pass and validation completes, how should the feature be finalized?
@@ -163,6 +178,14 @@ For each uncompleted story:
    - `tail -f kit_tools/EXECUTION_LOG.md` — follow the execution log
    - `cat kit_tools/specs/.execution-state.json` — check current state
    - `touch kit_tools/.pause_execution` — pause after current story
+8. **If `monitor: true` in config:** Set up the supervisor loop using CronCreate:
+   ```
+   CronCreate(cron: "*/30 * * * *", prompt: "/kit-tools:execution-status", recurring: true)
+   ```
+   Then run `/kit-tools:execution-status` immediately for the first check.
+   
+   Tell the user:
+   > Supervisor monitoring active. I'll check orchestrator health every 30 minutes and intervene if needed (restart crashes, split oversized stories, pause on repeated failures). You can close this session to stop monitoring — the orchestrator will continue running independently.
 
 ---
 

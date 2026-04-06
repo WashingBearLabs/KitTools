@@ -74,12 +74,12 @@ git clone https://github.com/WashingBearLabs/KitTools.git
 | `/kit-tools:create-vision` | Define the product vision interactively |
 | `/kit-tools:plan-epic` | Plan a new feature or epic, creating an Epic and Feature Specs |
 | `/kit-tools:validate-epic` | Validate feature specs before execution — completeness, story quality, adversarial review, cross-model second opinion |
-| `/kit-tools:execute-epic` | Execute an epic's feature specs autonomously, supervised, or guarded |
+| `/kit-tools:execute-epic` | Execute an epic's feature specs autonomously, supervised, or guarded — with optional supervisor monitoring |
 | `/kit-tools:complete-implementation` | Mark a Feature Spec as completed and archive it |
 | `/kit-tools:sync-project` | Full sync between code and docs (`--quick` for audit) |
 | `/kit-tools:validate-implementation` | Validate a feature branch against its feature spec (quality, security, compliance) |
 | `/kit-tools:update-kit-tools` | Update project components from latest plugin versions |
-| `/kit-tools:execution-status` | Check progress and status of autonomous epic execution |
+| `/kit-tools:execution-status` | Check execution progress and health; acts as supervisor when monitoring is enabled |
 | `/kit-tools:sync-symlinks` | Force-refresh skill symlinks after a plugin update |
 
 ## Hooks
@@ -277,6 +277,8 @@ Three execution modes:
 - **Supervised** — Review each story in-session before continuing
 - **Autonomous** — Spawn separate Claude sessions per story, run until complete
 - **Guarded** — Autonomous with human oversight on failures
+
+For autonomous and guarded modes, optional **supervisor monitoring** keeps the launching Claude session active, checking health every 30 minutes. The supervisor can split oversized stories, restart crashed orchestrators, and pause on repeated failures — all through JSON file communication (no system permissions needed).
 
 Autonomous execution uses git branch isolation (`feature/[feature-name]`), independent story verification, and a pause mechanism (`touch kit_tools/.pause_execution`). Progress is tracked in `kit_tools/EXECUTION_LOG.md` and feature spec checkboxes.
 
