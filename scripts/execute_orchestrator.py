@@ -131,8 +131,9 @@ def kill_tmux_session(config: dict) -> None:
             ["tmux", "kill-session", "-t", session_name],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            timeout=10,
         )
-    except OSError:
+    except (OSError, subprocess.TimeoutExpired):
         pass
 
 
@@ -983,8 +984,16 @@ def build_verification_prompt(
         )
     elif test_command:
         test_section = (
-            f"Run: `{test_command}`\n\n"
-            f"**Important:** {quiet_note}"
+            f"No targeted tests could be identified automatically (no test_mapping entries, "
+            f"heuristic matching found no matches).\n\n"
+            f"**Your task:** Based on the diff and acceptance criteria, identify the specific test "
+            f"files relevant to the changed code and run only those. Look at the test directory "
+            f"structure, imports, and class/function names to find the right tests.\n\n"
+            f"**Do NOT run the full test suite** (`{test_command}`). "
+            f"Running the full suite in a large codebase will waste time and may hang.\n\n"
+            f"If you truly cannot identify any relevant tests, note that in your verdict and move on. "
+            f"The regression check and end-of-epic validation will catch broader failures.\n\n"
+            f"{quiet_note}"
         )
     else:
         test_section = "No test command detected — skip test step unless criteria explicitly mention tests."
@@ -1053,6 +1062,24 @@ def get_size_timeouts(spec_path: str | None) -> tuple[int, int]:
     return size_map["M"]
 
 
+def _kill_process_group(pgid: int) -> None:
+    """Kill a process group gracefully (SIGTERM), then forcefully (SIGKILL).
+
+    Sends SIGTERM first to allow child processes to clean up, then SIGKILL
+    after a short grace period to ensure nothing lingers. Silently ignores
+    errors if the process group is already gone.
+    """
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except OSError:
+        return  # Already gone
+    time.sleep(0.5)
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except OSError:
+        pass  # Terminated during grace period
+
+
 def run_claude_session(prompt: str, project_dir: str, timeout: int = SESSION_TIMEOUT) -> str:
     """Execute a claude -p session and capture output.
 
@@ -1078,12 +1105,16 @@ def run_claude_session(prompt: str, project_dir: str, timeout: int = SESSION_TIM
                 stdout, stderr_out = proc.communicate(timeout=timeout)
             except subprocess.TimeoutExpired:
                 # Kill the entire process group (claude + all children like pytest, node, etc.)
+                _kill_process_group(proc.pid)
                 try:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                except OSError:
                     proc.kill()
+                except OSError:
+                    pass
                 proc.wait()
                 return f"SESSION_ERROR: Timed out after {timeout}s"
+
+            # Session finished — kill any orphaned children in the process group
+            _kill_process_group(proc.pid)
 
             if proc.returncode == 0:
                 return stdout
@@ -2174,24 +2205,37 @@ def run_regression_check(
         existing = sorted(existing)[:REGRESSION_TEST_FILE_CAP]
         log(f"  Regression: capped at {REGRESSION_TEST_FILE_CAP} test files")
 
-    test_files_str = " ".join(sorted(existing))
-    cmd = f"python3 -m pytest {test_files_str} -x -q --tb=short"
+    test_files = sorted(existing)
+    cmd = ["python3", "-m", "pytest"] + test_files + ["-x", "-q", "--tb=short"]
     log(f"  Regression check: {len(existing)} test files from {story_count} prior stories")
 
     try:
-        result = subprocess.run(
-            cmd, shell=True, cwd=project_dir,
-            capture_output=True, text=True, timeout=REGRESSION_TIMEOUT
+        proc = subprocess.Popen(
+            cmd, cwd=project_dir,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, start_new_session=True,
         )
-        if result.returncode == 0:
+        try:
+            stdout, stderr_out = proc.communicate(timeout=REGRESSION_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            _kill_process_group(proc.pid)
+            try:
+                proc.kill()
+            except OSError:
+                pass
+            proc.wait()
+            log(f"  WARNING: Regression check timed out after {REGRESSION_TIMEOUT}s — skipping")
+            return True, f"Timed out after {REGRESSION_TIMEOUT}s — skipped (best-effort)"
+
+        # Always clean up the process group (pytest may leave child processes)
+        _kill_process_group(proc.pid)
+
+        if proc.returncode == 0:
             return True, f"Passed ({len(existing)} test files)"
         # Tests failed — regression detected
-        output_lines = (result.stdout + result.stderr).strip().split("\n")
+        output_lines = (stdout + stderr_out).strip().split("\n")
         partial = "\n".join(output_lines[:50])
         return False, f"REGRESSION: tests failed\n{partial}"
-    except subprocess.TimeoutExpired:
-        log(f"  WARNING: Regression check timed out after {REGRESSION_TIMEOUT}s — skipping")
-        return True, f"Timed out after {REGRESSION_TIMEOUT}s — skipped (best-effort)"
     except OSError as e:
         log(f"  WARNING: Regression check error: {e}")
         return True, f"Error: {e} — skipped"

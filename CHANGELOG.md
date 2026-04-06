@@ -5,6 +5,17 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.3] - 2026-04-06
+
+### Fixed
+- **Orchestrator: orphaned process cleanup on normal exit** — `run_claude_session()` now kills the entire process group after every session completes, not just on timeout. Previously, child processes (pytest, vitest, node workers) spawned by Claude sessions survived after the session exited normally, accumulating across stories and eventually exhausting system memory.
+- **Orchestrator: regression check process handling** — `run_regression_check()` rewritten to use `Popen` with `start_new_session=True` instead of `subprocess.run(shell=True)`. Timeout now kills pytest and all its children via process group cleanup instead of only killing the shell wrapper.
+- **Orchestrator: graceful process termination** — New `_kill_process_group()` helper sends SIGTERM with a 0.5s grace period before SIGKILL, allowing child processes to clean up instead of being killed immediately.
+- **Orchestrator: tmux cleanup timeout** — `kill_tmux_session()` now has a 10s timeout to prevent hanging if tmux is unresponsive.
+
+### Changed
+- **Verifier: no more full-suite fallback** — When targeted test detection (T0/T1) finds no matches, the verifier is now instructed to identify and run only relevant tests from the diff rather than falling back to the full test suite. Prevents multi-minute test runs in large codebases during story verification. Broader test coverage is still enforced by the regression check and end-of-epic validation.
+
 ## [2.2.2] - 2026-04-04
 
 ### Added
