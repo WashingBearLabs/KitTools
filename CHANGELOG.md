@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Orchestrator: graceful process termination** — New `_kill_process_group()` helper sends SIGTERM with a 0.5s grace period before SIGKILL, allowing child processes to clean up instead of being killed immediately.
 - **Orchestrator: tmux cleanup timeout** — `kill_tmux_session()` now has a 10s timeout to prevent hanging if tmux is unresponsive.
 
+### Added
+- **Test metrics tracking** — New `kit_tools/testing/test-metrics.json` file tracks per-file test pass/fail counts, durations, timeouts, and last run dates across orchestration runs. Aggregated deterministically by the orchestrator from verifier results and regression checks. Portable JSON — no external dependencies.
+- **Verifier: `tests_run` result field** — Verifier result schema extended with a `tests_run` array reporting which test files were executed, pass/fail status, and duration. Fed into test metrics for observability.
+
 ### Changed
 - **Verifier: no more full-suite fallback** — When targeted test detection (T0/T1) finds no matches, the verifier is now instructed to identify and run only relevant tests from the diff rather than falling back to the full test suite. Prevents multi-minute test runs in large codebases during story verification. Broader test coverage is still enforced by the regression check and end-of-epic validation.
 

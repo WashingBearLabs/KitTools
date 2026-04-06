@@ -51,6 +51,7 @@ PAUSE_LOG_INTERVAL = 60  # log reminder every minute
 IMPL_RESULT_FILE = os.path.join("kit_tools", ".story-impl-result.json")
 VERIFY_RESULT_FILE = os.path.join("kit_tools", ".story-verify-result.json")
 NOTIFICATION_FILE = os.path.join("kit_tools", ".execution-notifications")
+TEST_METRICS_FILE = os.path.join("kit_tools", "testing", "test-metrics.json")
 
 
 # --- Notifications ---
@@ -1295,6 +1296,132 @@ def extract_learnings_from_results(
     return learnings
 
 
+# --- Test Metrics ---
+
+
+def get_test_metrics_path(project_dir: str) -> str:
+    """Return absolute path to the test metrics file."""
+    return os.path.join(project_dir, TEST_METRICS_FILE)
+
+
+def load_test_metrics(project_dir: str) -> dict:
+    """Load existing test metrics or return a fresh structure."""
+    path = get_test_metrics_path(project_dir)
+    if os.path.exists(path):
+        try:
+            with open(path, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            log("  WARNING: test-metrics.json corrupted — starting fresh")
+    return {"meta": {"created_at": now_iso(), "last_updated": now_iso(), "total_verifications": 0}, "tests": {}}
+
+
+def save_test_metrics(project_dir: str, metrics: dict) -> None:
+    """Write test metrics to disk. Best-effort — swallows errors."""
+    path = get_test_metrics_path(project_dir)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        metrics["meta"]["last_updated"] = now_iso()
+        with open(path, "w") as f:
+            json.dump(metrics, f, indent=2)
+    except OSError as e:
+        log(f"  WARNING: Failed to write test metrics: {e}")
+
+
+def update_test_metrics(project_dir: str, verify_result: dict | None, story_id: str) -> None:
+    """Aggregate test data from a verification result into the persistent metrics file.
+
+    Reads the optional 'tests_run' array from the verifier result. Each entry
+    should have: file, passed (bool), and optionally duration_s (float).
+    Also records a metric entry when the verifier reports tests_passed but no
+    detailed tests_run data (so we at least count the verification event).
+    """
+    if not verify_result:
+        return
+
+    tests_run = verify_result.get("tests_run")
+    if not isinstance(tests_run, list) or not tests_run:
+        return
+
+    metrics = load_test_metrics(project_dir)
+    metrics["meta"]["total_verifications"] = metrics["meta"].get("total_verifications", 0) + 1
+    now = now_iso()
+
+    for entry in tests_run:
+        if not isinstance(entry, dict) or "file" not in entry:
+            continue
+        test_file = str(entry["file"])
+        passed = bool(entry.get("passed", True))
+        duration = entry.get("duration_s")
+
+        if test_file not in metrics["tests"]:
+            metrics["tests"][test_file] = {
+                "runs": 0,
+                "passes": 0,
+                "failures": 0,
+                "timeouts": 0,
+                "total_duration_s": 0.0,
+                "last_run": now,
+                "last_failure": None,
+                "last_story_id": story_id,
+            }
+
+        t = metrics["tests"][test_file]
+        t["runs"] += 1
+        if passed:
+            t["passes"] += 1
+        else:
+            t["failures"] += 1
+            t["last_failure"] = now
+        if isinstance(duration, (int, float)) and duration >= 0:
+            t["total_duration_s"] = round(t.get("total_duration_s", 0.0) + duration, 2)
+            if entry.get("timed_out"):
+                t["timeouts"] = t.get("timeouts", 0) + 1
+        t["last_run"] = now
+        t["last_story_id"] = story_id
+
+    save_test_metrics(project_dir, metrics)
+
+
+def update_test_metrics_from_regression(
+    project_dir: str, test_files: list[str], passed: bool, story_id: str
+) -> None:
+    """Record regression check results in test metrics.
+
+    Unlike verifier results, regression checks are run by the orchestrator
+    directly so we know exactly which files were tested.
+    """
+    if not test_files:
+        return
+
+    metrics = load_test_metrics(project_dir)
+    now = now_iso()
+
+    for test_file in test_files:
+        if test_file not in metrics["tests"]:
+            metrics["tests"][test_file] = {
+                "runs": 0,
+                "passes": 0,
+                "failures": 0,
+                "timeouts": 0,
+                "total_duration_s": 0.0,
+                "last_run": now,
+                "last_failure": None,
+                "last_story_id": story_id,
+            }
+        t = metrics["tests"][test_file]
+        t["runs"] += 1
+        if passed:
+            t["passes"] += 1
+        else:
+            t["failures"] += 1
+            t["last_failure"] = now
+        t["last_run"] = now
+        t["last_story_id"] = story_id
+
+    save_test_metrics(project_dir, metrics)
+
+
 # --- Execution Log ---
 
 
@@ -2153,6 +2280,7 @@ def run_regression_check(
 
     Returns (passed, message). If passed is False, the merge should be reverted.
     Uses direct subprocess — not a Claude session.
+    Records results in test-metrics.json for observability.
     """
     if not test_command or "pytest" not in test_command:
         return True, "Skipped — no pytest command detected"
@@ -2225,12 +2353,16 @@ def run_regression_check(
                 pass
             proc.wait()
             log(f"  WARNING: Regression check timed out after {REGRESSION_TIMEOUT}s — skipping")
+            update_test_metrics_from_regression(project_dir, test_files, False, current_story_id)
             return True, f"Timed out after {REGRESSION_TIMEOUT}s — skipped (best-effort)"
 
         # Always clean up the process group (pytest may leave child processes)
         _kill_process_group(proc.pid)
 
-        if proc.returncode == 0:
+        passed = proc.returncode == 0
+        update_test_metrics_from_regression(project_dir, test_files, passed, current_story_id)
+
+        if passed:
             return True, f"Passed ({len(existing)} test files)"
         # Tests failed — regression detected
         output_lines = (stdout + stderr_out).strip().split("\n")
@@ -2607,6 +2739,10 @@ def execute_spec_stories(
 
             # --- Read verification result from file ---
             verdict, verify_error = read_verification_result(project_dir)
+
+            # Record test metrics regardless of verdict outcome
+            if verdict:
+                update_test_metrics(project_dir, verdict, story["id"])
 
             if verify_error:
                 # Result file missing or invalid — treat as retryable failure

@@ -95,6 +95,14 @@ Write to: `{{RESULT_FILE_PATH}}`
   "story_id": "{{STORY_ID}}",
   "verdict": "pass|pass_with_warnings|fail",
   "tests_passed": true,
+  "tests_run": [
+    {
+      "file": "tests/test_example.py",
+      "passed": true,
+      "duration_s": 2.3,
+      "timed_out": false
+    }
+  ],
   "criteria": [
     {
       "criterion": "Text of criterion",
@@ -134,6 +142,14 @@ The `tests_passed` field must always be set:
 - `true` if all test commands executed successfully (exit code 0)
 - `false` if any test command failed
 - Set this based on actual test execution results, not on your assessment of test quality
+
+The `tests_run` array tracks which test files you executed for metrics:
+- Include one entry per test file you ran
+- `file`: relative path to the test file (e.g., `tests/test_auth.py`)
+- `passed`: whether that file's tests passed (`true`/`false`)
+- `duration_s`: approximate duration in seconds (parse from pytest/vitest output if available, otherwise omit)
+- `timed_out`: set to `true` only if the test command timed out or was killed
+- If you ran no tests, set `tests_run` to an empty array `[]`
 
 ## Critical Rules
 
