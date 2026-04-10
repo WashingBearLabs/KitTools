@@ -13,7 +13,7 @@ Check on the progress of an autonomous or guarded execution launched by `/kit-to
 
 Read `kit_tools/specs/.execution-state.json`:
 
-- **Not found:** Report "No execution state found. Run `/kit-tools:execute-epic` to start." and stop.
+- **Not found:** Clean up any leftover supervisor cron jobs (see Supervisor Cron Cleanup below), then report "No execution state found. Run `/kit-tools:execute-epic` to start." and stop.
 - **Found:** Continue to Step 2.
 
 Also read `kit_tools/specs/.execution-config.json` to get the `tmux_session` field (the session name used at launch). Check if it's alive:
@@ -237,6 +237,7 @@ Warn: "The orchestrator is not running but state shows `running`. The process ma
 
 ### If Completed
 
+- Clean up any leftover supervisor cron jobs (see Supervisor Cron Cleanup below)
 - **Validate** — Suggest `/kit-tools:validate-implementation`
 - **Complete** — Suggest `/kit-tools:complete-implementation`
 - **View log** — Show full execution log
@@ -248,6 +249,18 @@ Warn: "The orchestrator is not running but state shows `running`. The process ma
 - **View log** — Show full execution log
 
 Ask the user which action to take, then execute it.
+
+---
+
+## Supervisor Cron Cleanup
+
+When execution is completed or no execution state exists, clean up the supervisor cron job that was created by `/kit-tools:execute-epic`:
+
+1. Call `CronList` to get all active cron jobs
+2. Find any entry whose prompt contains `/kit-tools:execution-status`
+3. Call `CronDelete` for each matching entry
+
+This prevents the supervisor from polling indefinitely after the orchestrator has finished and cleaned up its state files.
 
 ---
 
