@@ -11,6 +11,9 @@ env/
 *.egg-info/
 dist/
 build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # IDEs
 .idea/
@@ -51,3 +54,6 @@ kit_tools/.execution-notifications
 
 # Local-only skills (plugin maintenance, not shipped to users)
 .claude/skills/
+
+# Local Claude Code settings (user-specific tool permissions; never ship)
+.claude/settings.local.json
