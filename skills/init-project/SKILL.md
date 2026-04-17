@@ -356,7 +356,7 @@ project/
         └── validate_setup.py
 ```
 
-**Do NOT copy:** `hooks.json` and `sync_skill_symlinks.py` — these are plugin-specific and use `${CLAUDE_PLUGIN_ROOT}` which only works in plugins, not project settings.
+**Important:** the project copies Python hook scripts — it does NOT copy the plugin's hook registration (which lives in `.claude-plugin/plugin.json` and uses `${CLAUDE_PLUGIN_ROOT}`, valid only inside plugins). Project settings register hooks via Step 6b below using `$CLAUDE_PROJECT_DIR` instead.
 
 ### 6b: Configure hooks in project settings
 
@@ -496,16 +496,15 @@ Report to the user:
   - The project context gathered in Step 0 (description, tech stack, special considerations) will help seed SYNOPSIS and other templates more accurately
 - Run `/kit-tools:create-vision` to define the product vision (recommended before planning features)
 - Suggested workflow: **init → seed → create-vision → plan-epic**
-- Run `/kit-tools:update-kit-tools` later to update hooks, templates, or other components as the project grows
+- To pick up new plugin templates or hooks later, run `/plugin update kit-tools@washingbearlabs` then re-run `/kit-tools:init-project` to select additional components
 - Run `/kit-tools:validate-implementation` after completing a feature to validate the full branch against its feature spec
 
 ## Adding Templates Later
 
 If the project expands and needs templates that weren't initially selected:
 
-1. Run `/kit-tools:update-kit-tools`
-2. It will show missing hooks, templates, and other components
-3. Select which components to add or update
+1. Update the plugin: `/plugin update kit-tools@washingbearlabs`
+2. Re-run `/kit-tools:init-project` in the project — the "partial setup" branch of Step 1 lets you merge in new templates and hooks without overwriting existing docs.
 
 This allows the documentation to grow with the project.
 
@@ -519,4 +518,3 @@ The templates come from this plugin's `templates/` directory. They are canonical
 |-------|-------------|
 | `/kit-tools:seed-project` | After init, to populate templates with project-specific content |
 | `/kit-tools:plan-epic` | To plan a new feature or epic in `kit_tools/specs/` |
-| `/kit-tools:update-kit-tools` | Later, to update hooks/templates from newer plugin versions |

@@ -117,6 +117,16 @@ config = {
         "gotchas": "kit_tools/docs/GOTCHAS.md",
         "spec_overview": "... inline overview text ..."
     },
+    # Optional: per-run model selection. Omit to use orchestrator defaults
+    # (implementer=sonnet, verifier=opus, validator=opus). Values are model
+    # aliases ("sonnet", "opus") or full IDs ("claude-sonnet-4-6") —
+    # anything the local `claude` CLI's --model flag accepts. Partial
+    # overrides are supported; missing keys keep their defaults.
+    # "model_config": {
+    #     "implementer": "sonnet",
+    #     "verifier": "opus",
+    #     "validator": "opus",    # session running /kit-tools:validate-implementation
+    # },
     # epic fields (omit for standalone):
     # "epic_name": "...",
     # "epic_pause_between_specs": True,

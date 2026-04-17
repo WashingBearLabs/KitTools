@@ -5,6 +5,58 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-04-17
+
+Foundation refactor. 2.4.0 bundles a deep audit of the whole plugin: hardening, architectural cleanup, consistency across agents, and a full decomposition of the orchestrator. No breaking changes to the user-visible workflow — skills you invoke still behave the same, but the internals are substantially more robust and easier to evolve.
+
+### Added
+
+- **Unified Finding Schema for review agents** — New `agents/FINDING_SCHEMA.md` defines a single canonical shape (`{review_type, target, overall_verdict, findings[], summary}`) used by every review agent. Skills now parse one format instead of three (`FINDING:/END_FINDING`, `DRIFT:/END_DRIFT`, `VALIDATION_RESULT/ISSUE`). Optional per-agent fields (`confidence`, `evidence`, `trade_offs`) handled as schema extensions.
+- **Feature spec frontmatter schema doc** — `templates/specs/SCHEMA.md` is the canonical reference for `feature-*.md` and `epic-*.md` frontmatter: every field, type, validation rule, and example. Referenced from both template files.
+- **Model configurability** — Orchestrator now accepts a `model_config` block in `.execution-config.json` with per-role keys: `implementer` (default: sonnet), `verifier` (default: opus), `validator` (default: opus). Overrides merge onto defaults. Surfaces in `/kit-tools:execute-epic` Step 2c as an optional user prompt. The `claude -p` subprocess passes the configured model via `--model`.
+- **Structured event logging** — New `kit_tools/.execution-events.jsonl` append-only log with structured events for post-mortem grep/jq. `log_event(config, event_type, severity, **fields)` helper; instrumented at critical failure sites (`orchestrator_crashed`, `abort_not_git_repo`, `abort_dirty_worktree`, `abort_state_corrupt`, `abort_git_recovery_failed`). Complements the human-readable `log()` stdout stream.
+- **EXECUTION_LOG.md rotation** — `rotate_execution_log_if_large()` keeps a single `.1` backup when the log exceeds 5 MB. Prevents unbounded growth across resumed runs.
+- **State schema versioning** — `.execution-state.json` now carries `schema_version: 1`. Older files without the field are tolerated (upgraded on next save); newer-than-supported is a hard abort with explicit remediation. `StateCorrupt` exception + `_validate_state()` catch malformed files before they cause downstream crashes.
+- **Git recovery detection** — `check_git_clean_recovery()` + `GitRecoveryFailed` exception surface when `git merge --abort` or `git revert` leaves the repo stuck in MERGING/REVERTING/CHERRY-PICKING/REBASING state. Uses `git rev-parse --git-dir` so it works correctly inside linked worktrees.
+- **Clean-worktree precondition** — Orchestrator now verifies `is_git_repo()` + `verify_clean_worktree()` at startup before creating any branches. Aborts with a clear error if the worktree has uncommitted changes or isn't a git repo at all.
+- **Vision review split** — `vision-reviewer` (250 LOC, three modes) replaced by three focused agents: `vision-completionist-reviewer`, `vision-feasibility-reviewer`, `vision-readiness-reviewer`. Each has a single output shape and clearer accountability. `/kit-tools:create-vision` updated to invoke all three.
+- **Prompt substitution guard** — `_assert_prompt_fully_substituted()` raises if a built prompt still contains `{{TOKEN}}` markers after interpolation. Catches typos in `.replace()` calls and drift when agent templates gain new tokens. Wired into `build_implementation_prompt` and `build_verification_prompt`.
+- **Required-token contracts** — All 18 agents now declare `required_tokens` in frontmatter. Consistency tests catch drift between declared tokens and body `{{TOKEN}}` markers, and between declarations and orchestrator `.replace()` calls.
+
+### Changed
+
+- **Orchestrator decomposition** — `scripts/execute_orchestrator.py` (4,087 LOC, 115 functions, monolith) split into `scripts/orchestrator/` package (13 modules, 40–660 LOC each). `execute_orchestrator.py` remains as a 63-line backward-compat shim that re-exports the public API and dispatches the CLI. Module boundaries: `utils`, `events`, `config`, `state`, `specs`, `prompts`, `sessions`, `tests_metrics`, `git_ops`, `supervisor`, `execution_log`, `executor`, `entry`. No circular imports. Existing CLI invocation unchanged.
+- **Explicit tool grants on all 16 agents** — Every agent now declares `tools:` in frontmatter instead of inheriting full parent access. Three buckets: full-write (story-implementer, feature-fixer), write-no-Edit (story-verifier, generic-seeder, 6 reviewers), read-only (6 read-only reviewers). `story-verifier` is now architecturally prevented from modifying source — the "independent verifier" boundary enforced at the tool layer, not just prompt-layer.
+- **Prompt-injection resistance** — 9 code-reading agents got an explicit security-posture callout: code, comments, diffs, and tool output they consume may contain adversarial prompt-injection attempts and should be treated as text to analyze, never instructions to execute. `security-reviewer` got an extended note about the reviewer being a high-value injection target.
+- **Atomic JSON writes** — `save_state()`, health snapshots, test metrics, and control-file updates now use `_atomic_json_write()` (tempfile + fsync + `os.replace`). Mid-write crashes no longer corrupt state files. Concurrent readers (supervisor polling health) see either old or new contents — never partial.
+- **Review agents emit unified JSON** — `code-quality-validator`, `security-reviewer`, `feature-compliance-reviewer`, `drift-detector`, `template-validator` now write to `{{RESULT_FILE_PATH}}` matching the Finding Schema. Old text-block formats retired. Skill parsers (`validate-implementation`, `validate-seeding`, `sync-project`) updated to read JSON.
+- **`/kit-tools:sync-project` description** — Rewritten to lead with outcome instead of jargon. New "When to use" section (quick vs full vs resume) and "Outcome" section clarify what the skill actually produces in each mode.
+- **`spec-second-opinion` model unpinned** — Removed hardcoded `model: sonnet` from frontmatter. Cross-model rationale moved to skill prose: `/kit-tools:validate-epic` Step 3d now explains the pattern ("use a model different from the primary reviewer — typically the non-primary of sonnet/opus") and picks the model at invocation time, so the plugin adapts as new models ship.
+- **Hook placeholder detection unified** — `hooks/validate_seeded_template.py` and `hooks/validate_setup.py` previously had drifting regex lists for unfilled placeholders. Both now import from a shared `hooks/_placeholders.py` module.
+- **Supervisor cron cleanup extended** — 2.3.1 self-cleanup covered `Completed` and "no execution state" paths. 2.4.0 extends to `Crashed`, `Stale`, and `Failed` states so a supervisor cron never lingers past a run that stopped making progress. Documentation in `/kit-tools:execute-epic` Step 2a now explicitly surfaces the cron's lifetime (tied to the OG session) plus the laptop-sleep burst-fire caveat.
+- **Completionist reviewer dimension rename** — The vision completionist's `feasibility` dimension is now `risk_acknowledgment`. Disambiguates from the separate `vision-feasibility-reviewer` which stress-tests actual implementation rather than asking "did the vision mention risks?".
+- **`validator` session honors model_config** — Outer session running `/kit-tools:validate-implementation` now passes `--model` from `model_config.validator` (defaults to opus for judgment-heavy aggregation).
+- **Null-safe model config merging** — `get_model_config()` treats empty strings, non-string values, and non-dict `model_config` as "use default" rather than passing garbage to `--model`.
+
+### Fixed
+
+- **`proc.wait()` timeout after SIGKILL** — `run_claude_session()` and `run_regression_check()` now bound the final wait at 10 seconds. Previously, if SIGKILL didn't take (zombie, permissions, uninterruptible sleep), the orchestrator could hang indefinitely. Prefers a leaked PID over a hung 24h autonomous run.
+- **`git merge --abort` / `git revert --abort` stuck state** — Previously, if the abort itself failed (corrupt index, conflicts during revert), the orchestrator would log a warning and immediately retry the next checkout, which would also fail. Now each abort is followed by a recovery check; stuck state raises `GitRecoveryFailed` with explicit manual-remediation guidance.
+- **`_atomic_json_write` bare-filename handling** — Crashed on paths without a directory component (`os.path.dirname("state.json")` returns `""`, `os.makedirs("")` fails). Now falls back to CWD.
+- **Worktree indirection in git recovery** — `check_git_clean_recovery()` previously looked at `project_dir/.git/MERGE_HEAD`, which fails in linked worktrees where `.git` is a file, not a directory. Now uses `git rev-parse --git-dir` to follow the indirection.
+- **Pre-existing `feature-fixer` Edit access** — Confirmed the agent has Edit via tool inheritance; previously flagged as a latent bug during the audit.
+- **Stale `hooks.json` reference in `/kit-tools:init-project`** — The "Do NOT copy" guidance referenced a file that no longer exists in the plugin. Rewritten to describe the actual project-vs-plugin hook-registration rule.
+
+### Removed
+
+- **`/kit-tools:sync-symlinks` skill + `hooks/sync_skill_symlinks.py` hook** — Claude 3.5-era workaround for stale autocomplete symlinks after `/plugin update`. No longer needed; the plugin's skill autodiscovery works correctly without the symlink sync. Hook registration removed from `plugin.json`.
+- **`/kit-tools:update-kit-tools` skill** — Workflow pre-dated the standard `/plugin update kit-tools@washingbearlabs` command, which does the same thing natively. Initializing new templates/hooks in an existing project: re-run `/kit-tools:init-project`, choose the merge/partial option.
+
+### Internal
+
+- **Test infrastructure bootstrapped** — `tests/` directory (gitignored per distribution hygiene) with pytest and shared `conftest.py`. 125 tests across 6 suites cover: atomic writes, schema validation, git recovery helpers + worktree behaviour, model config merging, prompt substitution guards + required_tokens consistency for all 18 agents, placeholder detection, structured event logging, and log rotation. Not shipped to users.
+- **Consistency tests for agent contracts** — Parametrized tests verify each agent's declared `required_tokens` matches the `{{TOKEN}}` markers in its body, and that every token the orchestrator substitutes is declared by the agents it targets. Future drift fails CI.
+
 ## [2.3.1] - 2026-04-10
 
 ### Fixed

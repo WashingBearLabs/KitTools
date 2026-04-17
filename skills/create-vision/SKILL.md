@@ -12,7 +12,9 @@ Define your product's vision through a guided, iterative process with AI-assiste
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | **Vision template** | `$CLAUDE_PLUGIN_ROOT/templates/PRODUCT_VISION.md` | Template for vision document |
-| **Vision reviewer agent** | `$CLAUDE_PLUGIN_ROOT/agents/vision-reviewer.md` | Reviews vision for completeness, feasibility, and spec-readiness |
+| **Completionist reviewer** | `$CLAUDE_PLUGIN_ROOT/agents/vision-completionist-reviewer.md` | Scores six foundational dimensions (target users, value prop, success criteria, feature areas, constraints, risk acknowledgment) |
+| **Feasibility reviewer** | `$CLAUDE_PLUGIN_ROOT/agents/vision-feasibility-reviewer.md` | Stress-tests the implementation story — technical risks, early gotchas, definition gaps, build-order coherence |
+| **Spec-readiness reviewer** | `$CLAUDE_PLUGIN_ROOT/agents/vision-readiness-reviewer.md` | Per-feature-area audit of whether a spec writer could create concrete feature specs |
 
 **Creates in project:**
 - `kit_tools/PRODUCT_VISION.md` — the singular product vision document
@@ -65,12 +67,11 @@ Don't require complete answers — the review step will catch gaps.
 
 ## Step 4: Agent Review — Completeness
 
-Spawn the `vision-reviewer` agent in `completeness` mode:
+Spawn the `vision-completionist-reviewer` agent:
 
-1. Read the agent template from `$CLAUDE_PLUGIN_ROOT/agents/vision-reviewer.md`
+1. Read the agent template from `$CLAUDE_PLUGIN_ROOT/agents/vision-completionist-reviewer.md`
 2. Interpolate tokens:
    - `{{VISION_CONTENT}}` — the content of `kit_tools/PRODUCT_VISION.md`
-   - `{{REVIEW_MODE}}` — `completeness`
    - `{{PROJECT_CONTEXT}}` — project summary from any existing `kit_tools/SYNOPSIS.md` or CLAUDE.md, or "No project context available"
    - `{{RESULT_FILE_PATH}}` — `kit_tools/.vision_review_1.json`
 3. Run via Task tool
@@ -143,15 +144,15 @@ Based on the user's answer:
 
 ## Step 9: Agent Review — Feasibility
 
-Spawn the `vision-reviewer` agent in `feasibility` mode:
+Spawn the `vision-feasibility-reviewer` agent:
 
-1. Interpolate tokens:
+1. Read the agent template from `$CLAUDE_PLUGIN_ROOT/agents/vision-feasibility-reviewer.md`
+2. Interpolate tokens:
    - `{{VISION_CONTENT}}` — the updated content of `kit_tools/PRODUCT_VISION.md`
-   - `{{REVIEW_MODE}}` — `feasibility`
    - `{{PROJECT_CONTEXT}}` — same as Step 4
    - `{{RESULT_FILE_PATH}}` — `kit_tools/.vision_review_2.json`
-2. Run via Task tool
-3. Read the result file
+3. Run via Task tool
+4. Read the result file
 
 Present feasibility findings:
 
@@ -167,15 +168,15 @@ Apply any updates the user requests.
 
 ## Step 10: Agent Review — Spec-Readiness
 
-Spawn the `vision-reviewer` agent in `spec-readiness` mode:
+Spawn the `vision-readiness-reviewer` agent:
 
-1. Interpolate tokens:
+1. Read the agent template from `$CLAUDE_PLUGIN_ROOT/agents/vision-readiness-reviewer.md`
+2. Interpolate tokens:
    - `{{VISION_CONTENT}}` — the updated content of `kit_tools/PRODUCT_VISION.md`
-   - `{{REVIEW_MODE}}` — `spec-readiness`
    - `{{PROJECT_CONTEXT}}` — same as Step 4
    - `{{RESULT_FILE_PATH}}` — `kit_tools/.vision_review_3.json`
-2. Run via Task tool
-3. Read the result file
+3. Run via Task tool
+4. Read the result file
 
 Present spec-readiness findings:
 

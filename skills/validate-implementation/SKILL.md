@@ -57,15 +57,15 @@ If the full diff exceeds ~60KB, summarize before interpolating into agent prompt
 
 ## Step 3: Code Quality Review
 
-Interpolate `code-quality-validator.md` with diff, file list, and project context.
-Spawn via Task tool. Parse `FINDING:` / `END_FINDING` blocks.
+Interpolate `code-quality-validator.md` with diff, file list, and project context (include `{{RESULT_FILE_PATH}} = kit_tools/.validate_impl_quality.json`).
+Spawn via Task tool. The agent writes findings to the result file using the unified Finding Schema (see `$CLAUDE_PLUGIN_ROOT/agents/FINDING_SCHEMA.md`); read that file and parse the `findings[]` array.
 
 ---
 
 ## Step 4: Security Review
 
-Interpolate `security-reviewer.md` with diff, file list, and security context.
-Spawn via Task tool. Parse findings.
+Interpolate `security-reviewer.md` with diff, file list, and security context (include `{{RESULT_FILE_PATH}} = kit_tools/.validate_impl_security.json`).
+Spawn via Task tool. Read the result file, parse `findings[]` using the unified Finding Schema.
 
 ---
 
@@ -86,8 +86,8 @@ Spawn via Task tool. Parse findings.
 
 ## Step 5: Feature Spec Compliance Review
 
-Interpolate `feature-compliance-reviewer.md` with feature spec path, diff, file list, and architecture context.
-Spawn via Task tool. Parse `FINDING:` / `END_FINDING` blocks.
+Interpolate `feature-compliance-reviewer.md` with feature spec path, diff, file list, and architecture context (include `{{RESULT_FILE_PATH}} = kit_tools/.validate_impl_compliance.json`).
+Spawn via Task tool. Read the result file, parse `findings[]` using the unified Finding Schema.
 
 Reviews:
 - **5a: Acceptance criteria** — Is each criterion addressed?
@@ -100,7 +100,9 @@ Reviews:
 
 ## Step 6: Process & Fix
 
-### Aggregate findings from Steps 3, 4, 4b, 5. Assign IDs: `YYYY-MM-DD-NNN`.
+### Aggregate findings from Steps 3, 4, 4b, 5.
+
+All findings arrive in the same shape (unified Finding Schema), so merging them is straightforward: concatenate each review's `findings[]` array, tagging each entry with its `review_type` so later presentation can group by source. Assign IDs: `YYYY-MM-DD-NNN`.
 
 ### Determine mode from `.execution-state.json` (default: supervised).
 

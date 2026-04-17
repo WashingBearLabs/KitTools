@@ -65,6 +65,12 @@ If the user selected Autonomous or Guarded mode, ask:
 
 Store as `monitor: true/false` in `.execution-config.json`. Default: `false`.
 
+**Important lifetime note to surface to the user if they pick Yes:**
+
+> The supervisor runs via a cron scheduled to your current Claude Code session. It only fires while *this session is alive* — if you close this terminal / Claude Code window, the supervisor stops checking. The orchestrator itself keeps running in tmux regardless, but no one's watching for crashes or hung processes while the session is closed. For overnight runs where you'll close your laptop: either leave this session open, or pick "fire and forget" and rely on the 24-hour orchestrator safety net + execution notifications on your next session.
+>
+> Known quirk: if your laptop sleeps mid-run, cron fires queued during sleep may all run in quick succession on wake. This is usually harmless (each one just re-reads the health snapshot) but can produce a burst of supervisor log lines after your laptop wakes.
+
 Skip this step for Supervised mode (the user is already present).
 
 ---
@@ -78,6 +84,41 @@ After all stories pass and validation completes, how should the feature be final
 - **C. None** — Leave branch as-is, clean up tmux only
 
 Store as `completion_strategy` in `.execution-config.json`: `"pr"`, `"merge"`, or `"none"`. Default: `"pr"`.
+
+---
+
+## Step 2c: Model Selection (optional)
+
+The orchestrator can use different models for each role. Defaults:
+
+- **implementer** — Sonnet (cost-optimized for bulk code generation)
+- **verifier** — Opus (quality-critical independent review)
+- **validator** — Opus (the session that runs `/kit-tools:validate-implementation` after all stories pass; it makes judgment calls about finding severity and fix prioritization)
+
+Offer the user a chance to override:
+
+> **Model configuration for this run?**
+>
+> - **A. Defaults** — Sonnet for implementation, Opus for verification and validation (recommended)
+> - **B. All Opus** — Every role on Opus (highest cost, highest quality)
+> - **C. All Sonnet** — Every role on Sonnet (lowest cost, suitable for low-risk features)
+> - **D. Custom** — Specify each role individually
+
+If the user picks an option, store as `model_config` in `.execution-config.json`:
+
+```json
+{
+  "model_config": {
+    "implementer": "sonnet",
+    "verifier": "opus",
+    "validator": "opus"
+  }
+}
+```
+
+If `model_config` is omitted, the orchestrator falls back to its `DEFAULT_MODEL_CONFIG` (same as option A). Partial overrides are supported — missing keys keep their defaults. Values must be aliases the local `claude` CLI accepts (e.g., `sonnet`, `opus`, or full model IDs like `claude-sonnet-4-6`).
+
+Skip this step if the user just wants defaults — the orchestrator behaves the same as before.
 
 ---
 

@@ -1,7 +1,7 @@
 {
   "name": "kit-tools",
   "description": "Framework for AI-assisted development. Structured documentation, autonomous execution, and guided workflows for Claude Code.",
-  "version": "2.3.1",
+  "version": "2.4.0",
   "author": {
     "name": "WashingBearLabs",
     "email": "contact@washingbearlabs.com",
@@ -27,15 +27,6 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/create_scratchpad.py"
-          }
-        ]
-      },
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/sync_skill_symlinks.py"
           }
         ]
       }

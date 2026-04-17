@@ -1,14 +1,19 @@
 ---
 description: Reviews each user story in a feature spec for ID format correctness, size, detail quality, and integration scope. Used by the validate-epic skill — contains placeholder tokens that must be interpolated before invocation.
+tools: [Read, Grep, Glob, Bash, Write]
 capabilities:
   - story-quality
   - acceptance-criteria-review
   - integration-scope-analysis
+required_tokens:
+  - RESULT_FILE_PATH
+  - SPEC_NAME
+  - SPEC_PATH
 ---
 
 # Story Quality Reviewer
 
-> **NOTE:** This agent is invoked by the `/kit-tools:validate-epic` skill, which reads this file and interpolates `{{PLACEHOLDER}}` tokens with spec content and review context before passing it to the Task tool. It is not intended for direct invocation.
+> **NOTE:** This agent is invoked by the `/kit-tools:validate-epic` skill, which reads this file and interpolates `{{...}}` tokens with spec content and review context before passing it to the Task tool. It is not intended for direct invocation.
 
 ---
 

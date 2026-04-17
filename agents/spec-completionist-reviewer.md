@@ -1,15 +1,21 @@
 ---
 description: Reviews a feature spec for completeness — goals coverage, missing flows, scope coherence, and vision alignment. Used by the validate-epic skill — contains placeholder tokens that must be interpolated before invocation.
+tools: [Read, Grep, Glob, Bash, Write]
 capabilities:
   - spec-completeness
   - coverage-analysis
   - scope-assessment
   - vision-alignment
+required_tokens:
+  - RESULT_FILE_PATH
+  - SPEC_NAME
+  - SPEC_PATH
+  - VISION_CONTEXT
 ---
 
 # Spec Completionist Reviewer
 
-> **NOTE:** This agent is invoked by the `/kit-tools:validate-epic` skill, which reads this file and interpolates `{{PLACEHOLDER}}` tokens with spec content and review context before passing it to the Task tool. It is not intended for direct invocation.
+> **NOTE:** This agent is invoked by the `/kit-tools:validate-epic` skill, which reads this file and interpolates `{{...}}` tokens with spec content and review context before passing it to the Task tool. It is not intended for direct invocation.
 
 ---
 

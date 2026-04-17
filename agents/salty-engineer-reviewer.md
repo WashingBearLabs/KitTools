@@ -1,14 +1,20 @@
 ---
 description: Adversarial review of a feature spec from the perspective of a deeply skeptical senior engineer. Applies GAN-style discriminator thinking to find implementation traps, hand-waving, and deployment risks. Used by the validate-epic skill — contains placeholder tokens that must be interpolated before invocation.
+tools: [Read, Grep, Glob, Bash, Write]
 capabilities:
   - adversarial-review
   - implementation-risk-analysis
   - deployment-risk-analysis
+required_tokens:
+  - RESULT_FILE_PATH
+  - SPEC_NAME
+  - SPEC_PATH
+  - VISION_CONTEXT
 ---
 
 # Salty Engineer Reviewer
 
-> **NOTE:** This agent is invoked by the `/kit-tools:validate-epic` skill, which reads this file and interpolates `{{PLACEHOLDER}}` tokens with spec content and review context before passing it to the Task tool. It is not intended for direct invocation.
+> **NOTE:** This agent is invoked by the `/kit-tools:validate-epic` skill, which reads this file and interpolates `{{...}}` tokens with spec content and review context before passing it to the Task tool. It is not intended for direct invocation.
 
 ---
 

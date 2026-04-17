@@ -1,11 +1,22 @@
 ---
 name: sync-project
-description: Sync documentation with codebase (use --quick for lightweight audit)
+description: Detect and fix drift between kit_tools documentation and the actual codebase. Full mode rewrites stale docs; `--quick` runs a lightweight audit for monthly check-ins; `--resume` continues an interrupted sync. Invoke when docs feel outdated, after significant refactors, or when onboarding surfaces inaccurate docs.
 ---
 
 # Sync Project Documentation
 
-Synchronize documentation with the actual codebase. This skill detects drift between what docs claim and what code actually does.
+The codebase is the source of truth. This skill finds places where `kit_tools/` documentation has drifted from the code — stale file paths, removed features still documented, new modules not documented, API routes that have been renamed, env vars that have been added or deleted — and either fixes them (full mode) or reports them (quick mode).
+
+## When to Use
+
+- **Quick audit** (`--quick`, ~5 min): routine monthly check-in, or "is my docs rotten?" sanity check before onboarding someone.
+- **Full sync** (default, multi-session): after a significant refactor, major feature landing, or any time `--quick` flags substantial drift.
+- **Resume** (`--resume`): continue a full sync that was interrupted — picks up from manifest progress rather than re-exploring.
+
+## Outcome
+
+- Full mode: documentation is rewritten to match the current codebase state. `SESSION_LOG.md` records what was updated.
+- Quick mode: a structured report of drift — which docs are current, stale, outdated, or have broken references — with a recommendation on whether a full sync is warranted. No files are modified.
 
 ## Dependencies
 
@@ -73,20 +84,22 @@ For each doc in `kit_tools/`:
 
 ### Step 4: Report
 
+Aggregate each document's `overall_verdict` from the drift-detector result files:
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    QUICK SYNC AUDIT                              │
 ├─────────────────────────────────────────────────────────────────┤
 │  Documents Checked: 19                                           │
-│  Current: 12    Stale: 5    Outdated: 2                         │
+│  Clean: 12    Warnings: 5    Issues: 2                           │
 └─────────────────────────────────────────────────────────────────┘
 
-OUTDATED (significant drift):
+ISSUES (critical drift — doc is actively misleading):
   ✗ arch/CODE_ARCH.md
     - References src/utils/ which no longer exists
     - Missing new src/services/ module
 
-STALE (needs refresh):
+WARNINGS (stale but not wrong):
   ⚠ docs/API_GUIDE.md — Last updated 45 days ago, API routes changed
   ⚠ docs/ENV_REFERENCE.md — Missing 3 new env vars
 
@@ -162,27 +175,47 @@ For EACH document in `kit_tools/`:
 1. **Load exploration context** for relevant focus areas
 
 2. **Run drift-detector** with:
-   - Document content
-   - Exploration context
-   - Last updated date
-   - Stale threshold (30 days)
+   - `{{DOCUMENT_CONTENT}}` — document content
+   - `{{DOCUMENT_PATH}}`, `{{DOCUMENT_NAME}}` — document identifiers
+   - `{{EXPLORATION_CONTEXT}}` — current codebase state from Phase 2
+   - `{{LAST_UPDATED}}` — document's "Last updated" date
+   - `{{STALE_THRESHOLD_DAYS}}` — `30`
+   - `{{RESULT_FILE_PATH}}` — `kit_tools/.sync_drift_<doc-basename>.json` (per-document)
 
-3. **Collect drift results:**
-   - `CURRENT` — No action needed
-   - `STALE` — Flag for refresh
-   - `OUTDATED` — Needs significant updates
-   - `MISSING_REFS` — Has broken references
+3. **Read the result file.** The agent writes JSON matching the unified Finding Schema (`$CLAUDE_PLUGIN_ROOT/agents/FINDING_SCHEMA.md`):
 
-4. **Update manifest** with drift status and issues
+   ```json
+   {
+     "review_type": "drift",
+     "target": "<document path>",
+     "overall_verdict": "clean|warnings|issues",
+     "findings": [
+       {
+         "severity": "critical|warning|info",
+         "category": "missing-file|wrong-path|outdated-tech|stale-api|incorrect-claim|stale-content",
+         "location": "<line or section>",
+         "description": "...",
+         "recommendation": "...",
+         "confidence": "high|medium|low",
+         "evidence": {"claim": "...", "reality": "..."}
+       }
+     ],
+     "summary": "..."
+   }
+   ```
+
+   A missing result file means the agent errored — treat as inconclusive, not clean.
+
+4. **Update manifest** with per-document `overall_verdict` and finding count.
 
 ```
 Document Review: ████████████░░░░ 14/19 docs
 
-SYNOPSIS.md ................ CURRENT
-arch/CODE_ARCH.md .......... STALE (2 issues)
-arch/SERVICE_MAP.md ........ CURRENT
-docs/LOCAL_DEV.md .......... CURRENT
-docs/API_GUIDE.md .......... OUTDATED (5 issues)  ← Current
+SYNOPSIS.md ................ clean
+arch/CODE_ARCH.md .......... warnings (2 findings)
+arch/SERVICE_MAP.md ........ clean
+docs/LOCAL_DEV.md .......... clean
+docs/API_GUIDE.md .......... issues (5 findings, 3 critical)  ← Current
 ```
 
 ### Phase 4: Conflict Resolution

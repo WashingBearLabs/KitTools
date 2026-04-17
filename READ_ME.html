@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KitTools v2.3.1 — AI-Assisted Development Framework</title>
+  <title>KitTools v2.4.0 — AI-Assisted Development Framework</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap" rel="stylesheet">
@@ -943,9 +943,9 @@
           <div class="step-cmd"><span class="step-cmd-text">/kit-tools:create-vision</span></div>
           <div class="step-desc">Guided conversation to define target users, value proposition, feature areas, constraints, and build order. Runs 3 sequential AI reviews.</div>
           <div class="badges">
-            <span class="badge-agent">vision-reviewer — completeness</span>
-            <span class="badge-agent">vision-reviewer — feasibility</span>
-            <span class="badge-agent">vision-reviewer — spec-readiness</span>
+            <span class="badge-agent">vision-completionist-reviewer</span>
+            <span class="badge-agent">vision-feasibility-reviewer</span>
+            <span class="badge-agent">vision-readiness-reviewer</span>
             <span class="badge-out">PRODUCT_VISION.md</span>
           </div>
         </div>
@@ -1255,18 +1255,8 @@
     </div>
 
     <div class="skill-card">
-      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-setup)"></span>/kit-tools:update-kit-tools</span>
-      <span class="skill-desc">Check if your project's hooks and templates are behind the plugin. Selectively pull in updates.</span>
-    </div>
-
-    <div class="skill-card">
       <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-postvalid)"></span>/kit-tools:optimize-tests</span>
       <span class="skill-desc">Audit test suite health: mapping completeness, stale tests, coverage overlap, performance, and KitTools alignment. Periodic maintenance.</span>
-    </div>
-
-    <div class="skill-card">
-      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-setup)"></span>/kit-tools:sync-symlinks</span>
-      <span class="skill-desc">Force-refresh skill symlinks after a plugin update. Fixes autocomplete when symlinks go stale.</span>
     </div>
 
   </div>
@@ -1292,11 +1282,6 @@
         <td><span class="hook-name">create_scratchpad</span></td>
         <td><span class="hook-trigger">SessionStart</span></td>
         <td>Creates SESSION_SCRATCH.md if kit_tools/ exists in the project</td>
-      </tr>
-      <tr>
-        <td><span class="hook-name">sync_skill_symlinks</span></td>
-        <td><span class="hook-trigger">SessionStart</span></td>
-        <td>Verifies skill symlinks against installed_plugins.json — fixes stale symlinks after plugin updates</td>
       </tr>
       <tr>
         <td><span class="hook-name">update_doc_timestamps</span></td>
@@ -1433,7 +1418,7 @@
   </div>
 
   <div class="callout" style="border-left-color: var(--phase-planning);">
-    <p><strong>Template vs. Instance.</strong> Plugin templates are canonical versions that update with the plugin. Your project's <code style="color:var(--text-code);font-family:var(--font-mono);font-size:12px;">kit_tools/</code> directory is yours to customize — plugin updates never overwrite your docs. Pull in improvements selectively with <code style="color:var(--text-code);font-family:var(--font-mono);font-size:12px;">/kit-tools:update-kit-tools</code>.</p>
+    <p><strong>Template vs. Instance.</strong> Plugin templates are canonical versions that update with the plugin. Your project's <code style="color:var(--text-code);font-family:var(--font-mono);font-size:12px;">kit_tools/</code> directory is yours to customize — plugin updates never overwrite your docs. To pull in new templates or hooks, run <code style="color:var(--text-code);font-family:var(--font-mono);font-size:12px;">/plugin update kit-tools@washingbearlabs</code>, then re-run <code style="color:var(--text-code);font-family:var(--font-mono);font-size:12px;">/kit-tools:init-project</code> and choose the merge option.</p>
   </div>
 </section>
 

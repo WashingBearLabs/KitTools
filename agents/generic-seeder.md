@@ -1,15 +1,22 @@
 ---
 description: Generic template seeder. Receives template path, requirements, and exploration context to populate documentation with project-specific content.
+tools: [Read, Grep, Glob, Bash, Write]
 capabilities:
   - template-population
   - placeholder-replacement
   - section-generation
   - cross-reference-creation
+required_tokens:
+  - EXPLORATION_CONTEXT
+  - TEMPLATE_CONTENT
+  - TEMPLATE_NAME
+  - TEMPLATE_PATH
+  - TEMPLATE_REQUIREMENTS
 ---
 
 # Generic Seeder
 
-> **NOTE:** This agent is invoked by `/kit-tools:seed-project` and `/kit-tools:seed-template` skills, which interpolate `{{PLACEHOLDER}}` tokens with template content and exploration results. It is not intended for direct invocation.
+> **NOTE:** This agent is invoked by `/kit-tools:seed-project` and `/kit-tools:seed-template` skills, which interpolate `{{...}}` tokens with template content and exploration results. It is not intended for direct invocation.
 
 ---
 

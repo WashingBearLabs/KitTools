@@ -1,16 +1,23 @@
 ---
-description: Independent second-opinion review of a feature spec using a different model (Sonnet). Evaluates architecture decisions, feasibility, over-engineering, and alternative approaches. Used by the validate-epic skill — contains placeholder tokens that must be interpolated before invocation.
-model: sonnet
+description: Independent second-opinion review of a feature spec — deliberately runs on a different model than the other reviewers to surface issues that one training can miss. Evaluates architecture decisions, feasibility, over-engineering, and alternative approaches. Used by the validate-epic skill — contains placeholder tokens that must be interpolated before invocation.
+tools: [Read, Grep, Glob, Bash, Write]
 capabilities:
   - architecture-review
   - feasibility-assessment
   - alternative-approaches
   - over-engineering-detection
+required_tokens:
+  - RESULT_FILE_PATH
+  - SPEC_NAME
+  - SPEC_PATH
+  - VISION_CONTEXT
 ---
 
 # Spec Second Opinion
 
-> **NOTE:** This agent is invoked by the `/kit-tools:validate-epic` skill with `model: "sonnet"`, which reads this file and interpolates `{{PLACEHOLDER}}` tokens with spec content and review context before passing it to the Task tool. It is not intended for direct invocation.
+> **NOTE:** This agent is invoked by the `/kit-tools:validate-epic` skill. The invoker reads this file, interpolates `{{...}}` tokens with spec content, and passes it to the Task tool with an explicit `model:` parameter. It is not intended for direct invocation.
+>
+> **Cross-model design:** this agent deliberately does NOT pin a model in its frontmatter. The value of a "second opinion" comes from running on a model *different* from whatever the other reviewers used — different training surfaces different blind spots. The invoking skill picks the secondary model (typically the non-primary of sonnet/opus), which lets the plugin adapt as new models ship without needing to re-author this agent.
 
 ---
 

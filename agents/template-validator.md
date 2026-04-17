@@ -1,14 +1,20 @@
 ---
 description: Validates seeded templates for unfilled placeholders and incomplete sections. Used by validate-seeding skill and post-edit hooks.
+tools: [Read, Grep, Glob, Bash, Write]
 capabilities:
   - placeholder-detection
   - section-completeness-check
   - validation-reporting
+required_tokens:
+  - RESULT_FILE_PATH
+  - TEMPLATE_CONTENT
+  - TEMPLATE_PATH
+  - TEMPLATE_REQUIREMENTS
 ---
 
 # Template Validator
 
-> **NOTE:** This agent is invoked by the `/kit-tools:validate-seeding` skill, which reads this file and interpolates `{{PLACEHOLDER}}` tokens with template content before passing it to the Task tool. It is not intended for direct invocation.
+> **NOTE:** This agent is invoked by the `/kit-tools:validate-seeding` skill, which reads this file and interpolates `{{...}}` tokens with template content before passing it to the Task tool. It is not intended for direct invocation.
 
 ---
 
@@ -77,40 +83,41 @@ Look for:
 
 ## Output Format
 
-Output your findings in this exact format:
+Write a JSON file to `{{RESULT_FILE_PATH}}` matching the unified Finding Schema (see `agents/FINDING_SCHEMA.md`):
 
+```json
+{
+  "review_type": "template-validation",
+  "target": "{{TEMPLATE_PATH}}",
+  "overall_verdict": "clean|warnings|issues",
+  "findings": [
+    {
+      "severity": "critical|warning|info",
+      "category": "placeholder|empty-section|missing-required|inconsistency",
+      "location": "line 15 | line 15-20 | section name",
+      "description": "What's wrong — include the problematic text (truncated to ~80 chars if long).",
+      "recommendation": "Concrete fix — e.g., replace [PROJECT_NAME] with actual project name, or delete the empty section."
+    }
+  ],
+  "summary": "One-sentence validation result."
+}
 ```
-VALIDATION_RESULT: [PASS|WARNING|FAIL]
 
-SUMMARY:
-[1-2 sentence summary of validation results]
+Use the Write tool. Empty `findings: []` with `overall_verdict: "clean"` when the template is fully populated.
 
-ISSUES:
-[List each issue found, or "None" if clean]
-```
+### Severity Mapping from Old Terminology
 
-For each issue found, use this format:
+The previous schema used `PASS | WARNING | FAIL` and `error | warning` severity. Map as follows:
 
-```
-ISSUE:
-  severity: [error|warning]
-  type: [placeholder|empty-section|missing-required|inconsistency]
-  line: [line number or range, e.g., "15" or "15-20"]
-  content: [the problematic text, truncated to 80 chars if needed]
-  description: [what's wrong]
-END_ISSUE
-```
+- **PASS** → `overall_verdict: "clean"`, `findings: []` (or only `severity: "info"` findings)
+- **WARNING** → `overall_verdict: "warnings"`, findings with `severity: "warning"`
+- **FAIL** → `overall_verdict: "issues"`, findings with `severity: "critical"`
 
 ### Severity Guidelines
 
-- **error** — Must be fixed: unfilled placeholders in critical sections, completely empty required sections, broken references
-- **warning** — Should review: optional sections that are empty, minor placeholders in non-critical areas, possible false positives
-
-### Result Guidelines
-
-- **PASS** — No errors, at most minor warnings that are likely intentional (e.g., N/A for sections that don't apply)
-- **WARNING** — No errors, but has warnings that should be reviewed
-- **FAIL** — Has one or more errors that indicate incomplete seeding
+- **critical** — Must be fixed: unfilled placeholders in critical sections, completely empty required sections, broken references.
+- **warning** — Should review: optional sections empty, minor placeholders in non-critical areas, possible false positives.
+- **info** — Minor note worth surfacing but not blocking.
 
 ---
 

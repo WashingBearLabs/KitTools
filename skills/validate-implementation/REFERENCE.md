@@ -6,19 +6,35 @@ Detailed formats, agent interpolation details, and edge cases for the validate-i
 
 ## Finding Format
 
-All review steps output findings in this structured format:
+All review agents write findings to a JSON result file matching the unified Finding Schema defined at `$CLAUDE_PLUGIN_ROOT/agents/FINDING_SCHEMA.md`. Each review step interpolates the agent with a distinct `{{RESULT_FILE_PATH}}` and reads the file back after the Task invocation:
 
-```
-FINDING:
-  category: [quality|security|compliance|testing]
-  severity: [critical|warning|info]
-  file: [file path or "feature spec" or "test suite"]
-  description: [What was found]
-  recommendation: [What to do about it]
-END_FINDING
+| Step | Agent | Result File |
+|------|-------|-------------|
+| 3 | code-quality-validator | `kit_tools/.validate_impl_quality.json` |
+| 4 | security-reviewer | `kit_tools/.validate_impl_security.json` |
+| 5 | feature-compliance-reviewer | `kit_tools/.validate_impl_compliance.json` |
+
+Result file shape (summary — full detail in FINDING_SCHEMA.md):
+
+```json
+{
+  "review_type": "code-quality|security|feature-compliance",
+  "target": "<branch or spec>",
+  "overall_verdict": "clean|warnings|issues",
+  "findings": [
+    {
+      "severity": "critical|warning|info",
+      "category": "<agent-specific>",
+      "location": "<file:line | criterion ID | section>",
+      "description": "<evidence-based observation>",
+      "recommendation": "<actionable fix>"
+    }
+  ],
+  "summary": "<one-sentence assessment>"
+}
 ```
 
-If no issues found: `NO_FINDINGS: [category]`
+When no issues exist the file is still written with `findings: []` and `overall_verdict: "clean"`. A missing result file is a failure — the agent either errored or didn't write (treat as a hard failure and report rather than proceeding as clean).
 
 ---
 
@@ -35,6 +51,7 @@ Template: `$CLAUDE_PLUGIN_ROOT/agents/code-quality-validator.md`
 | `{{CONVENTIONS_PATH}}` | Path to CONVENTIONS.md (agent reads on-demand) |
 | `{{GOTCHAS_PATH}}` | Path to GOTCHAS.md (agent reads on-demand) |
 | `{{CODE_ARCH_PATH}}` | Path to CODE_ARCH.md (agent reads on-demand) |
+| `{{RESULT_FILE_PATH}}` | `kit_tools/.validate_impl_quality.json` |
 
 ### Security Agent
 
@@ -46,6 +63,7 @@ Template: `$CLAUDE_PLUGIN_ROOT/agents/security-reviewer.md`
 | `{{CHANGED_FILES}}` | File list from Step 2 |
 | `{{SECURITY_PATH}}` | Path to SECURITY.md (agent reads on-demand) |
 | `{{CODE_ARCH_PATH}}` | Path to CODE_ARCH.md (agent reads on-demand) |
+| `{{RESULT_FILE_PATH}}` | `kit_tools/.validate_impl_security.json` |
 
 ### Feature Spec Compliance Agent
 
@@ -57,6 +75,7 @@ Template: `$CLAUDE_PLUGIN_ROOT/agents/feature-compliance-reviewer.md`
 | `{{GIT_DIFF}}` | Full branch diff from Step 2 |
 | `{{CHANGED_FILES}}` | File list from Step 2 |
 | `{{CODE_ARCH_PATH}}` | Path to CODE_ARCH.md (agent reads on-demand) |
+| `{{RESULT_FILE_PATH}}` | `kit_tools/.validate_impl_compliance.json` |
 
 ### Feature Fixer Agent
 
