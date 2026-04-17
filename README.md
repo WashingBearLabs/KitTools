@@ -78,9 +78,7 @@ git clone https://github.com/WashingBearLabs/KitTools.git
 | `/kit-tools:complete-implementation` | Mark a Feature Spec as completed and archive it |
 | `/kit-tools:sync-project` | Full sync between code and docs (`--quick` for audit) |
 | `/kit-tools:validate-implementation` | Validate a feature branch against its feature spec (quality, security, compliance) |
-| `/kit-tools:update-kit-tools` | Update project components from latest plugin versions |
 | `/kit-tools:execution-status` | Check execution progress and health; acts as supervisor when monitoring is enabled |
-| `/kit-tools:sync-symlinks` | Force-refresh skill symlinks after a plugin update |
 
 ## Hooks
 
@@ -89,7 +87,6 @@ kit-tools includes automation hooks that run automatically:
 | Hook | Trigger | What it does |
 |------|---------|--------------|
 | `create_scratchpad` | SessionStart | Creates SESSION_SCRATCH.md if kit_tools exists |
-| `sync_skill_symlinks` | SessionStart | Syncs skill symlinks (verifies against `installed_plugins.json`) |
 | `update_doc_timestamps` | PostToolUse (Edit/Write) | Updates "Last Updated" in kit_tools docs |
 | `detect_phase_completion` | PostToolUse (Edit) | Notes feature spec criteria and milestone task completions; suggests validate-implementation when all criteria are done |
 | `validate_seeded_template` | PostToolUse (Edit/Write) | Validates seeded templates for unfilled placeholders |
@@ -289,7 +286,7 @@ All templates include version comments:
 <!-- Template Version: 1.1.0 -->
 ```
 
-Use `/kit-tools:update-kit-tools` to see if your project components (hooks, templates) are behind the plugin versions and selectively update.
+To pick up template or hook improvements from newer plugin versions, run `/plugin update kit-tools@washingbearlabs` to update the plugin, then re-run `/kit-tools:init-project` in your project if you want to pull in new templates or hooks that weren't selected originally.
 
 ## Philosophy
 

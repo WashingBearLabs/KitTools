@@ -169,9 +169,16 @@ Ask: "Address these before proceeding, or note them as known risks and continue?
 - If user updates spec, offer to re-run the salty engineer review
 - If user accepts risk, log them as acknowledged in the final summary
 
-### 3d: Second Opinion Review (Sonnet)
+### 3d: Second Opinion Review (cross-model)
 
-This review uses a **different model** (Sonnet) for cross-model validation. The other three reviews run on the default model — this one deliberately uses a different perspective.
+This review deliberately uses a **different model** than the other three reviews. The value of a second opinion comes from different training surfacing different blind spots — so pick a model that contrasts with the model you're using for the primary reviews.
+
+**Model choice:**
+- If the rest of the session is running on Opus, use `model: "sonnet"` here.
+- If the rest is running on Sonnet (or you've configured `model_config.reviewer_primary: sonnet` in your orchestrator config), use `model: "opus"` here.
+- If the user has specified a secondary model (e.g., via `model_config.reviewer_second_opinion` in their execution config), honor that.
+
+The goal is *different model from the other reviewers*, not a specific model pin — that way the pattern keeps working as new models ship.
 
 1. Read `$CLAUDE_PLUGIN_ROOT/agents/spec-second-opinion.md`
 2. Interpolate tokens:
@@ -179,7 +186,7 @@ This review uses a **different model** (Sonnet) for cross-model validation. The 
    - `{{SPEC_NAME}}` — feature name
    - `{{VISION_CONTEXT}}` — from Step 1
    - `{{RESULT_FILE_PATH}}` — `kit_tools/.validate_epic_4.json`
-3. Spawn via Task tool **with `model: "sonnet"`** — this is critical, the agent must run on Sonnet
+3. Spawn via Task tool with an explicit `model:` parameter chosen per the guidance above
 4. Read `kit_tools/.validate_epic_4.json`
 
 **Present findings:**

@@ -1,4 +1,4 @@
-<!-- Template Version: 2.0.0 -->
+<!-- Template Version: 2.1.0 -->
 ---
 feature: {{FEATURE_NAME}}
 status: active
@@ -14,17 +14,17 @@ updated: {{DATE}}
 ---
 
 <!--
-Frontmatter fields:
-- feature: Kebab-case feature name (e.g., "user-auth")
+Frontmatter fields — see `specs/SCHEMA.md` for full reference, validation rules, and examples.
+
+Quick summary:
+- feature: kebab-case name (used as feature branch suffix)
 - status: active | on-hold | completed
-- session_ready: true if all stories pass session-fit checks; false if skipped or unresolved issues
-- depends_on: Array of feature names this feature spec depends on (for epics)
-- vision_ref: Product Vision reference (optional, section in PRODUCT_VISION.md — e.g., "Feature Area 2: User Management")
+- session_ready: true once story-quality checks pass; false blocks execution
+- depends_on: [feature-names] — hard gate, empty list OK
+- vision_ref: free-form reference into PRODUCT_VISION.md (optional)
 - type: feature | epic-child
-- epic: Epic name (empty for standalone feature specs)
-- epic_seq: Execution order within epic (1-based; empty for standalone)
-- epic_final: true only on the last feature spec in an epic (empty for standalone)
-- created/updated: Dates in YYYY-MM-DD format
+- epic / epic_seq / epic_final: only populated for epic-child specs
+- created / updated: YYYY-MM-DD
 -->
 
 # Feature Spec: {{FEATURE_TITLE}}

@@ -92,38 +92,45 @@ For each template to validate:
    - Verify required sections have content
    - Note line numbers for all issues
 
-4. **Determine result**
-   - `PASS` — No errors, may have minor warnings
-   - `WARNING` — Has warnings but no errors
-   - `FAIL` — Has one or more errors
+4. **Determine result** — map unified-schema verdicts:
+   - `clean` → no issues, may have info-only findings
+   - `warnings` → has warning-severity findings but no critical
+   - `issues` → has one or more critical findings
 
 ### Step 4: Generate Validator Prompt
 
-For each template, I'll read the template-validator agent and interpolate:
+For each template, read the template-validator agent and interpolate:
 
 - `{{TEMPLATE_PATH}}` — Path to the template
 - `{{TEMPLATE_CONTENT}}` — Full template content
 - `{{TEMPLATE_REQUIREMENTS}}` — Extracted requirements from frontmatter
+- `{{RESULT_FILE_PATH}}` — `kit_tools/.validate_seeding_<template-basename>.json` (per-template so parallel runs don't overwrite each other)
 
 Then run the validator via Task tool with the interpolated prompt.
 
 ### Step 5: Collect Results
 
-Parse validator output for each template:
+Read each template's result file. The validator writes JSON matching the unified Finding Schema (`$CLAUDE_PLUGIN_ROOT/agents/FINDING_SCHEMA.md`):
 
+```json
+{
+  "review_type": "template-validation",
+  "target": "<template path>",
+  "overall_verdict": "clean|warnings|issues",
+  "findings": [
+    {
+      "severity": "critical|warning|info",
+      "category": "placeholder|empty-section|missing-required|inconsistency",
+      "location": "line 15 | line 15-20 | section name",
+      "description": "What's wrong",
+      "recommendation": "Concrete fix"
+    }
+  ],
+  "summary": "One-sentence validation result."
+}
 ```
-VALIDATION_RESULT: [PASS|WARNING|FAIL]
-SUMMARY: [summary text]
-ISSUES:
-  ISSUE:
-    severity: [error|warning]
-    type: [placeholder|empty-section|missing-required|inconsistency]
-    line: [line number]
-    content: [problematic text]
-    description: [what's wrong]
-  END_ISSUE
-  ...
-```
+
+A missing result file means the validator errored — treat as a hard failure for that template, not as clean.
 
 ### Step 6: Update Manifest
 
@@ -132,14 +139,14 @@ If manifest exists, update each validated template:
 ```json
 {
   "validated_at": "2024-01-15T10:30:00Z",
-  "validation_result": "PASS|WARNING|FAIL",
-  "validation_issues": [
+  "overall_verdict": "clean|warnings|issues",
+  "findings": [
     {
-      "severity": "error|warning",
-      "type": "placeholder|empty-section|...",
-      "line": 15,
-      "content": "...",
-      "description": "..."
+      "severity": "critical|warning|info",
+      "category": "placeholder|empty-section|...",
+      "location": "line 15",
+      "description": "...",
+      "recommendation": "..."
     }
   ]
 }
@@ -185,9 +192,9 @@ If no manifest exists, validation still works:
 
 ## Exit Behavior
 
-- **All PASS**: Report success, exit cleanly
-- **Any WARNING**: Report warnings, suggest review
-- **Any FAIL**: Report failures with actionable fix instructions
+- **All `clean`**: Report success, exit cleanly
+- **Any `warnings`**: Report warnings, suggest review
+- **Any `issues`** (critical findings): Report failures with actionable fix instructions
 - **--strict mode**: Treat warnings as failures
 
 ## Quick Reference

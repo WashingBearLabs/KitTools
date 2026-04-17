@@ -7,12 +7,15 @@ It checks for required files, unfilled placeholders, and common issues.
 
 Currently called by: init-project skill (Step 7)
 Can also be run manually: python3 hooks/validate_setup.py
+
+Placeholder detection logic is shared with validate_seeded_template.py
+via _placeholders.py so both hooks see the same coverage.
 """
 import json
 import os
-import re
-import sys
 from pathlib import Path
+
+from _placeholders import file_has_placeholders, should_validate_path
 
 
 def check_required_files(kit_tools_dir: Path) -> list[str]:
@@ -32,38 +35,20 @@ def check_required_files(kit_tools_dir: Path) -> list[str]:
     for file in required:
         if not (kit_tools_dir / file).exists():
             missing.append(file)
-
     return missing
 
 
 def check_placeholders(kit_tools_dir: Path) -> list[str]:
-    """Check for unfilled placeholder text in files."""
-    placeholder_patterns = [
-        r'\[Feature Name\]',
-        r'\[Project Name\]',
-        r'\[Your Name\]',
-        r'\[TODO\]',
-        r'YYYY-MM-DD',  # Unfilled dates
-    ]
-
-    files_with_placeholders = []
-
+    """Return list of kit_tools-relative paths that contain placeholders."""
+    files_with_placeholders: list[str] = []
     for md_file in kit_tools_dir.rglob("*.md"):
-        # Skip scratchpad and progress files
-        if "SCRATCH" in md_file.name or "PROGRESS" in md_file.name:
+        # Delegate path-level exclusion to the shared module.
+        if not should_validate_path(str(md_file)):
             continue
-
-        try:
-            content = md_file.read_text()
-            for pattern in placeholder_patterns:
-                if re.search(pattern, content):
-                    rel_path = md_file.relative_to(kit_tools_dir)
-                    if str(rel_path) not in files_with_placeholders:
-                        files_with_placeholders.append(str(rel_path))
-                    break
-        except Exception:
-            pass
-
+        if file_has_placeholders(md_file):
+            rel_path = str(md_file.relative_to(kit_tools_dir))
+            if rel_path not in files_with_placeholders:
+                files_with_placeholders.append(rel_path)
     return files_with_placeholders
 
 
@@ -78,12 +63,8 @@ def check_claude_md(project_dir: Path) -> bool:
 
 
 def main():
-    # Get tool input from stdin (may be empty when called manually)
-    try:
-        data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        data = {}
-
+    # validate_setup.py is a script (called by /kit-tools:init-project), not a
+    # registered hook — no stdin protocol to consume.
     project_dir = os.environ.get("CLAUDE_PROJECT_DIR", "")
     if not project_dir:
         return
@@ -97,19 +78,15 @@ def main():
 
     issues = []
 
-    # Check required files
     missing = check_required_files(kit_tools_dir)
     if missing:
         issues.append(f"Missing core files: {', '.join(missing)}")
 
-    # Check CLAUDE.md
     if not check_claude_md(project_path):
         issues.append("CLAUDE.md missing or doesn't have scratchpad instructions")
 
-    # Check for placeholders (informational, not blocking)
     placeholders = check_placeholders(kit_tools_dir)
 
-    # Build response
     if issues:
         print(json.dumps({
             "message": f"kit_tools setup issues: {'; '.join(issues)}. Run /kit-tools:seed-project to populate."

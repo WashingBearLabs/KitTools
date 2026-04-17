@@ -1,4 +1,4 @@
-<!-- Template Version: 2.0.0 -->
+<!-- Template Version: 2.1.0 -->
 <!-- Seeding:
   explorer_focus: none
   required_sections: []
@@ -14,11 +14,13 @@ updated: {{DATE}}
 ---
 
 <!--
-Frontmatter fields:
-- epic: Kebab-case epic name (e.g., "user-management")
+Frontmatter fields — see `specs/SCHEMA.md` for full reference.
+
+Quick summary:
+- epic: kebab-case name (must match `epic` field on all child feature specs)
 - status: active | on-hold | completed
-- vision_ref: Product Vision reference (optional, section in PRODUCT_VISION.md — e.g., "Feature Area 2: User Management")
-- created/updated: Dates in YYYY-MM-DD format
+- vision_ref: free-form reference into PRODUCT_VISION.md (optional)
+- created / updated: YYYY-MM-DD
 -->
 
 # Epic: {{EPIC_TITLE}}

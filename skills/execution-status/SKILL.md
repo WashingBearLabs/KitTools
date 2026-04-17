@@ -217,7 +217,8 @@ Present available actions based on current state using AskUserQuestion:
 
 Warn: "The orchestrator crashed. The process exited unexpectedly."
 
-- **Resume execution** — Suggest running `/kit-tools:execute-epic` (it will detect the existing state and resume)
+- Clean up any leftover supervisor cron jobs (see Supervisor Cron Cleanup below) — the orchestrator isn't making progress, no reason to keep polling
+- **Resume execution** — Suggest running `/kit-tools:execute-epic` (it will detect the existing state, resume, and create a fresh supervisor cron if monitoring is re-enabled)
 - **Reset state** — Delete `.execution-state.json` to start fresh
 - **View log** — Show full `EXECUTION_LOG.md`
 
@@ -225,7 +226,8 @@ Warn: "The orchestrator crashed. The process exited unexpectedly."
 
 Warn: "The orchestrator is not running but state shows `running`. The process may have crashed or been interrupted."
 
-- **Resume execution** — Suggest running `/kit-tools:execute-epic` (it will detect the existing state and resume)
+- Clean up any leftover supervisor cron jobs (see Supervisor Cron Cleanup below) — there's nothing for the supervisor to watch
+- **Resume execution** — Suggest running `/kit-tools:execute-epic` (it will detect the existing state, resume, and create a fresh supervisor cron if monitoring is re-enabled)
 - **Reset state** — Delete `.execution-state.json` to start fresh
 - **View log** — Show full `EXECUTION_LOG.md`
 
@@ -245,6 +247,7 @@ Warn: "The orchestrator is not running but state shows `running`. The process ma
 ### If Failed
 
 - Show failure details from the last story with `status: "failed"` or `status: "retrying"`
+- Clean up any leftover supervisor cron jobs (see Supervisor Cron Cleanup below) — the orchestrator stopped trying; a resumed run will create a fresh cron if monitoring is re-enabled
 - **Retry** — Suggest `/kit-tools:execute-epic` to resume
 - **View log** — Show full execution log
 
