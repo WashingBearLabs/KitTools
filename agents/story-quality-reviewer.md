@@ -43,16 +43,24 @@ For each critical ID finding, include a suggested renaming that resolves conflic
 
 ### 2. Story Size
 
-A story is too large if it exhibits two or more of:
-- More than 5 acceptance criteria covering distinct concerns
-- Spans multiple architectural layers in a single story (e.g., database schema + API endpoint + UI component + auth guard all in one)
+Right-sized stories have 5–7 acceptance criteria and focus on a single architectural layer. Each story should be completable in a single 15-minute AI implementation session by an agent that has never seen the codebase. More stories with fewer criteria is always better than fewer stories with many criteria — don't compress scope by dropping criteria, expand it by adding stories.
+
+#### Hard ceilings (critical — blocks execution)
+
+These are standalone triggers. Any ONE of these makes the story **critical / not-ready**:
+- **More than 10 acceptance criteria** — must be split regardless of how related they are
+- **Spans 3+ architectural layers** in a single story (e.g., database schema + API endpoint + UI component). Two layers is acceptable; three is not.
+
+#### Soft signals (warning — needs-work)
+
+A story is flagged as **warning** if it exhibits **two or more** of:
+- More than 7 acceptance criteria covering distinct concerns
+- Spans 2 architectural layers (acceptable alone, but compounds with other signals)
 - Uses scope keywords: "entire", "full", "complete", "all", "end-to-end"
 - Connects distinct feature areas with "and also" / "as well as" / "including"
 - Assumes it can be completed without any external dependencies when it clearly requires prior work
 
-When flagging a story as too large, propose specific split points. Include suggested story titles for each proposed sub-story so the fix is immediately actionable.
-
-Flag oversized stories as **warning**.
+When flagging a story as too large (critical or warning), propose specific split points. Include suggested story titles for each proposed sub-story so the fix is immediately actionable.
 
 ### 3. Detail Quality
 

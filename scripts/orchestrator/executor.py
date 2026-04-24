@@ -87,11 +87,13 @@ def execute_spec_stories(
     if test_command:
         log(f"  Detected test command: {test_command}")
 
-    # Compute size-based timeouts from spec frontmatter
+    # Compute size-based timeouts and model escalation from spec frontmatter
     impl_timeout, verify_timeout = get_size_timeouts(spec_path)
+    spec_size = "M"
+    if spec_path and os.path.exists(spec_path):
+        spec_size = str(parse_spec_frontmatter(spec_path).get("size", "M")).upper()
     if impl_timeout != IMPL_SESSION_TIMEOUT or verify_timeout != VERIFY_SESSION_TIMEOUT:
-        size_fm = parse_spec_frontmatter(spec_path) if spec_path and os.path.exists(spec_path) else {}
-        log(f"  Story size: {size_fm.get('size', 'M')}, impl timeout: {impl_timeout}s, verify timeout: {verify_timeout}s")
+        log(f"  Story size: {spec_size}, impl timeout: {impl_timeout}s, verify timeout: {verify_timeout}s")
 
     # Determine which stories_state dict to use for find_next_uncompleted_story
     if spec_key is not None:
@@ -218,6 +220,9 @@ def execute_spec_stories(
             prompt_chars = len(prompt)
             models = get_model_config(config)
             impl_model = models["implementer"]
+            if attempt > 1 and spec_size in ("L", "XL"):
+                impl_model = models.get("escalation", impl_model)
+                log(f"  Escalating to {impl_model} for retry of size-{spec_size} story")
             log(f"  Session timeout: {impl_timeout}s (implementation, model={impl_model})")
             impl_output = run_claude_session(
                 prompt, project_dir, timeout=impl_timeout, model=impl_model

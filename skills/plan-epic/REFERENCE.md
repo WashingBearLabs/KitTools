@@ -90,7 +90,7 @@ depends_on: [oauth-api]
 - "Add authentication" -> Split into schema, provider, API, UI specs
 - "Create the settings page" -> Split by settings category
 
-**Rule of thumb:** If you can't describe the change in 2-3 sentences, it's too big.
+**Rule of thumb:** If you can't describe the change in 2-3 sentences, it's too big. If a story needs more than 7 criteria, split it into two stories — never drop criteria to hit a size target.
 
 ---
 
@@ -103,7 +103,9 @@ Each criterion must be **verifiable**, not vague:
 | "Login form shows error message for invalid credentials" | "Works correctly" |
 | "API returns 401 for unauthenticated requests" | "Handles auth properly" |
 
-**Target: 3-5 criteria per story.** More than 6 suggests the story is too big.
+**Target: 5-7 criteria per story.** More than 7 covering distinct concerns suggests the story should be split. More than 10 must be split — this is a hard gate during validation.
+
+**Never drop criteria to fit the target.** If a story genuinely needs 9 criteria, split it into two stories that each get the criteria they need. More well-defined stories is always better than fewer under-specified ones.
 
 ---
 
@@ -128,6 +130,7 @@ If `kit_tools/testing/TESTING_GUIDE.md` exists, reference the specific test comm
 |-------|----------|----------|
 | **Single Responsibility** | Is this story trying to do multiple things? | "and", "also", multiple verbs |
 | **Session Fit** | Can this complete in one context window? | Touches >3 files, crosses subsystems |
+| **Criteria Count** | Does this story have >7 distinct criteria? | Split the story — never drop criteria |
 | **Research Needs** | Are there unknowns that eat context? | Vague tech, unexplored patterns |
 | **Scope Clarity** | Are criteria specific and verifiable? | "works correctly", "handles properly" |
 | **Exploration Load** | How much discovery needed? | "figure out", "determine how" |
@@ -190,6 +193,7 @@ US-004: Handle OAuth callback and create session
 | `epic` | Epic name (same across all feature specs in epic) |
 | `epic_seq` | Execution order within epic, 1-based |
 | `epic_final` | `true` only on the last feature spec in the epic |
+| `size` | `S` / `M` / `L` / `XL` — controls session timeouts and model escalation on retry (default M) |
 | `created` | Creation date |
 | `updated` | Last update date |
 

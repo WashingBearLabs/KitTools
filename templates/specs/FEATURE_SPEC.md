@@ -1,4 +1,4 @@
-<!-- Template Version: 2.1.0 -->
+<!-- Template Version: 2.2.0 -->
 ---
 feature: {{FEATURE_NAME}}
 status: active
@@ -6,6 +6,7 @@ session_ready: true
 depends_on: []
 vision_ref:
 type: feature
+size:
 epic:
 epic_seq:
 epic_final:
@@ -22,6 +23,7 @@ Quick summary:
 - session_ready: true once story-quality checks pass; false blocks execution
 - depends_on: [feature-names] — hard gate, empty list OK
 - vision_ref: free-form reference into PRODUCT_VISION.md (optional)
+- size: S | M | L | XL — controls session timeouts and model escalation (default M if omitted)
 - type: feature | epic-child
 - epic / epic_seq / epic_final: only populated for epic-child specs
 - created / updated: YYYY-MM-DD
@@ -44,16 +46,20 @@ Quick summary:
 <!--
 SESSION-FIT GUIDELINES:
 - Each story should complete in one focused session (single context window)
-- 3-5 acceptance criteria per story (clear, verifiable)
+- 5-7 acceptance criteria per story (clear, verifiable)
 - Order by dependency: schema → backend → UI
 - Stories are refined during planning to ensure session-fit
 - Implementation Hints give the implementing agent a head start (key files, patterns, gotchas)
+- More stories with fewer criteria > fewer stories with many criteria
 
 Story count is not a target — what matters is that each story:
 - Has single responsibility (one concern)
 - Is session-fit (completable in one context window)
 - Has clear, verifiable acceptance criteria
 - Has implementation hints (3-5 bullet points of guidance)
+
+Never compress scope by dropping criteria to fit a story size target.
+If a story needs more criteria, split the story instead.
 -->
 
 ### US-001: {{Story Title}}
