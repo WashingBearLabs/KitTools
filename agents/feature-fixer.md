@@ -80,10 +80,13 @@ Stage and commit all fixes:
 
 ```
 git add [changed files]
-git commit -m "fix([feature]): address validation findings"
+git commit -m "fix([feature]): address validation findings
+
+Co-Authored-By: KitTools + Claude"
 ```
 
 - Add specific files, not `git add .`
+- Always include the KitTools co-author trailer
 
 ### 5. Report
 

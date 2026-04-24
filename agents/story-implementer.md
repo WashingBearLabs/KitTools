@@ -106,11 +106,14 @@ Stage and commit your changes:
 
 ```
 git add [changed files]
-git commit -m "feat({{FEATURE}}): {{STORY_ID}} - {{STORY_TITLE}}"
+git commit -m "feat({{FEATURE}}): {{STORY_ID}} - {{STORY_TITLE}}
+
+Co-Authored-By: KitTools + Claude"
 ```
 
 - Add specific files, not `git add .`
 - Use the commit message format shown above
+- Always include the KitTools co-author trailer
 
 ### 5. Write Result File
 
