@@ -5,6 +5,23 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.1] - 2026-04-24
+
+### Fixed
+
+- **Dirty-tree self-block on resume** — The orchestrator writes a run header to `EXECUTION_LOG.md` after the clean-worktree check passes, but before story execution begins. If the orchestrator then crashes (timeout, error, killed session), the log is left dirty and every subsequent relaunch fails the dirty-worktree check. Fixed by committing the log header immediately after writing it in both `run_epic()` and `run_single_spec()`, closing the dirty-tree window.
+
+### Added
+
+- **Hybrid model escalation** — New `escalation` model role in `DEFAULT_MODEL_CONFIG` (defaults to `opus`). On retry (`attempt > 1`) for specs marked `size: L` or `size: XL`, the implementation session uses the escalation model instead of the default implementer (Sonnet). First attempt is always Sonnet — cheap exploration that produces learnings. Retry gets Opus for stories where the context is too large for Sonnet to process within the timeout.
+- **`size:` frontmatter field** — Feature spec template now includes `size:` in frontmatter (S/M/L/XL). Controls both session timeouts (existing) and model escalation on retry (new). Added to the frontmatter field reference in plan-epic.
+
+### Changed
+
+- **Story sizing raised to 5–7 criteria** — Sweet spot raised from 3–5 to 5–7 acceptance criteria per story across the story-quality-reviewer agent, plan-epic skill, plan-epic reference, and feature spec template. The old 3–5 range caused planners to drop criteria to fit, producing under-specified stories that passed validation but failed execution. The new guidance: more stories with well-defined criteria is always better than fewer stories with compressed scope.
+- **Story-quality-reviewer hard ceilings** — Two new critical (execution-blocking) triggers: more than 10 acceptance criteria, or spanning 3+ architectural layers. Previously all oversized stories were warnings (`needs-work`), meaning they could proceed to execution and time out. Stories with 24 criteria (observed in production runs) now hard-block at validation.
+- **Plan-epic sizing step** — Step 9 (Final scope check) now includes guidance for setting `size:` frontmatter based on spec complexity: S for simple single-layer specs, M as default, L for integration-heavy or verbose-domain specs, XL for cross-cutting concerns.
+
 ## [2.4.0] - 2026-04-17
 
 Foundation refactor. 2.4.0 bundles a deep audit of the whole plugin: hardening, architectural cleanup, consistency across agents, and a full decomposition of the orchestrator. No breaking changes to the user-visible workflow — skills you invoke still behave the same, but the internals are substantially more robust and easier to evolve.

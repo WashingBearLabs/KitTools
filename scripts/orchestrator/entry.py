@@ -117,6 +117,7 @@ def run_single_spec(config: dict) -> None:
 
     # Initialize execution log
     init_execution_log(config)
+    commit_tracking_files(project_dir, config.get("feature_name", "feature"))
 
     # Execute all stories
     execute_spec_stories(spec_path, config.get("feature_name", "feature"), config, state)
@@ -207,6 +208,7 @@ def run_epic(config: dict) -> None:
                 f.write("\n---\n> Previous epic run ended. New run starting below.\n---\n\n")
 
     init_execution_log(config, epic_mode=True)
+    commit_tracking_files(project_dir, epic_name)
 
     for i, spec_info in enumerate(epic_specs):
         spec_path = spec_info["spec_path"]

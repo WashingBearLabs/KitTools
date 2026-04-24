@@ -12,6 +12,10 @@ DEFAULT_MODEL_CONFIG = {
     # judgment calls about which findings to fix and how to aggregate them —
     # those benefit from the stronger reasoning model.
     "validator": "opus",
+    # Used when retrying size-L/XL stories — Sonnet's first attempt explored
+    # and timed out, so the retry benefits from a model that processes large
+    # context faster and makes implementation decisions more decisively.
+    "escalation": "opus",
 }
 
 

@@ -88,7 +88,7 @@ Each story needs: ID, Title, Description, Implementation Hints (populated in Ste
 
 ### Session-fit focus
 
-Focus on right-sized stories completable in one Claude session, not story count.
+Focus on right-sized stories completable in one Claude session. More stories with 5–7 well-defined criteria is always better than fewer stories with many criteria. Never compress scope by dropping criteria to make a story smaller — split the story instead.
 
 ### Auto-injected test criteria
 
@@ -117,7 +117,15 @@ Document unresolved decisions as checkboxes.
 
 ## Step 9: Final scope check
 
-Verify: 3-5 criteria per story, single layer focus, dependencies clear, stories well-defined.
+Verify: 5-7 criteria per story, single layer focus, dependencies clear, stories well-defined. If any story has more than 7 criteria, split it — don't drop criteria.
+
+### Set `size:` frontmatter
+
+Based on the spec's overall complexity, set the `size:` field in frontmatter:
+- **S** — All stories have ≤ 5 criteria, single layer, no integrations
+- **M** — Default. Stories have 5-7 criteria, straightforward domain (omit field to default)
+- **L** — Complex stories: integration-heavy, verbose domain context, or stories near the 7-criteria ceiling
+- **XL** — Reserved for specs with necessarily large context (porting complex logic, cross-cutting concerns)
 
 ---
 
