@@ -5,6 +5,23 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.3] - 2026-05-22
+
+### Added
+
+- **Codebase fit reviewer** — New `codebase-fit-reviewer` agent for `/kit-tools:validate-epic`. Deeply explores the actual codebase to verify implementation hints, find missed reuse opportunities, check pattern conformance, and identify duplication risks. Five review lenses: hint verification, missed reuse, pattern conformance, duplication risk, shared resource expansion. Findings include file paths and line numbers grounded in real code exploration.
+- **Signal feedback hook** — New `harvest_signals.py` Stop hook silently captures skill telemetry from KitTools artifacts (execution state, validate-epic summaries) into `.feedback/signals.jsonl` in the plugin directory. Enables retrospective analysis of skill performance across projects.
+- **Validate-epic signal summary** — Validate-epic now writes `.validate_epic_summary.json` before cleaning up individual result files, ensuring the Stop hook can capture reviewer verdicts even after cleanup.
+
+### Changed
+
+- **Validate-epic runs reviewers in parallel** — All five reviewers (completionist, story quality, salty engineer, codebase fit, second opinion) now spawn concurrently instead of sequentially. Consolidated finding presentation with severity-sorted results across all reviewers. Selective re-run: users can re-run only the reviewers that found issues after updating the spec.
+- **Epic pause behavior is mode-dependent** — `epic_pause_between_specs` now defaults to `false` in examples and documentation. Supervised mode pauses between specs; autonomous and guarded modes run continuously. Previously the example and config pattern defaulted to `true`, causing unintended multi-hour pauses in autonomous/guarded execution.
+
+### Fixed
+
+- **Autonomous/guarded epic pausing between specs** — Execute-epic SKILL.md and REFERENCE.md examples hardcoded `epic_pause_between_specs: true`, which agents copied into config regardless of execution mode. Fixed examples, added mode-dependent guidance, and collapsed the redundant "pause between each / non-stop" user options into a single "execute all remaining" choice.
+
 ## [2.4.2] - 2026-04-24
 
 ### Added
