@@ -6,7 +6,7 @@ All KitTools review agents emit findings in this shape, written as JSON to `{{RE
 
 ```json
 {
-  "review_type": "code-quality|security|feature-compliance|drift|template-validation|story-quality|spec-completeness|spec-second-opinion|salty-engineer|test-optimizer|vision-*",
+  "review_type": "code-quality|security|feature-compliance|drift|template-validation|story-quality|spec-completeness|spec-second-opinion|salty-engineer|codebase-fit|test-optimizer|vision-*",
   "target": "<what was reviewed — file path, doc name, spec name, template name>",
   "overall_verdict": "clean|warnings|issues",
   "findings": [
@@ -43,7 +43,7 @@ Agents may add fields beyond the core set. Skills ignore unknown fields.
 
 - `confidence: high|medium|low` — used by `test-optimizer` and `drift-detector` where findings are heuristic
 - `trade_offs: "<what the alternative gains/sacrifices>"` — required by `spec-second-opinion` for alternative-approach and over-engineering categories
-- `evidence: {claim: "<doc says>", reality: "<code shows>"}` — `drift-detector` uses this to surface the specific divergence
+- `evidence: {claim: "<doc says>", reality: "<code shows>"}` — `drift-detector` uses this to surface the specific divergence. `codebase-fit-reviewer` uses a variant: `{existing_code: "<path:line — what exists>", spec_proposes: "<what the spec plans instead>"}`
 - `code_snippet: "<relevant lines>"` — optional for code reviewers when the snippet adds clarity
 
 ## Verdict Derivation

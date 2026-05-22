@@ -36,10 +36,11 @@ Check `kit_tools/specs/.execution-state.json`:
 From the selected `epic-*.md`, read the Decomposition table to get the ordered list of feature specs. Check `.execution-state.json` for any running/paused/completed state for each spec.
 
 Present options:
-- **A.** Execute all remaining specs, pause between each (recommended)
-- **B.** Execute all remaining specs non-stop
-- **C.** Execute just one specific spec (ask which)
-- **D.** Cancel
+- **A.** Execute all remaining specs (recommended)
+- **B.** Execute just one specific spec (ask which)
+- **C.** Cancel
+
+> **Pause behavior is determined by mode, not by this choice.** Supervised mode always pauses between specs (the user is reviewing in-session). Autonomous and guarded modes never pause between specs — they run continuously. The `epic_pause_between_specs` config field must match the mode: `true` for supervised, `false` for autonomous/guarded.
 
 **Fallback:** If no `epic-*.md` files are found, fall back to listing feature specs directly from `kit_tools/specs/`. This is a backwards-compatibility path for projects that predate the epic-wrapper convention. In fallback mode, if a selected feature spec has an `epic` frontmatter field, scan for sibling specs by that field to assemble the execution order.
 

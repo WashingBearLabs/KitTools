@@ -55,5 +55,8 @@ kit_tools/.execution-notifications
 # Local-only skills (plugin maintenance, not shipped to users)
 .claude/skills/
 
+# Signal feedback (accumulated locally, not shipped)
+.feedback/
+
 # Local Claude Code settings (user-specific tool permissions; never ship)
 .claude/settings.local.json

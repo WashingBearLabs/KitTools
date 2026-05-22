@@ -54,7 +54,7 @@ This is the standard path. Derived from the selected `epic-*.md` wrapper.
     "spec_overview": "... feature spec overview section ..."
   },
   "epic_name": "arxiv",
-  "epic_pause_between_specs": true,
+  "epic_pause_between_specs": false,
   "epic_specs": [
     {
       "spec_path": "/abs/path/kit_tools/specs/feature-arxiv-source.md",
@@ -79,6 +79,8 @@ This is the standard path. Derived from the selected `epic-*.md` wrapper.
 ```
 
 When `epic_specs` is present, the orchestrator runs in epic mode. When absent, it runs in single-feature-spec mode. Exclude already-completed/archived feature specs from `epic_specs`.
+
+`epic_pause_between_specs` must match the execution mode: `true` for supervised (user reviews between specs), `false` for autonomous and guarded (continuous execution). The example above shows `false` because autonomous is the most common mode for epic execution.
 
 `completion_strategy` controls post-execution behavior: `"pr"` (push + create GitHub PR, recommended), `"merge"` (auto-merge to main, blocked if validation finds critical issues), or `"none"` (leave branch as-is). Default: `"pr"`.
 
@@ -129,7 +131,7 @@ config = {
     # },
     # epic fields (omit for standalone):
     # "epic_name": "...",
-    # "epic_pause_between_specs": True,
+    # "epic_pause_between_specs": False,  # True only for supervised mode
     # "epic_specs": [...]
 }
 
@@ -256,9 +258,8 @@ Present the list with completion status so the user can choose an epic to execut
 
 ### Epic user options
 
-- **A. Execute all remaining, pause between each** — Sets `epic_pause_between_specs: true`. Pauses after each feature spec (validate + tag + archive).
-- **B. Execute all remaining non-stop** — No stops between feature specs.
-- **C. Execute just one specific spec** — Standalone on the `epic/[name]` branch.
+- **A. Execute all remaining specs** — Runs all unarchived specs in sequence. Pause behavior is determined by the execution mode: supervised pauses between specs (`epic_pause_between_specs: true`), autonomous and guarded run continuously (`epic_pause_between_specs: false`).
+- **B. Execute just one specific spec** — Standalone on the `epic/[name]` branch.
 
 ### Epic orchestrator behavior
 
