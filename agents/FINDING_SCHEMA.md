@@ -6,7 +6,7 @@ All KitTools review agents emit findings in this shape, written as JSON to `{{RE
 
 ```json
 {
-  "review_type": "code-quality|security|feature-compliance|drift|template-validation|story-quality|spec-completeness|spec-second-opinion|salty-engineer|codebase-fit|test-optimizer|vision-*",
+  "review_type": "code-quality|security|feature-compliance|drift|template-validation|story-quality|spec-completeness|spec-second-opinion|spec-security|salty-engineer|codebase-fit|test-optimizer|vision-*",
   "target": "<what was reviewed — file path, doc name, spec name, template name>",
   "overall_verdict": "clean|warnings|issues",
   "findings": [

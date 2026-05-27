@@ -1,11 +1,11 @@
 ---
 name: validate-epic
-description: Validate an epic's feature specs before execution — completeness, story quality, adversarial review, codebase fit, and cross-model second opinion
+description: Validate an epic's feature specs before execution — completeness, story quality, adversarial review, codebase fit, security review, and cross-model second opinion
 ---
 
 # Validate Epic
 
-Run five parallel pre-execution reviews on an epic's feature specs before handing off to `/kit-tools:execute-epic`. Catches missing stories, vague criteria, bad story IDs, implementation gaps, codebase mismatches, and architectural blind spots that would cause retries or failures during autonomous execution.
+Run six parallel pre-execution reviews on an epic's feature specs before handing off to `/kit-tools:execute-epic`. Catches missing stories, vague criteria, bad story IDs, implementation gaps, codebase mismatches, security risks, and architectural blind spots that would cause retries or failures during autonomous execution.
 
 This skill is the quality gate between planning and execution.
 
@@ -17,10 +17,11 @@ This skill is the quality gate between planning and execution.
 | Story quality agent | `$CLAUDE_PLUGIN_ROOT/agents/story-quality-reviewer.md` | Yes |
 | Salty engineer agent | `$CLAUDE_PLUGIN_ROOT/agents/salty-engineer-reviewer.md` | Yes |
 | Codebase fit agent | `$CLAUDE_PLUGIN_ROOT/agents/codebase-fit-reviewer.md` | Yes |
+| Security agent | `$CLAUDE_PLUGIN_ROOT/agents/spec-security-reviewer.md` | Yes |
 | Second opinion agent | `$CLAUDE_PLUGIN_ROOT/agents/spec-second-opinion.md` | Yes |
 
 **Reads:** `kit_tools/specs/epic-*.md`, `kit_tools/specs/feature-*.md`, `kit_tools/PRODUCT_VISION.md` (if exists)
-**Creates (temporary):** `kit_tools/.validate_epic_1.json` through `kit_tools/.validate_epic_5.json`
+**Creates (temporary):** `kit_tools/.validate_epic_1.json` through `kit_tools/.validate_epic_6.json`
 **Cleans up:** Deletes temp result files on completion
 
 ## Arguments
@@ -69,12 +70,13 @@ Validating [N] active feature spec(s):
   2. feature-foo-api.md
   3. feature-foo-ui.md
 
-Running 5 reviews per spec (in parallel):
+Running 6 reviews per spec (in parallel):
   1. Completionist — are we missing anything?
   2. Story Quality — are stories well-formed and right-sized?
   3. Salty Engineer — what will blow up in implementation?
   4. Codebase Fit — does the plan fit the existing code?
-  5. Second Opinion (cross-model) — is there a better way to do this?
+  5. Security — does this introduce security risks?
+  6. Second Opinion (cross-model) — is there a better way to do this?
 ```
 
 Confirm before proceeding.
@@ -83,11 +85,11 @@ Confirm before proceeding.
 
 ## Step 3: Per-Spec Review Loop
 
-For each active feature spec (in epic order), spawn all five reviewers in parallel, collect results, then present consolidated findings.
+For each active feature spec (in epic order), spawn all six reviewers in parallel, collect results, then present consolidated findings.
 
 ### 3a: Spawn All Reviewers (parallel)
 
-Read all five agent templates from `$CLAUDE_PLUGIN_ROOT/agents/`, interpolate their tokens, and spawn all five via the Task tool **in a single message** so they run concurrently.
+Read all six agent templates from `$CLAUDE_PLUGIN_ROOT/agents/`, interpolate their tokens, and spawn all six via the Task tool **in a single message** so they run concurrently.
 
 | # | Agent | Template | Result File | Tokens | Notes |
 |---|-------|----------|-------------|--------|-------|
@@ -95,16 +97,17 @@ Read all five agent templates from `$CLAUDE_PLUGIN_ROOT/agents/`, interpolate th
 | 2 | Story Quality | `story-quality-reviewer.md` | `kit_tools/.validate_epic_2.json` | `SPEC_PATH`, `SPEC_NAME`, `RESULT_FILE_PATH` | |
 | 3 | Salty Engineer | `salty-engineer-reviewer.md` | `kit_tools/.validate_epic_3.json` | `SPEC_PATH`, `SPEC_NAME`, `VISION_CONTEXT`, `RESULT_FILE_PATH` | |
 | 4 | Codebase Fit | `codebase-fit-reviewer.md` | `kit_tools/.validate_epic_4.json` | `SPEC_PATH`, `SPEC_NAME`, `RESULT_FILE_PATH` | Explores actual source code |
-| 5 | Second Opinion | `spec-second-opinion.md` | `kit_tools/.validate_epic_5.json` | `SPEC_PATH`, `SPEC_NAME`, `VISION_CONTEXT`, `RESULT_FILE_PATH` | Cross-model (see below) |
+| 5 | Security | `spec-security-reviewer.md` | `kit_tools/.validate_epic_5.json` | `SPEC_PATH`, `SPEC_NAME`, `VISION_CONTEXT`, `RESULT_FILE_PATH` | Adversarial security review |
+| 6 | Second Opinion | `spec-second-opinion.md` | `kit_tools/.validate_epic_6.json` | `SPEC_PATH`, `SPEC_NAME`, `VISION_CONTEXT`, `RESULT_FILE_PATH` | Cross-model (see below) |
 
-**Second Opinion model choice:** This review deliberately uses a **different model** than the other four. The value comes from different training surfacing different blind spots.
+**Second Opinion model choice:** This review deliberately uses a **different model** than the other five. The value comes from different training surfacing different blind spots.
 - If the session is running on Opus, use `model: "sonnet"` for this agent.
 - If the session is running on Sonnet, use `model: "opus"`.
 - If the user has specified a model via `model_config.reviewer_second_opinion`, honor that.
 
 ### 3b: Present Consolidated Findings
 
-Once all five agents complete, read all result files and present findings grouped by reviewer:
+Once all six agents complete, read all result files and present findings grouped by reviewer:
 
 ```
 Review Results — [spec-name]
@@ -116,6 +119,7 @@ Review Results — [spec-name]
 | Story Quality | needs-work | 0 | 3 | 2 |
 | Salty Engineer | needs-work | 1 | 2 | 0 |
 | Codebase Fit | needs-work | 0 | 4 | 1 |
+| Security | needs-work | 0 | 2 | 1 |
 | Second Opinion | ready | 0 | 1 | 0 |
 ```
 
@@ -124,6 +128,7 @@ Then present findings by severity across all reviewers — critical first, then 
 **Presentation notes per reviewer:**
 - **Salty Engineer**: Preserve the engineer's direct voice — don't sanitize critique fields
 - **Codebase Fit**: Always include the `evidence` block (existing code reference + what the spec proposes) — this is what makes the finding actionable
+- **Security**: Lead with the biggest risk. Group findings by lens (attack surface, auth, data exposure, input trust, omissions) when there are many. Omission findings are often the most important — highlight them.
 - **Second Opinion**: Include trade-offs for alternative-approach and over-engineering findings
 - **Story Quality**: Include the per-story status table if present
 
@@ -144,7 +149,7 @@ If the user picks **B**, record unresolved findings for the final summary.
 
 ## Step 4: Next Spec
 
-After all 5 reviews complete for a spec (with or without revisions), move to the next spec in the epic and repeat Step 3.
+After all 6 reviews complete for a spec (with or without revisions), move to the next spec in the epic and repeat Step 3.
 
 Show progress:
 ```
@@ -163,11 +168,11 @@ Validate Epic: [epic-name]
 
 Specs reviewed: N
 
-| Feature Spec | Completionist | Story Quality | Salty Engineer | Codebase Fit | Second Opinion | Ready? |
-|-------------|---------------|---------------|----------------|--------------|----------------|--------|
-| feature-foo-schema.md | ✅ ready | ✅ ready | ⚠️ needs-work | ✅ ready | ✅ ready | ⚠️ |
-| feature-foo-api.md | ✅ ready | ✅ ready | ✅ ready | ⚠️ needs-work | ✅ ready | ⚠️ |
-| feature-foo-ui.md | ⚠️ needs-work | ⚠️ needs-work | 🔴 not-ready | ⚠️ needs-work | ⚠️ needs-work | 🔴 |
+| Feature Spec | Completionist | Story Quality | Salty Engineer | Codebase Fit | Security | Second Opinion | Ready? |
+|-------------|---------------|---------------|----------------|--------------|----------|----------------|--------|
+| feature-foo-schema.md | ✅ ready | ✅ ready | ⚠️ needs-work | ✅ ready | ✅ ready | ✅ ready | ⚠️ |
+| feature-foo-api.md | ✅ ready | ✅ ready | ✅ ready | ⚠️ needs-work | ⚠️ needs-work | ✅ ready | ⚠️ |
+| feature-foo-ui.md | ⚠️ needs-work | ⚠️ needs-work | 🔴 not-ready | ⚠️ needs-work | ⚠️ needs-work | ⚠️ needs-work | 🔴 |
 
 Outstanding findings (unaddressed):
   - feature-foo-schema.md: [N warnings acknowledged as known risks]
@@ -177,7 +182,7 @@ Overall readiness: [ready / needs-work / not-ready]
 ```
 
 **Overall readiness logic:**
-- **ready** — All specs are ready across all five reviews (or only info findings remain)
+- **ready** — All specs are ready across all six reviews (or only info findings remain)
 - **needs-work** — Warning findings remain in one or more specs; critical findings are all resolved
 - **not-ready** — Critical findings remain unresolved in any spec
 
@@ -206,6 +211,7 @@ Overall readiness: [ready / needs-work / not-ready]
       "story-quality": "ready",
       "salty-engineer": "needs-work",
       "codebase-fit": "ready",
+      "security": "needs-work",
       "second-opinion": "ready"
     }
   },
@@ -213,7 +219,7 @@ Overall readiness: [ready / needs-work / not-ready]
 }
 ```
 
-**Clean up:** Delete `kit_tools/.validate_epic_1.json` through `kit_tools/.validate_epic_5.json`. Leave the summary file — the Stop hook reads and deletes it.
+**Clean up:** Delete `kit_tools/.validate_epic_1.json` through `kit_tools/.validate_epic_6.json`. Leave the summary file — the Stop hook reads and deletes it.
 
 ---
 

@@ -96,7 +96,19 @@ Move to `kit_tools/specs/archive/`. Create directory if needed.
 
 ---
 
-## Step 9: Summary
+## Step 9: Offer Version Bump
+
+If `kit_tools/BUMP_VERSION.md` exists, ask the user:
+
+> "Would you like to bump the project version for this release?"
+
+If yes, invoke `/kit-tools:bump-version`. The bump-version skill handles the full flow (reading the runbook, determining the new version, updating files, committing).
+
+If no, or if `BUMP_VERSION.md` doesn't exist, skip this step.
+
+---
+
+## Step 10: Summary
 
 Report: feature spec archived, completion stats, branch status, files updated, artifacts cleaned.
 

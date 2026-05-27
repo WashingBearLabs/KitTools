@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KitTools v2.4.3 — AI-Assisted Development Framework</title>
+  <title>KitTools v2.5.0 — AI-Assisted Development Framework</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap" rel="stylesheet">
@@ -1024,16 +1024,17 @@
       <div class="phase-body">
         <div class="step">
           <div class="step-cmd"><span class="step-cmd-text">/kit-tools:validate-epic</span></div>
-          <div class="step-desc">Five parallel agent reviews per feature spec. Results are consolidated and presented together; re-run individual reviewers selectively after spec updates.</div>
+          <div class="step-desc">Six parallel agent reviews per feature spec. Results are consolidated and presented together; re-run individual reviewers selectively after spec updates.</div>
           <div class="badges">
             <span class="badge-agent">spec-completionist-reviewer</span>
             <span class="badge-agent">story-quality-reviewer</span>
             <span class="badge-agent">salty-engineer-reviewer</span>
             <span class="badge-agent">codebase-fit-reviewer</span>
+            <span class="badge-agent">spec-security-reviewer</span>
             <span class="badge-agent">spec-second-opinion <span style="font-size:9px;opacity:0.7;">(cross-model)</span></span>
           </div>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap: 8px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr; gap: 8px;">
           <div class="step" style="text-align: center;">
             <div style="font-size: 10.5px; color: var(--phase-prevalid); font-family: var(--font-mono); margin-bottom: 4px;">Review 1</div>
             <div style="font-size: 11px; color: var(--text-secondary);">Are we missing any features or flows?</div>
@@ -1052,6 +1053,10 @@
           </div>
           <div class="step" style="text-align: center;">
             <div style="font-size: 10.5px; color: var(--phase-prevalid); font-family: var(--font-mono); margin-bottom: 4px;">Review 5</div>
+            <div style="font-size: 11px; color: var(--text-secondary);">Adversarial security &amp; threat surface</div>
+          </div>
+          <div class="step" style="text-align: center;">
+            <div style="font-size: 10.5px; color: var(--phase-prevalid); font-family: var(--font-mono); margin-bottom: 4px;">Review 6</div>
             <div style="font-size: 11px; color: var(--text-secondary);">Cross-model architecture &amp; alternatives</div>
           </div>
         </div>
@@ -1231,7 +1236,7 @@
 
     <div class="skill-card">
       <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-prevalid)"></span>/kit-tools:validate-epic</span>
-      <span class="skill-desc">Pre-execution quality gate. Five parallel reviews (completeness, story quality, adversarial engineering, codebase fit, cross-model second opinion) per spec.</span>
+      <span class="skill-desc">Pre-execution quality gate. Six parallel reviews (completeness, story quality, adversarial engineering, codebase fit, security, cross-model second opinion) per spec.</span>
     </div>
 
     <div class="skill-card">
@@ -1252,6 +1257,11 @@
     <div class="skill-card">
       <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-completion)"></span>/kit-tools:complete-implementation</span>
       <span class="skill-desc">Mark a feature spec as completed, archive it, and handle the PR or merge. Works for mid-epic and final specs.</span>
+    </div>
+
+    <div class="skill-card">
+      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-completion)"></span>/kit-tools:bump-version</span>
+      <span class="skill-desc">Bump project version using <code>kit_tools/BUMP_VERSION.md</code> runbook. Handles multi-repo updates, changelogs, and commit conventions.</span>
     </div>
 
     <div class="skill-card">

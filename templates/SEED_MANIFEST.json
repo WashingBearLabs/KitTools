@@ -96,6 +96,16 @@
       "validation_issues": [],
       "skipped_reason": null
     },
+    "BUMP_VERSION.md": {
+      "tier": 2,
+      "path": "kit_tools/BUMP_VERSION.md",
+      "status": "pending",
+      "seeded_at": null,
+      "validated_at": null,
+      "validation_result": null,
+      "validation_issues": [],
+      "skipped_reason": null
+    },
     "arch/INFRA_ARCH.md": {
       "tier": 2,
       "path": "kit_tools/arch/INFRA_ARCH.md",
@@ -319,9 +329,9 @@
   },
 
   "summary": {
-    "total": 27,
+    "total": 28,
     "by_status": {
-      "pending": 27,
+      "pending": 28,
       "seeded": 0,
       "validated": 0,
       "skipped": 0,
@@ -329,7 +339,7 @@
     },
     "by_tier": {
       "1": { "total": 5, "completed": 0 },
-      "2": { "total": 5, "completed": 0 },
+      "2": { "total": 6, "completed": 0 },
       "3": { "total": 9, "completed": 0 },
       "4": { "total": 4, "completed": 0 },
       "5": { "total": 3, "completed": 0 }

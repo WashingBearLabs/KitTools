@@ -5,6 +5,18 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-06-03
+
+### Added
+
+- **Spec security reviewer** — New `spec-security-reviewer` agent for `/kit-tools:validate-epic`. Adversarial security review of feature specs before implementation — catches auth/authz gaps, attack surface expansion, data exposure risks, trust boundary violations, and security-relevant omissions at the design stage. Five security lenses: attack surface, authentication & authorization, data exposure & privacy, input trust & injection, and security omissions. Shift-left security: catching design-level security problems before code is written reduces rework and makes post-implementation security review easier.
+- **Bump version skill** — New `/kit-tools:bump-version` skill and `BUMP_VERSION.md` template. Template-driven version bumping that reads a project-specific runbook for version source location, changelog conventions, additional version locations (including external repos), and pre/post-bump steps. `/kit-tools:complete-implementation` now offers to invoke bump-version as an optional final step after archiving.
+
+### Changed
+
+- **Validate-epic runs 6 reviewers** — Added spec-security-reviewer as the 6th parallel reviewer alongside completionist, story quality, salty engineer, codebase fit, and second opinion. Updated result file numbering, summary tables, and signal output to include the security dimension.
+- **Complete-implementation offers version bump** — After archiving a feature spec and cleaning up artifacts, complete-implementation now checks for `kit_tools/BUMP_VERSION.md` and offers to run `/kit-tools:bump-version` if present.
+
 ## [2.4.3] - 2026-05-22
 
 ### Added
