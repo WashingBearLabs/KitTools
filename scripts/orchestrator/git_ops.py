@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 
+from . import registry
 from .events import write_notification
 from .specs import archive_spec
 from .supervisor import (
@@ -122,8 +123,13 @@ def delete_attempt_branch(project_dir: str, feature_branch: str, attempt_branch:
 
 
 def verify_branch_base(project_dir: str) -> bool:
-    """Verify the feature branch is based on main."""
-    result = run_git(["merge-base", "--is-ancestor", "main", "HEAD"], project_dir)
+    """Verify the feature branch is based on the integration branch.
+
+    Uses the detected default branch (``main`` for KitTools-born repos, but
+    ``master``/custom for imported ones) rather than assuming ``main``.
+    """
+    base = registry.default_branch(project_dir)
+    result = run_git(["merge-base", "--is-ancestor", base, "HEAD"], project_dir)
     return result.returncode == 0
 
 
@@ -320,6 +326,128 @@ def _build_pr_body(config: dict, state: dict) -> str:
     return "\n".join(lines)
 
 
+def _gh_available() -> bool:
+    """Return True if the `gh` CLI is installed and authenticated."""
+    try:
+        result = subprocess.run(
+            ["gh", "auth", "status"], capture_output=True, text=True, timeout=15
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return False
+
+
+def _is_worktree_execution(config: dict) -> bool:
+    """True when the orchestrator is running in an isolated worktree.
+
+    Detected by ``project_dir`` (where the orchestrator runs) differing from
+    ``main_repo`` (the user's checkout). Legacy/supervised in-dir executions
+    have these equal (or lack ``main_repo``) and return False, preserving the
+    original local-merge behaviour for them.
+    """
+    main = config.get("main_repo")
+    project_dir = config.get("project_dir")
+    if not main or not project_dir:
+        return False
+    return os.path.abspath(main) != os.path.abspath(project_dir)
+
+
+def _complete_merge_worktree(config: dict, state: dict, feature_name: str,
+                             branch: str) -> str:
+    """Merge a worktree execution's branch *without* touching the user's main
+    checkout.
+
+    A worktree can't `git checkout main` (main is checked out in the user's main
+    worktree — git refuses), and merging into that live checkout is exactly the
+    contamination worktree isolation exists to prevent. So we merge server-side:
+    push the branch, open a PR, and `gh pr merge`. The local branch and worktree
+    are intentionally left for a main-side reaper (complete-implementation /
+    close-session) to remove — the orchestrator can't delete its own cwd.
+
+    Returns the completion status actually achieved: ``"merged"``,
+    ``"pr"`` (pushed + PR open but not merged), or ``"none"`` (couldn't push).
+    """
+    project_dir = config["project_dir"]
+    if not _gh_available():
+        log("Merge requested but gh CLI unavailable — pushing branch for a "
+            "manual merge instead of touching the main checkout.")
+        push = run_git(["push", "-u", "origin", branch], project_dir)
+        if push.returncode != 0:
+            write_notification(
+                config, "completion_fallback",
+                "Merge skipped — gh unavailable and push failed",
+                f"Could not push {branch}. Merge {feature_name} manually from a "
+                f"checkout of main.",
+                severity="warning",
+            )
+            return "none"
+        write_notification(
+            config, "completion_fallback",
+            "Merge skipped — gh unavailable",
+            f"Branch {branch} pushed. Install/authenticate gh, or merge manually "
+            f"(do not run the orchestrator's worktree as your main checkout).",
+            severity="warning",
+        )
+        return "pr"
+
+    push = run_git(["push", "-u", "origin", branch], project_dir)
+    if push.returncode != 0:
+        log(f"Push failed: {push.stderr.strip()[:200]}")
+        write_notification(
+            config, "completion_fallback",
+            "Merge failed — push failed",
+            f"Could not push {branch}. Merge {feature_name} manually.",
+            severity="warning",
+        )
+        return "none"
+
+    pr_title = f"feat({feature_name}): autonomous implementation"
+    pr_body = _build_pr_body(config, state)
+    try:
+        create = subprocess.run(
+            ["gh", "pr", "create", "--title", pr_title, "--body", pr_body],
+            capture_output=True, text=True, timeout=30, cwd=project_dir,
+        )
+    except (subprocess.TimeoutExpired, OSError) as e:
+        log(f"PR creation error: {e}. Branch {branch} pushed — merge manually.")
+        return "pr"
+    if create.returncode != 0:
+        log(f"PR creation failed: {create.stderr.strip()[:200]}. "
+            f"Branch {branch} pushed — merge manually.")
+        return "pr"
+    pr_url = create.stdout.strip()
+
+    try:
+        merge = subprocess.run(
+            ["gh", "pr", "merge", "--merge", "--delete-branch"],
+            capture_output=True, text=True, timeout=60, cwd=project_dir,
+        )
+    except (subprocess.TimeoutExpired, OSError) as e:
+        log(f"Auto-merge error: {e}. PR open: {pr_url}")
+        write_notification(
+            config, "pr_created", f"PR created (auto-merge failed): {feature_name}",
+            f"PR: {pr_url}. Merge it manually.", severity="info",
+        )
+        return "pr"
+    if merge.returncode != 0:
+        # Branch protection, required checks pending, conflicts, etc.
+        log(f"Auto-merge declined: {merge.stderr.strip()[:200]}. PR open: {pr_url}")
+        write_notification(
+            config, "pr_created", f"PR created (auto-merge declined): {feature_name}",
+            f"PR: {pr_url}. Merge once checks/approvals pass.", severity="info",
+        )
+        return "pr"
+
+    log(f"Merged via PR: {pr_url}")
+    write_notification(
+        config, "feature_merged", f"Feature merged: {feature_name}",
+        f"{branch} merged to main via {pr_url}. The local worktree/branch will "
+        f"be cleaned up by complete-implementation / close-session.",
+        severity="info",
+    )
+    return "merged"
+
+
 def complete_feature(config: dict, state: dict, validation_clean: bool) -> None:
     """Handle post-execution completion based on the configured strategy.
 
@@ -357,11 +485,24 @@ def complete_feature(config: dict, state: dict, validation_clean: bool) -> None:
                 severity="warning",
             )
             strategy = "pr"
+        elif _is_worktree_execution(config):
+            # Worktree execution: merge server-side, never `git checkout main`.
+            outcome = _complete_merge_worktree(config, state, feature_name, branch)
+            if outcome == "merged":
+                _cleanup_execution_artifacts(project_dir)
+                kill_tmux_session(config)
+                return
+            # "pr" → branch pushed (and possibly a PR open); "none" → left local.
+            # Either way the work is recorded; skip the generic PR block to avoid
+            # a duplicate push/PR, and fall through to final cleanup.
+            strategy = "none" if outcome == "none" else "done"
         else:
-            # Attempt merge
-            checkout_result = run_git(["checkout", "main"], project_dir)
+            # Legacy / supervised in-dir execution — local merge is safe (the
+            # integration branch is not checked out in a separate worktree here).
+            base = registry.default_branch(project_dir)
+            checkout_result = run_git(["checkout", base], project_dir)
             if checkout_result.returncode != 0:
-                log(f"Failed to checkout main: {checkout_result.stderr.strip()[:200]}")
+                log(f"Failed to checkout {base}: {checkout_result.stderr.strip()[:200]}")
                 log("Falling back to PR strategy.")
                 run_git(["checkout", branch], project_dir)
                 strategy = "pr"
@@ -401,19 +542,7 @@ def complete_feature(config: dict, state: dict, validation_clean: bool) -> None:
 
     # --- PR strategy ---
     if strategy == "pr":
-        # Check gh availability
-        gh_available = True
-        try:
-            gh_check = subprocess.run(
-                ["gh", "auth", "status"],
-                capture_output=True, text=True, timeout=15
-            )
-            if gh_check.returncode != 0:
-                gh_available = False
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            gh_available = False
-
-        if not gh_available:
+        if not _gh_available():
             log("gh CLI not available or not authenticated. Leaving branch as-is.")
             write_notification(
                 config, "completion_fallback",

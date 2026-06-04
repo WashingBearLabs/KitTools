@@ -121,6 +121,44 @@ Add an entry to `kit_tools/SESSION_LOG.md` with:
 - Which docs were updated
 - Open items for next session
 
+## Step 4b: Reconcile & reap execution worktrees
+
+Autonomous/guarded epics run in isolated worktrees. Closing your session is the natural point to tidy up finished ones. The governing invariant: **no work is lost, and no tree is left unaccounted for** — *not* "everything is merged." **Never auto-merge** (that would bypass PR review and could merge a paused/running execution), and never force-remove.
+
+Census the executions:
+
+```bash
+python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" census
+```
+
+If it returns `[]` (or this isn't a git repo), skip this step. Otherwise sort each record by `disposition`:
+
+| Disposition | Meaning | Action |
+|-------------|---------|--------|
+| **`active`** | tmux session still running | **Keep.** Report: "execution still running in `<worktree>` — it continues after you close this session; monitor with `/kit-tools:execution-status`." Do not touch. |
+| **`reapable`** | finished, clean, branch merged into main | **Safe-remove:** `registry.py teardown "<epic>"`. Report what was removed. |
+| **`orphan`** | worktree directory already gone (stale entry) | **Prune:** `registry.py teardown "<epic>"` (clears the branch if merged + deregisters). |
+| **`flag`** | uncommitted/untracked work, an unmerged branch, or a crash | **Keep + flag loudly.** Report the specifics ("`<worktree>` has uncommitted work" / "branch `<branch>` is unmerged — awaiting PR"). Do **not** remove or merge. Then scrub copied secrets from the kept tree (next paragraph). |
+
+For each reapable/orphan, run teardown and check the exit code:
+
+```bash
+python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" teardown "<epic>"
+```
+
+- **Exit 0** — removed/pruned cleanly; deregistered.
+- **Exit 3** — teardown refused at the last moment (git's guards caught dirty/unmerged state the census raced past). It was **kept**; surface the `messages` verbatim and leave it for the user. This is the safety net — trust it over the census.
+
+For each **kept** tree (`flag` disposition, or a teardown that returned exit 3), scrub copied secret files so none linger outside gitignore protection in `~/.kit/worktrees/`:
+
+```bash
+python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" scrub-secrets "<epic>"
+```
+
+This is a **no-op for the default symlinked secrets** (a symlink holds nothing at rest) and only removes the Windows copy-fallback duplicates. If it reports removed files, tell the user those secret *copies* were cleaned from the kept worktree (the originals in the main checkout are untouched; the worktree will re-provision them on the next execution).
+
+Summarize: reaped (N), still running (N), kept-and-flagged (N, with reasons), secret copies scrubbed (N).
+
 ## Step 5: Delete scratchpad
 
 > **Note:** Unlike `/kit-tools:checkpoint` (which clears notes but preserves the file and Active Feature), close-session deletes the scratchpad entirely to signal the session ended.
@@ -137,5 +175,6 @@ Provide a brief summary of:
 - Implementation Notes captured (if any)
 - What documentation was updated
 - Audit findings summary (N critical, N warning, N info) — if validator was run
+- Execution worktrees reconciled (N reaped, N still running, N kept-and-flagged with reasons) — if any exist
 - Any open items or recommended next steps
 - If a feature spec is complete, remind user about `/kit-tools:complete-implementation`

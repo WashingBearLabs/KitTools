@@ -32,6 +32,7 @@ from .git_ops import (
     verify_clean_worktree,
 )
 from .prompts import persist_learnings
+from . import registry
 from .sessions import clean_result_files, is_session_error, run_claude_session
 from .specs import archive_spec, check_dependencies_archived, tag_checkpoint
 from .state import (
@@ -44,6 +45,26 @@ from .state import (
 )
 from .supervisor import pause_file_exists, wait_for_pause_removal
 from .utils import kill_tmux_session, log, now_iso, run_git
+
+
+def _update_registry_status(config: dict, status: str) -> None:
+    """Best-effort: reflect an execution status transition in the `.kit/` registry.
+
+    The registry lives in the *main* checkout (``config["main_repo"]``), keyed by
+    epic (or feature) name. This is a no-op for legacy configs that predate
+    worktree isolation — those have no ``main_repo``, run in the user's live
+    checkout, and were never registered — so old in-dir executions are wholly
+    unaffected. Never raises: a registry write failure must not take down an
+    otherwise-healthy execution.
+    """
+    main_repo = config.get("main_repo")
+    key = config.get("epic_name") or config.get("feature_name")
+    if not main_repo or not key:
+        return
+    try:
+        registry.set_status(main_repo, key, status)
+    except Exception:
+        pass
 
 
 def register_crash_handler(config: dict) -> None:
@@ -62,6 +83,7 @@ def register_crash_handler(config: dict) -> None:
             state["status"] = "crashed"
             state["updated_at"] = now_iso()
             _atomic_json_write(state_path, state)
+            _update_registry_status(config, "crashed")
             feature = config.get("feature_name") or config.get("epic_name", "unknown")
             write_notification(
                 config, "execution_crashed",
@@ -180,6 +202,7 @@ def run_single_spec(config: dict) -> None:
             log("Resuming after pause. Proceeding to completion.")
 
     complete_feature(config, state, validation_clean)
+    _update_registry_status(config, "completed")
 
 
 def run_epic(config: dict) -> None:
@@ -229,6 +252,7 @@ def run_epic(config: dict) -> None:
             log("Cannot continue epic execution.")
             state["status"] = "blocked"
             save_state(state, config)
+            _update_registry_status(config, "blocked")
             write_notification(
                 config, "execution_paused",
                 "Epic blocked on dependencies",
@@ -336,6 +360,7 @@ def run_epic(config: dict) -> None:
     # Complete the epic using the configured strategy
     validation_clean = is_validation_clean(project_dir)
     complete_feature(config, state, validation_clean)
+    _update_registry_status(config, "completed")
 
 
 def main():

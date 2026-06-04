@@ -13,6 +13,11 @@ from .prompts import *  # noqa: F401,F403
 from .sessions import *  # noqa: F401,F403
 from .tests_metrics import *  # noqa: F401,F403
 from .git_ops import *  # noqa: F401,F403
+# registry/worktree are namespaced (not star-imported) — their CRUD verbs
+# (get, register, list_all, ...) are generic and would pollute the package
+# namespace. Access as `registry.get(...)` / `worktree.add_worktree(...)`.
+from . import registry  # noqa: F401
+from . import worktree  # noqa: F401
 from .supervisor import *  # noqa: F401,F403
 from .execution_log import *  # noqa: F401,F403
 from .executor import *  # noqa: F401,F403

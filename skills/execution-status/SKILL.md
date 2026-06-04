@@ -5,24 +5,34 @@ description: Check progress and status of autonomous epic execution
 
 # Execution Status
 
-Check on the progress of an autonomous or guarded execution launched by `/kit-tools:execute-epic`. Read-only — this skill inspects state files and logs without modifying anything.
+Check on the progress of an autonomous or guarded execution launched by `/kit-tools:execute-epic`. Mostly read-only — this skill inspects state files and logs, and (only when it detects a dead orchestrator) reconciles the registry status.
+
+---
+
+## Step 0: Resolve the execution directory
+
+Autonomous/guarded executions run in an **isolated worktree**, so their state files do **not** live in your current checkout. Resolve the execution via the registry so this skill works from anywhere:
+
+```bash
+python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" census
+```
+
+- **One or more records returned:** each carries `worktree`, `branch`, `tmux`, `status`, and signals (`worktree_exists`, `tmux_alive`, `disposition`). If a `[name]` argument was given, pick that record; if exactly one, use it; if several, list them (epic · status · disposition) and ask which. Set **`EXEC_DIR`** = that record's `worktree`, use its `tmux` as the session name, and use `tmux_alive` for the effective-status table. Remember the record's `epic` as **`KEY`** (for registry updates).
+- **`[]` returned (no records):** legacy in-dir execution (or none). Set `EXEC_DIR` = current project root; there is no registry `KEY`.
+- **Not a git repo / error:** set `EXEC_DIR` = current project root.
+
+> **`EXEC_DIR` is a value you resolve once and substitute literally** into the paths below — it is *not* a shell variable that survives between separate commands (this harness doesn't persist shell state across tool calls). Read e.g. `<EXEC_DIR>/kit_tools/specs/.execution-state.json` using the actual absolute path. When you print commands or pause instructions for the user, use that absolute path so they're copy-pasteable from the main checkout.
 
 ---
 
 ## Step 1: Check for Active Execution
 
-Read `kit_tools/specs/.execution-state.json`:
+Read `"$EXEC_DIR/kit_tools/specs/.execution-state.json"`:
 
 - **Not found:** Clean up any leftover supervisor cron jobs (see Supervisor Cron Cleanup below), then report "No execution state found. Run `/kit-tools:execute-epic` to start." and stop.
 - **Found:** Continue to Step 2.
 
-Also read `kit_tools/specs/.execution-config.json` to get the `tmux_session` field (the session name used at launch). Check if it's alive:
-
-```bash
-tmux has-session -t {tmux_session} 2>/dev/null
-```
-
-If `tmux_session` is missing from the config (older runs), fall back to `kit-exec-{feature_name}` derived from the state file's `spec` field (strip the `feature-` or `prd-` prefix and `.md` suffix).
+The `census` from Step 0 already told you the tmux session name (`tmux` field) and whether it's alive (`tmux_alive`). For a legacy in-dir execution (no record), read `"$EXEC_DIR/kit_tools/specs/.execution-config.json"` for `tmux_session` and check `tmux has-session -t {tmux_session} 2>/dev/null`; if missing, fall back to `kit-exec-{feature_name}` derived from the state file's `spec` field.
 
 Record whether the session is running or not — this affects the status report.
 
@@ -45,7 +55,7 @@ Determine the effective status:
 | `failed` | — | **Failed** |
 | `paused` | — | **Paused** |
 
-Check for pause file: `kit_tools/.pause_execution` — if present, status is **Paused** regardless of state JSON.
+Check for pause file: `"$EXEC_DIR/kit_tools/.pause_execution"` — if present, status is **Paused** regardless of state JSON.
 
 > **Note:** Execution notifications are surfaced automatically via a `UserPromptSubmit` hook — when the orchestrator completes, fails, crashes, or pauses, you will see a summary the next time the user sends a message. The tmux session is cleaned up automatically on completion. This skill provides full details on demand.
 
@@ -107,7 +117,7 @@ If `state.specs` exists (epic mode), show a per-feature-spec progress table:
 
 ## Step 3: Recent Activity
 
-Read the last 20 lines of `kit_tools/EXECUTION_LOG.md` and display them under a "Recent Activity" heading. This shows the latest story attempts, pass/fail results, and any error messages.
+Read the last 20 lines of `"$EXEC_DIR/kit_tools/EXECUTION_LOG.md"` and display them under a "Recent Activity" heading. This shows the latest story attempts, pass/fail results, and any error messages.
 
 If the file doesn't exist, report "No execution log found."
 
@@ -115,13 +125,13 @@ If the file doesn't exist, report "No execution log found."
 
 ## Step 3b: Supervisor Assessment (monitoring mode only)
 
-Check `.execution-config.json` for `"monitor": true`. If not set, skip to Step 4.
+Check `"$EXEC_DIR/kit_tools/specs/.execution-config.json"` for `"monitor": true`. If not set, skip to Step 4.
 
 If monitoring is active **and** the orchestrator is running, read the health snapshot:
 
 ### Read Health Data
 
-Read `kit_tools/specs/.execution-health.json`. If missing, note "No health data yet — orchestrator may not have completed its first attempt" and skip to Step 4.
+Read `"$EXEC_DIR/kit_tools/specs/.execution-health.json"`. If missing, note "No health data yet — orchestrator may not have completed its first attempt" and skip to Step 4.
 
 ### Health Checks
 
@@ -146,7 +156,7 @@ Assess these conditions in order:
 
 ### Writing Control Actions
 
-When the supervisor decides to intervene, write the action to `kit_tools/specs/.execution-control.json`. The orchestrator reads and consumes this file between story attempts.
+When the supervisor decides to intervene, write the action to `"$EXEC_DIR/kit_tools/specs/.execution-control.json"`. The orchestrator reads and consumes this file between story attempts.
 
 **Split story format:**
 ```json
@@ -209,7 +219,7 @@ Present available actions based on current state using AskUserQuestion:
 
 ### If Running (tmux alive)
 
-- **Pause** — `touch kit_tools/.pause_execution` (pauses after current story completes)
+- **Pause** — `touch "$EXEC_DIR/kit_tools/.pause_execution"` (pauses after current story completes)
 - **Attach to tmux** — Print `tmux attach -t {tmux_session}` for user to run
 - **Refresh** — Re-read state and show updated status
 
@@ -217,23 +227,25 @@ Present available actions based on current state using AskUserQuestion:
 
 Warn: "The orchestrator crashed. The process exited unexpectedly."
 
+- **Reconcile the registry** (worktree executions only): if `KEY` is set and the record's status isn't already `crashed`, run `python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" set-status "$KEY" crashed` so the census stays truthful.
 - Clean up any leftover supervisor cron jobs (see Supervisor Cron Cleanup below) — the orchestrator isn't making progress, no reason to keep polling
 - **Resume execution** — Suggest running `/kit-tools:execute-epic` (it will detect the existing state, resume, and create a fresh supervisor cron if monitoring is re-enabled)
-- **Reset state** — Delete `.execution-state.json` to start fresh
-- **View log** — Show full `EXECUTION_LOG.md`
+- **Reset state** — Delete `"$EXEC_DIR/kit_tools/specs/.execution-state.json"` to start fresh
+- **View log** — Show full `"$EXEC_DIR/kit_tools/EXECUTION_LOG.md"`
 
 ### If Stale (tmux dead but status is `running`)
 
 Warn: "The orchestrator is not running but state shows `running`. The process may have crashed or been interrupted."
 
+- **Reconcile the registry** (worktree executions only): if `KEY` is set, run `python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" set-status "$KEY" crashed` — a dead orchestrator with `running` state is a crash by another name, and this keeps the registry/census accurate.
 - Clean up any leftover supervisor cron jobs (see Supervisor Cron Cleanup below) — there's nothing for the supervisor to watch
 - **Resume execution** — Suggest running `/kit-tools:execute-epic` (it will detect the existing state, resume, and create a fresh supervisor cron if monitoring is re-enabled)
-- **Reset state** — Delete `.execution-state.json` to start fresh
-- **View log** — Show full `EXECUTION_LOG.md`
+- **Reset state** — Delete `"$EXEC_DIR/kit_tools/specs/.execution-state.json"` to start fresh
+- **View log** — Show full `"$EXEC_DIR/kit_tools/EXECUTION_LOG.md"`
 
 ### If Paused
 
-- **Resume** — `rm kit_tools/.pause_execution`
+- **Resume** — `rm "$EXEC_DIR/kit_tools/.pause_execution"`
 - **Attach to tmux** — Print `tmux attach -t {tmux_session}` for user to run
 - **View findings** — If `.pause_execution` references `AUDIT_FINDINGS.md`, suggest reading it
 

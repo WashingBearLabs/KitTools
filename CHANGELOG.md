@@ -5,6 +5,26 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-06-04
+
+### Added
+
+- **Worktree isolation for autonomous execution** — Autonomous and guarded epic executions now run in a dedicated git **worktree** under `~/.kit/worktrees/<project-id>/<epic>/` instead of the user's live checkout. This fixes commit contamination (unrelated untracked files being scooped into autonomous commits) and checkout collisions when multiple lines of work happen in one repo at once (e.g. planning the next epic while one executes). Branch-per-epic is unchanged; what's added is *directory*-per-execution. Supervised mode is unaffected — it remains an in-session, single-writer flow in the main checkout.
+- **Execution registry** — A gitignored, file-per-execution registry at `<main-repo>/.kit/executions/<epic>.json` lets every skill find a running execution's worktree regardless of the directory it's invoked from. New `scripts/orchestrator/registry.py` (stdlib-only, with a CLI: `resolve-main`, `project-id`, `census`, `get`, `list`, `set-status`, `teardown`, `scrub-secrets`, `is-worktree`, `worktree-path`, and `provision-worktree` — which consolidates the deterministic launch mechanics, `git worktree add` + secret symlinking + registration, into one tested call so the skill doesn't orchestrate it through stateful shell) is the single source of truth for resolution. Project IDs are derived from the normalized `origin` remote (hashed) so two repos sharing a directory name don't collide.
+- **Worktree & environment contract** — `init-project` now creates a committed `kit_tools/worktree.yaml` (`root`, `env_bootstrap`, `env_link`, `cleanup_policy`). A fresh worktree runs the project's `env_bootstrap` commands and **symlinks** gitignored secret files listed in `env_link` (copy-fallback only where symlinks are unavailable, e.g. Windows, with scrub-on-teardown). Because the contract is committed, `execute-epic` **echoes the bootstrap commands and confirms** before running them.
+- **Safe worktree teardown & session reaping** — `complete-implementation` tears down a finished execution's worktree (from the main checkout) via `registry.py teardown`, which leans on git's own guards: `git worktree remove` refuses dirty trees and `git branch -d` refuses unmerged branches — both are then *kept and flagged* rather than destroyed. `close-session` reconciles all executions (reap finished/merged, prune orphans, keep-and-flag dirty/unmerged, leave running ones alone) — never auto-merges. `start-session` adds a non-destructive census that warns about collisions.
+
+### Changed
+
+- **`init-project` sets up git** — Now offers to `git init` a repository on `main` (with an initial commit) when one doesn't exist, instead of assuming it. Also owns git ignore-setup: adds a KitTools block to `.gitignore` (`.kit/` registry + transient execution state: `.execution-*.json`, `.pause_execution`, notifications, events log, scratchpad), written *before* the initial commit so transient state never lands in it. Previously KitTools assumed a git repo with a `main` branch already existed.
+- **Default-branch detection** — Worktree creation, branch-base verification, merge reconciliation, and the session census no longer hardcode `main`. They resolve the integration branch (`origin/HEAD` → local `main`/`master` → fallback `main`), so repos imported with a `master` (or other) default work correctly. KitTools-initialised repos still standardize on `main`.
+- **Pre-flight git gate & dependency warning** — `execute-epic` now checks for a git repo + at least one commit before launching (clear guidance instead of a late orchestrator abort), and warns when `env_bootstrap` is empty but the project has a dependency manifest (a fresh worktree won't have `node_modules`/`.venv`, so verification tests would fail). Teardown now also sweeps leaked `*-attempt-*` branches from crashed runs.
+- **Worktree-aware completion** — For worktree executions, `completion_strategy: "merge"` now merges **server-side** (push → `gh pr merge`) and never `git checkout main` in the worktree (which git would refuse). Legacy in-dir executions keep the original local-merge behavior. `execution-status` resolves the execution's worktree via the registry and reads state/log/health from there; on detecting a dead-but-`running` orchestrator it reconciles the registry status to `crashed`.
+
+### Notes
+
+- Fully backward compatible: legacy in-dir executions (no registry record / no `main_repo` in config) follow the original code paths untouched. To pick up worktree isolation in an existing project, update the plugin and re-run `/kit-tools:init-project` to add `kit_tools/worktree.yaml` and the `.gitignore` block.
+
 ## [2.5.0] - 2026-06-03
 
 ### Added

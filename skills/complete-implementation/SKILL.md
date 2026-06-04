@@ -7,7 +7,7 @@ description: Mark a feature spec as completed and archive it
 
 Mark a feature spec as completed and move it to the archive. Run when all user stories are implemented and verified.
 
-> **Note:** In autonomous/guarded mode, the orchestrator handles completion directly via the `completion_strategy` config option (`"pr"`, `"merge"`, or `"none"`). This skill is for manual/supervised use or as a fallback when the orchestrator's completion fails.
+> **Note:** In autonomous/guarded mode, the orchestrator handles completion directly via the `completion_strategy` config option (`"pr"`, `"merge"`, or `"none"`). For worktree-isolated executions, `"merge"` is performed **server-side** (push → `gh pr merge`) — the orchestrator never checks out main in its worktree. This skill is for manual/supervised use, for **tearing down the execution worktree** after a finished run (Step 8), or as a fallback when the orchestrator's completion fails.
 
 Read `REFERENCE.md` in this skill directory for epic handling details, PR formats, and edge cases.
 
@@ -82,17 +82,43 @@ Move to `kit_tools/specs/archive/`. Create directory if needed.
 
 ## Step 7: Clean up execution artifacts
 
-**Standalone or final epic feature spec:** Delete `.execution-state.json`, `.execution-config.json`, `.pause_execution`.
+First, determine how this execution ran. Resolve the registry record (`<key>` = epic name, or feature name for a standalone fallback):
 
-**Mid-epic feature spec:** Skip cleanup.
+```bash
+python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" get "<key>"
+```
+
+- **A record exists →** this was a worktree-isolated (autonomous/guarded) execution. Its `.execution-*` state files live *inside the worktree*, so removing the worktree (Step 8) cleans them up — don't hunt for them in the main checkout.
+  - **If you are running INSIDE the execution worktree** (check: `registry.py is-worktree` exits 0) — e.g. the orchestrator auto-invoked this skill during a single-spec run — do **NOT** remove the worktree (you can't delete your own cwd). Just mark the record completed and stop here; teardown happens later from the main checkout:
+    ```bash
+    python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" set-status "<key>" completed
+    ```
+- **No record (legacy / in-dir execution) →** delete `.execution-state.json`, `.execution-config.json`, `.pause_execution` from `kit_tools/specs/` as before.
+
+**Mid-epic feature spec:** Skip cleanup and teardown (later specs still need the branch/worktree).
 
 ---
 
-## Step 8: Feature branch
+## Step 8: Feature branch & worktree teardown
 
-- **Standalone:** Offer: create PR, merge to main, or leave
-- **Final epic:** Offer epic PR referencing all completed feature specs and checkpoint tags
-- **Mid-epic:** Skip branch handling
+Resolve the branch decision first, then tear down the worktree (teardown is safe — git refuses to remove a dirty tree or delete an unmerged branch).
+
+**Branch options:**
+- **Standalone:** Offer: create PR, merge to main, or leave as-is.
+- **Final epic:** Offer an epic PR referencing all completed feature specs and checkpoint tags.
+- **Mid-epic:** Skip branch handling and teardown.
+
+> For worktree executions, run `gh`/`git push` from the worktree path (resolve it from the record's `worktree` field), **not** the main checkout. Never `git checkout main` to merge a worktree branch — merge via `gh pr merge` or let the user merge from their own checkout.
+
+**Worktree teardown** (only when running from the **main checkout**, and only for standalone / final-epic completion — never mid-epic, never from inside the worktree):
+
+- If the user chose **PR** or **merge**, tear down now:
+  ```bash
+  python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" teardown "<key>"
+  ```
+  - **Exit 0** — worktree removed, the (merged) branch deleted, registry entry cleared. (An unmerged branch behind an open PR is kept and flagged — that's expected; the PR lives on the remote.)
+  - **Exit 3** — **kept and flagged.** The worktree had uncommitted/untracked work, or the branch was unmerged. Report the `messages` from the JSON output to the user verbatim. Do **not** force. Let them save/commit/merge, then re-run teardown (or, only on explicit say-so, `teardown --force` / `git branch -D`).
+- If the user chose **leave as-is**, do not tear down. Mark the record completed (`set-status "<key>" completed`) and tell them the worktree path so they can inspect it; `/kit-tools:close-session` will offer to reap it later.
 
 ---
 
@@ -110,7 +136,7 @@ If no, or if `BUMP_VERSION.md` doesn't exist, skip this step.
 
 ## Step 10: Summary
 
-Report: feature spec archived, completion stats, branch status, files updated, artifacts cleaned.
+Report: feature spec archived, completion stats, branch status, files updated, artifacts cleaned, and — for worktree executions — teardown outcome (worktree removed / kept-and-flagged with the reason).
 
 ### Next Steps
 

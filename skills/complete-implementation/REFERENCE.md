@@ -94,12 +94,37 @@ If file already exists in archive (shouldn't happen):
 
 ## Cleanup Artifacts
 
-**Standalone feature spec or final epic feature spec:**
+**Worktree-isolated execution (autonomous/guarded — has a `.kit/` registry record):**
+The `.execution-*` state files live inside the worktree, so worktree teardown
+(see Branch Options below) removes them. From inside the worktree, only
+`set-status <key> completed`; defer removal to the main checkout.
+
+**Legacy / in-dir execution (no registry record):**
 - Delete `kit_tools/specs/.execution-state.json`
 - Delete `kit_tools/specs/.execution-config.json`
 - Delete `kit_tools/.pause_execution`
 
 **Mid-epic feature spec:** Do NOT clean up — still needed for subsequent feature specs.
+
+---
+
+## Worktree Teardown (registry-backed executions)
+
+Run **only from the main checkout**, for standalone/final-epic completion:
+
+```bash
+python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" teardown "<key>"
+```
+
+The teardown sequence is `worktree remove` → `branch -d` → `worktree prune` →
+deregister, and it leans on git's own guards:
+
+| git guard | Effect |
+|-----------|--------|
+| `git worktree remove` (no `--force`) | Refuses a dirty/untracked worktree → kept + flagged |
+| `git branch -d` (lowercase) | Refuses an unmerged branch → kept + flagged (worktree may still be removed if its tree was clean) |
+
+Exit codes: `0` = cleaned; `3` = kept/flagged (surface `messages` to the user, never force); `1` = not a git repo. Force (`--force` / `git branch -D`) only on explicit human instruction.
 
 ---
 
@@ -125,3 +150,6 @@ Epic branch: epic/arxiv
 
 - **Autonomous mode** (auto-invoked): Note branch, user merges/PRs after review
 - **Supervised/manual mode**: Ask user
+
+> **Worktree branches:** push/PR from the worktree path, never `git checkout main`
+> in the worktree. After the branch decision, run worktree teardown (above).

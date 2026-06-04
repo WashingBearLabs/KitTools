@@ -20,6 +20,7 @@ Read `REFERENCE.md` in this skill directory for detailed schemas, token tables, 
 | `$CLAUDE_PLUGIN_ROOT/scripts/execute_orchestrator.py` | For autonomous/guarded | Python orchestrator script |
 
 **Creates:** `.execution-state.json`, `.execution-config.json`, `EXECUTION_LOG.md`
+**Creates (autonomous/guarded):** an isolated git worktree under `~/.kit/worktrees/<project-id>/<epic>/` and a registry entry in `.kit/executions/<epic>.json` (main checkout). The orchestrator runs in the worktree; your main checkout is left untouched.
 **Modifies:** Feature spec checkboxes (updated by orchestrator/skill after verification passes)
 
 ---
@@ -80,11 +81,13 @@ Skip this step for Supervised mode (the user is already present).
 
 After all stories pass and validation completes, how should the feature be finalized?
 
-- **A. Create PR** (recommended) — Push branch, create GitHub PR for review
-- **B. Merge to main** — Auto-merge to main and delete branch (blocked if validation finds critical issues)
-- **C. None** — Leave branch as-is, clean up tmux only
+- **A. Create PR** (recommended) — Push branch, create GitHub PR for review. **Needs a remote + authenticated `gh`.**
+- **B. Merge** — For worktree (autonomous/guarded) executions this is a **server-side merge** (push → `gh pr merge`), because the orchestrator can't safely check out the integration branch in its worktree. **It needs a remote + `gh`.** Blocked if validation finds critical issues.
+- **C. None** — Leave the branch as-is, clean up tmux only. The user merges/PRs it themselves later.
 
 Store as `completion_strategy` in `.execution-config.json`: `"pr"`, `"merge"`, or `"none"`. Default: `"pr"`.
+
+> **Local-only / no GitHub?** Both `pr` and worktree-`merge` require a remote + `gh`. If the project has no remote, they degrade to "branch pushed/left for manual merge" — which strands a novice. For a purely local repo, prefer **`none`**, and merge from your own checkout afterward (`git merge <epic-branch>`), or use `/kit-tools:complete-implementation` which can guide the merge. (Offline auto-merge into your live checkout is intentionally *not* done — that's the contamination worktree isolation prevents.)
 
 ---
 
@@ -125,11 +128,16 @@ Skip this step if the user just wants defaults — the orchestrator behaves the 
 
 ## Step 3: Pre-flight Checks
 
-Run checks and report pass/fail for each:
+**Git readiness (hard gate — check first).** Autonomous/guarded execution creates branches and worktrees off the integration branch, so before anything else:
+- `git rev-parse --git-dir` must succeed. If it fails, **stop** and tell the user this isn't a git repository — run `/kit-tools:init-project` (which can initialize one on `main`) or `git init` first. Don't attempt to launch; the orchestrator would just abort.
+- There must be at least one commit (`git rev-parse HEAD` succeeds) — a branch with no commits can't be branched into a worktree. If there are none, tell the user to make an initial commit.
+- Resolve the integration branch: `git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null` (remote default) else a local `main`/`master`. KitTools uses this automatically; just report it so the user knows what the epic branches from and merges into.
+
+Then run these checks and report pass/fail for each:
 
 1. **Session readiness** — `session_ready: true` in frontmatter
 2. **Dependency check** — `depends_on` feature specs archived
-3. **Clean working tree** — `git status --porcelain` empty
+3. **Specs committed** — The autonomous/guarded worktree is created from committed `main`, so uncommitted spec/doc edits won't reach it. **Supervised mode:** require a clean tree (`git status --porcelain` empty) as before, since it runs in the main checkout. **Autonomous/guarded mode:** the main checkout no longer needs to be clean (the orchestrator runs in a separate worktree), but the selected `epic-*.md` / `feature-*.md` and the `kit_tools/` context docs **must be committed** — warn and offer to commit if `git status --porcelain` shows uncommitted changes to those files.
 4. **Uncompleted stories** — At least one story with unchecked criteria
 5. **No concurrent execution** — State not `running`
 6. **Branch base** — New branch from `main`, or existing branch based on `main`
@@ -144,12 +152,50 @@ Run checks and report pass/fail for each:
 
 ---
 
-## Step 4: Git Branch Setup
+## Step 4: Working Directory & Branch Setup
 
+Branch naming (all modes):
 - **Epic feature spec:** Branch `epic/[epic-name]`
 - **Standalone feature spec (fallback):** Branch `feature/[feature-name]`
 
-Create new or checkout existing. Feature/epic name from feature spec frontmatter.
+The *working directory* depends on mode.
+
+### Supervised mode — main checkout (unchanged)
+
+Supervised execution runs in **this** session — you are the single writer — so it works directly in the main checkout, as before. Create the branch new (`git checkout -b epic/[name] main`) or check out the existing branch. Skip the rest of this step.
+
+### Autonomous / Guarded mode — isolated worktree
+
+Autonomous and guarded modes spawn a background orchestrator: a **second writer** in the repo. Sharing the user's live directory is exactly what caused commit contamination (unrelated untracked files scooped into a commit) and checkout collisions. So the orchestrator runs in its own **git worktree**.
+
+The deterministic git/registry mechanics (resolve main → `git worktree add` → symlink secrets → register) are done in **one tested command**, `registry.py provision-worktree`, so this skill doesn't orchestrate them through fragile multi-step shell. The only parts that stay here are the genuinely project-specific ones: reading the contract and the **echo-and-confirm gate** for bootstrap commands.
+
+1. **Read the contract** `kit_tools/worktree.yaml` (created by `init-project`) for `root`, `env_bootstrap`, `env_link`. If it's missing (older project), use empty bootstrap/link and the default root, and suggest the user run `/kit-tools:init-project` to add it. Let `<key>` = the epic name (or feature name in standalone fallback).
+
+   **⚠️ Dependency reality check.** A fresh worktree does **not** inherit gitignored files — `.venv`, `node_modules`, build outputs are absent. If `env_bootstrap` is **empty** *and* the repo has a dependency manifest (`package.json`, `pyproject.toml`, `requirements.txt`, `Cargo.toml`, `go.mod`, `Gemfile`, …), the worktree won't have installed dependencies and **verification tests will fail with import/module errors**. Warn the user and recommend they add the install command(s) to `env_bootstrap` in `kit_tools/worktree.yaml` (e.g. `uv sync`, `npm install` — KitTools is language-agnostic, so the command is theirs to specify). Ask whether to proceed anyway (fine for dependency-free projects or vendored deps).
+
+2. **Derive the tmux session name** now: `kit-exec-<key>`. Check for a collision — `tmux has-session -t kit-exec-<key> 2>/dev/null`; if it exists, **do NOT kill it** (another execution may own it) — append a suffix (`-2`) or ask the user. You'll pass the final name to provisioning so the registry record carries it.
+
+3. **Echo & confirm `env_bootstrap` — SECURITY GATE.** If `env_bootstrap` is non-empty, those commands run shell in the new worktree. Because the contract is committed (PR-mutable), surface them before anything runs:
+   > These bootstrap commands from `kit_tools/worktree.yaml` will run in the new worktree:
+   >   - `<command 1>`
+   >   - `<command 2>`
+   - **Guarded:** require explicit confirmation before proceeding.
+   - **Autonomous:** log the exact commands prominently to `EXECUTION_LOG.md` and proceed (trusted contract, but never run hidden).
+
+4. **Provision the worktree** — one call creates the worktree (new branch or resume), symlinks each `env_link` secret (copy-fallback where symlinks are unavailable), and registers the execution:
+   ```bash
+   python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" provision-worktree \
+     "<key>" --branch "epic/<key>" --mode "<autonomous|guarded>" --tmux "kit-exec-<key>" \
+     [--root "<contract root>"] [--link ".env" --link ".env.vault"]
+   ```
+   It prints JSON: `{worktree, branch, created, linked, copied, skipped, registered, messages}`. **Read the `worktree` value from that JSON and use it as a literal absolute path in every later command** (do not rely on a shell variable surviving between commands — it won't). If `created` is `false` (e.g. the branch is already checked out in another worktree → a live execution), **stop and report** the `messages`; don't force.
+
+5. **Bootstrap env:** run each confirmed `env_bootstrap` command with cwd = the worktree path from step 4, in order, stopping at the first failure. On failure, warn that the worktree may not be runnable (verification could fail) and ask whether to continue. (Provisioning records `env_link` in the registry so teardown/close-session can scrub copied secrets later — a no-op for symlinks.)
+
+> From here on the orchestrator's working directory is the provisioned worktree. The user keeps working in the main checkout, undisturbed, and finds the execution via the `.kit/` registry.
+
+**Legacy / in-flight executions:** if `.execution-state.json` shows `status: running` but there is **no** registry entry (`registry.py get <key>` returns nothing), this is a pre-worktree execution started by an older KitTools. Do **not** launch a second one — report it and let it finish (or have the user stop it) before starting a worktree-isolated run.
 
 ---
 
@@ -196,31 +242,35 @@ For each uncompleted story:
 
 ### Autonomous/Guarded Mode
 
-1. Write `.execution-config.json` using a Python inline script that reads the agent templates via Python file I/O — **never use shell heredocs or `$(cat ...)` substitution to embed template content** (single-quoted heredocs suppress expansion; double-quoted heredocs break on special characters). See REFERENCE.md for the schema and the correct creation pattern.
+> The worktree was created in Step 4. The config below is written **into the worktree** (`<worktree>/kit_tools/specs/.execution-config.json`) and its `project_dir` points there, so the orchestrator operates entirely inside the worktree.
+
+> Use the **literal absolute worktree path** from Step 4's `provision-worktree` JSON (shown as `<worktree>` below) and the main checkout from `resolve-main` (`<main>`). Don't rely on shell variables persisting between commands.
+
+1. Write `.execution-config.json` using a Python inline script that reads the agent templates via Python file I/O — **never use shell heredocs or `$(cat ...)` substitution to embed template content** (single-quoted heredocs suppress expansion; double-quoted heredocs break on special characters). Pass the script `<worktree>` (as `project_dir`) and `<main>` (as `main_repo`); it writes the config into the worktree. Registration already happened in Step 4 (provision-worktree). The tmux session name (step 3) must match what you passed to `--tmux` at provision time. See REFERENCE.md for the schema and creation pattern.
 2. Check for tmux: `which tmux`
-3. **Derive tmux session name:** `kit-exec-{epic_name}` (e.g., `kit-exec-oauth`, `kit-exec-auth`). Store as `tmux_session` in `.execution-config.json`.
-4. **Check for name collision:** Run `tmux has-session -t {session_name} 2>/dev/null`. If it exists, **do NOT kill it** — warn the user and append a short suffix (e.g., `-2`) or ask them to choose a name.
-5. **If tmux available:** Launch orchestrator in a detached tmux session:
+3. **tmux session name:** reuse the `kit-exec-<key>` name you chose and passed to `provision-worktree --tmux` in Step 4 (collision already handled there). Set it as `tmux_session` in the config so it matches the registry record.
+4. **If tmux available:** Launch the orchestrator in a detached tmux session whose working directory is the worktree (`-c <worktree>`):
    ```bash
-   tmux new-session -d -s {session_name} \
+   tmux new-session -d -s {session_name} -c "<worktree>" \
      "unset CLAUDECODE; python3 \"$CLAUDE_PLUGIN_ROOT/scripts/execute_orchestrator.py\" \
-     --config \"$(pwd)/kit_tools/specs/.execution-config.json\""
+     --config \"<worktree>/kit_tools/specs/.execution-config.json\""
    ```
    The orchestrator kills its own tmux session on completion. Progress is reported to the parent Claude session via file-based notifications (surfaced on the user's next prompt).
-6. **If no tmux:** Print the command for the user to run in a separate terminal:
+5. **If no tmux:** Print the command for the user to run in a separate terminal (use the resolved absolute worktree path):
    ```
    Run this in a separate terminal window:
 
+   cd "<worktree_path>" && \
    python3 "<plugin_root>/scripts/execute_orchestrator.py" \
-     --config "<project_dir>/kit_tools/specs/.execution-config.json"
+     --config "<worktree_path>/kit_tools/specs/.execution-config.json"
    ```
-7. Report monitoring commands (using the actual session name):
-   - `/kit-tools:execution-status` — check progress, errors, and available actions
+6. Report monitoring commands. The state/log/pause files live in the worktree, so prefer the registry-resolved status skill; print absolute worktree paths for the raw commands:
+   - `/kit-tools:execution-status` — check progress, errors, and available actions (resolves the worktree via the registry — run from anywhere)
    - `tmux attach -t {session_name}` — attach to watch live output
-   - `tail -f kit_tools/EXECUTION_LOG.md` — follow the execution log
-   - `cat kit_tools/specs/.execution-state.json` — check current state
-   - `touch kit_tools/.pause_execution` — pause after current story
-8. **If `monitor: true` in config:** Set up the supervisor loop using CronCreate:
+   - `tail -f "<worktree_path>/kit_tools/EXECUTION_LOG.md"` — follow the execution log
+   - `cat "<worktree_path>/kit_tools/specs/.execution-state.json"` — check current state
+   - `touch "<worktree_path>/kit_tools/.pause_execution"` — pause after current story
+7. **If `monitor: true` in config:** Set up the supervisor loop using CronCreate:
    ```
    CronCreate(cron: "*/30 * * * *", prompt: "/kit-tools:execution-status", recurring: true)
    ```

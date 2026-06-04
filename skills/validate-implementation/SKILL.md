@@ -29,18 +29,36 @@ Read `REFERENCE.md` in this skill directory for detailed finding formats, agent 
 
 ---
 
+## Step 0: Resolve the working directory
+
+Autonomous/guarded executions run in an isolated worktree. Determine where to validate:
+
+```bash
+python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" census
+```
+
+- **Orchestrator-invoked** (the common case): you are already running with the worktree as your cwd — set `EXEC_DIR` = `.` (the current directory) and proceed. `git diff main...HEAD` is correct here because HEAD is the feature branch in this worktree.
+- **Manual invocation from the main checkout, and a census record matches this feature:** the branch's work lives in that record's `worktree`, not your cwd (`main...HEAD` would be empty). Set `EXEC_DIR` = the record's `worktree` and run all git/diff/agent steps **there** (or diff `main...<record.branch>`).
+- **No record (supervised/manual in-dir):** set `EXEC_DIR` = current project root and proceed as before.
+
+Every `kit_tools/...` path and git command below runs relative to `EXEC_DIR`. Resolve it once and substitute the **literal absolute path** into each command — it isn't a shell variable that persists between separate command invocations.
+
+---
+
 ## Step 1: Identify Feature
 
-Determine feature spec from argument, `.execution-state.json`, or by listing active feature specs.
+Determine feature spec from argument, `$EXEC_DIR/kit_tools/specs/.execution-state.json`, or by listing active feature specs.
 Read full feature spec: overview, stories, criteria, out of scope, tech considerations.
 
 ---
 
 ## Step 2: Get Branch Diff
 
+Run from `EXEC_DIR` (in the worktree, HEAD is the feature branch):
+
 ```bash
-git diff main...HEAD           # Full diff
-git diff main...HEAD --name-only  # File list
+git -C "$EXEC_DIR" diff main...HEAD              # Full diff
+git -C "$EXEC_DIR" diff main...HEAD --name-only  # File list
 ```
 
 If diff is empty, report and stop.
@@ -104,7 +122,7 @@ Reviews:
 
 All findings arrive in the same shape (unified Finding Schema), so merging them is straightforward: concatenate each review's `findings[]` array, tagging each entry with its `review_type` so later presentation can group by source. Assign IDs: `YYYY-MM-DD-NNN`.
 
-### Determine mode from `.execution-state.json` (default: supervised).
+### Determine mode from `$EXEC_DIR/kit_tools/specs/.execution-state.json` (default: supervised).
 
 ### Fix critical findings:
 - **Autonomous:** Spawn fixer agent
@@ -134,7 +152,7 @@ Report: branch, files changed, validation loops, finding counts by severity.
 ### Pause on critical findings (autonomous mode only)
 
 If autonomous mode AND critical findings remain:
-1. Create `kit_tools/.pause_execution` referencing finding count
+1. Create `$EXEC_DIR/kit_tools/.pause_execution` referencing finding count (the orchestrator watches the worktree's copy)
 2. Orchestrator waits until file removed
 
 **No pause for:** supervised/guarded mode, manual invocation, warning/info-only findings.

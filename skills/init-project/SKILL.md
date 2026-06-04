@@ -19,9 +19,12 @@ This skill requires the following plugin components:
 
 **Creates in project:**
 - `kit_tools/` directory with selected templates
+- `kit_tools/worktree.yaml` — worktree & environment contract (committed)
 - `hooks/` directory with Python automation scripts
 - `.claude/settings.local.json` with hook configuration
 - `CLAUDE.md` with scratchpad instructions
+- A git repository on `main` (with an initial commit) if one didn't exist — offered, not forced
+- `.gitignore` entries for transient execution state and the `.kit/` registry
 
 ## Arguments
 
@@ -66,6 +69,12 @@ Hooks to install (7 files in kit_tools/hooks/):
 
 Settings to create/update:
   - .claude/settings.local.json (hooks configuration)
+
+Contract:
+  - kit_tools/worktree.yaml (worktree & environment contract)
+
+.gitignore:
+  - Will add a KitTools block (.kit/ registry + transient execution state)
 
 CLAUDE.md:
   - Will be created with scratchpad instructions
@@ -244,6 +253,7 @@ Based on selection, include these templates:
 - specs/FEATURE_SPEC.md
 - specs/EPIC.md
 - PRODUCT_VISION.md
+- worktree.yaml (worktree & environment contract — see Step 8)
 
 **API/Backend adds:**
 - arch/DATA_MODEL.md
@@ -465,7 +475,58 @@ Keep notes terse — one line plus optional details. This file survives context 
 
 If `CLAUDE.md` already exists, append the scratchpad section if it's not already present.
 
-## Step 8: Validate setup
+## Step 8: Set up git & configure .gitignore
+
+KitTools needs a git repository: session tracking reports git status, and autonomous execution creates branches, commits, and worktrees off the **`main`** branch. This step makes sure git is actually set up (not just assumed) and writes the ignore rules — it's the one place in the workflow that owns git setup.
+
+### 8a: Ensure a git repository exists (on `main`)
+
+Run `git rev-parse --git-dir` to check. 
+
+**If it's already a git repo:** note the integration branch — `git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null` (remote default), else current branch. If it's not `main` (e.g. `master` or a feature branch), that's fine — KitTools detects and uses it — but mention it so the user knows what epics will branch from and merge into.
+
+**If it's NOT a git repo**, KitTools can't track sessions or run autonomous execution. Offer to initialize one:
+
+> This folder isn't a git repository yet. KitTools needs git for session tracking and autonomous execution. Want me to initialize one now (on a `main` branch, with an initial commit)?
+
+If the user agrees, do this **after writing `.gitignore` in 8b** (so the first commit respects the ignore rules):
+
+```bash
+git init
+git add -A
+git commit -m "Initial commit"
+git branch -M main          # standardize on main (no-op if already main)
+```
+
+Report what was committed (and that `.gitignore` kept transient state out). If the user declines, warn clearly: `/kit-tools:execute-epic` and session git-health checks won't work until they run `git init` themselves — and recommend they do so on a `main` branch.
+
+### 8b: Configure .gitignore
+
+KitTools writes transient runtime files that must **never** be committed: execution state/config, the pause file, notifications, the events log, the session scratchpad, and — for worktree-isolated execution — the `.kit/` registry that points at active execution worktrees.
+
+1. If a `.gitignore` exists at the project root, read it. If not, you'll create one.
+2. Append a clearly-delimited KitTools block containing **only the entries not already present** (don't duplicate lines the project already ignores, and never remove existing entries):
+
+```gitignore
+# --- KitTools (transient runtime state — do not commit) ---
+.kit/
+kit_tools/specs/.execution-config.json
+kit_tools/specs/.execution-state.json
+kit_tools/specs/.execution-health.json
+kit_tools/specs/.execution-control.json
+kit_tools/.pause_execution
+kit_tools/.execution-notifications
+kit_tools/.execution-events.jsonl
+kit_tools/SESSION_SCRATCH.md
+# --- end KitTools ---
+```
+
+3. **`kit_tools/worktree.yaml` is committed, not ignored** — it is the shared team contract (see the template's header for the security rationale). Do not add it to `.gitignore`.
+4. If the user configured an in-repo `worktree.root` in `kit_tools/worktree.yaml` (uncommon — the default lives outside the repo at `~/.kit/worktrees/`), also add that path to `.gitignore` so worktree checkouts aren't tracked.
+
+> Sequence matters: write `.gitignore` (8b) **before** the initial commit (8a) so transient state and the worktree registry never land in the first commit.
+
+## Step 9: Validate setup
 
 Run a quick validation to ensure everything is in place:
 
@@ -476,10 +537,13 @@ Run a quick validation to ensure everything is in place:
 - [ ] No obvious errors in template copying
 - [ ] `kit_tools/hooks/` directory exists with all 7 Python scripts
 - [ ] `.claude/settings.local.json` exists with hooks configured using `$CLAUDE_PROJECT_DIR/kit_tools/hooks/` paths
+- [ ] `kit_tools/worktree.yaml` exists (worktree & environment contract)
+- [ ] `.gitignore` contains the KitTools block (`.kit/` + transient execution state)
+- [ ] This is a git repository (`git rev-parse --git-dir` succeeds) with at least one commit — or the user explicitly declined and was warned that execution needs git
 
 **Report any issues** — if validation finds problems, list them clearly.
 
-## Step 9: Summary
+## Step 10: Summary
 
 Report to the user:
 
@@ -489,6 +553,9 @@ Report to the user:
 - Whether patterns were included
 - Hooks installed (list the 4 automation hooks)
 - Whether CLAUDE.md was created/updated
+- That `kit_tools/worktree.yaml` was created (note it's committed; mention they can set `env_bootstrap`/`env_link` if execute-epic worktrees need deps or secrets)
+- Git status: whether a repo was initialized (and on `main`) or already existed, and the detected integration branch if not `main`
+- That `.gitignore` was updated with the KitTools transient-state block
 - Validation status (pass/issues found)
 
 **Remind the user:**

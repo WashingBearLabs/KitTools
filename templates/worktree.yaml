@@ -1,0 +1,49 @@
+# Template Version: 1.0.0
+#
+# KitTools worktree & environment contract.
+#
+# When you run `/kit-tools:execute-epic`, the orchestrator no longer runs in
+# your live checkout. It creates a dedicated git worktree (a second working
+# directory on the epic branch) so concurrent work — you planning the next
+# epic while an execution runs — never shares one physical directory and can't
+# contaminate each other's commits.
+#
+# A fresh worktree shares git history but NOT your gitignored working files
+# (.venv, node_modules, .env). This file is the per-project contract that makes
+# a new worktree runnable. It is COMMITTED so your whole team shares it.
+#
+# SECURITY NOTE: `env_bootstrap` commands are executed by the orchestrator.
+# Because this file is committed, treat it as trusted input — review changes to
+# it in PRs as carefully as you would a CI config. `execute-epic` echoes these
+# commands and asks you to confirm (supervised) or logs them prominently
+# (autonomous) before running them.
+
+# Where execution worktrees are created. Leave blank to use the default,
+# ~/.kit/worktrees/<project-id>/  (tidy, out of your repo, one cleanup point).
+# Set an absolute or ~-relative path to override.
+root:
+
+# Ordered shell commands that make a fresh worktree runnable. Run with the
+# worktree as the working directory. Execution stops at the first failure.
+# Examples (uncomment / adapt to your stack):
+# env_bootstrap:
+#   - uv sync --extra dev
+#   - pnpm install
+env_bootstrap: []
+
+# Gitignored config/secret files to make available inside the worktree.
+# Each path is relative to the repo root. KitTools SYMLINKS these (no secret is
+# ever duplicated outside the repo); it only copies where symlinks are
+# unavailable, and scrubs any copy on teardown.
+# Example:
+# env_link:
+#   - .env
+#   - .env.vault
+env_link: []
+
+# What to do with the worktree when an execution finishes:
+#   remove-on-success  (default) — remove the tree on a clean finish; keep it
+#                                   on failure so you can debug.
+#   remove-always                 — always remove (no post-mortem).
+#   keep-always                   — never auto-remove; you clean up manually.
+cleanup_policy: remove-on-success

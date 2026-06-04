@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KitTools v2.5.0 — AI-Assisted Development Framework</title>
+  <title>KitTools v2.6.0 — AI-Assisted Development Framework</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap" rel="stylesheet">
@@ -911,9 +911,10 @@
       <div class="phase-body">
         <div class="step">
           <div class="step-cmd"><span class="step-cmd-text">/kit-tools:init-project</span></div>
-          <div class="step-desc">Select project type (API, Web App, Full Stack, CLI, Library, Mobile) — scaffolds the <code>kit_tools/</code> directory with tailored templates.</div>
+          <div class="step-desc">Select project type (API, Web App, Full Stack, CLI, Library, Mobile) — scaffolds the <code>kit_tools/</code> directory with tailored templates. Sets up git (offers to <code>git init</code> on <code>main</code> if needed) and writes <code>.gitignore</code> rules for transient execution state.</div>
           <div class="badges">
             <span class="badge-out">kit_tools/ scaffold</span>
+            <span class="badge-out">git + .gitignore</span>
             <span class="badge-out">CLAUDE.md</span>
           </div>
         </div>
@@ -1079,7 +1080,7 @@
       <div class="phase-body">
         <div class="step">
           <div class="step-cmd"><span class="step-cmd-text">/kit-tools:execute-epic</span></div>
-          <div class="step-desc">Select epic, choose mode, launch. Optional supervisor monitoring checks health every 30 min and can split stories, restart, or pause. Adaptive timeouts, pre-flight checks, structured retry context, and cross-story regression detection.</div>
+          <div class="step-desc">Select epic, choose mode, launch. Autonomous &amp; guarded runs execute in an isolated <strong>git worktree</strong> (under <code>~/.kit/worktrees/</code>) so the background orchestrator never touches your live checkout — work in your repo undisturbed while an epic runs. Optional supervisor monitoring checks health every 30 min and can split stories, restart, or pause. Adaptive timeouts, pre-flight checks, structured retry context, and cross-story regression detection.</div>
           <div class="modes-row" style="margin-top: 6px;">
             <span class="mode-badge supervised">Supervised</span>
             <span class="mode-badge autonomous">Autonomous</span>
@@ -1163,11 +1164,11 @@
       <div class="phase-body">
         <div class="step">
           <div class="step-cmd"><span class="step-cmd-text">/kit-tools:complete-implementation</span></div>
-          <div class="step-desc">Archive completed feature specs, create PR or merge to main, clean up execution artifacts.</div>
+          <div class="step-desc">Archive completed feature specs, create PR or merge, and safely tear down the execution worktree (git's own guards keep dirty/unmerged work — never destroyed). Cleans up execution artifacts.</div>
           <div class="badges">
             <span class="badge-out">specs/archive/</span>
             <span class="badge-out">GitHub PR</span>
-            <span class="badge-out">merge to main</span>
+            <span class="badge-out">worktree teardown</span>
           </div>
         </div>
         <div class="feedback-banner loop-back">

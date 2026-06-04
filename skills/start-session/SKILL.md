@@ -73,6 +73,23 @@ Flag any of these to the user and let them decide how to proceed:
 
 Do not take any git actions automatically — just report and let the user choose. If everything is clean, say so and move on.
 
+## Step 1b: Execution worktree census
+
+Autonomous/guarded epics run in isolated worktrees. Take a quick census so you know what's live and warn about collisions — **report only, don't reap here** (cleanup belongs to `/kit-tools:close-session`):
+
+```bash
+python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" census
+```
+
+If it returns records, summarize them and act on `disposition`:
+
+- **`active`** — an orchestrator is running in that worktree on its branch. **Collision warning:** you're in the main checkout (safe), but tell the user *not* to `git checkout <branch>` here — git will refuse (the branch is checked out in the worktree), and it would disrupt the running execution. Point them at `/kit-tools:execution-status` to monitor it.
+- **`reapable`** — finished, clean, merged. Note it and suggest: "Run `/kit-tools:close-session` to clean up finished worktrees."
+- **`flag`** — needs attention (uncommitted/untracked work, an unmerged branch, or a crash). Surface it clearly so the work isn't forgotten; don't touch it.
+- **`orphan`** — registry entry whose worktree directory is gone (stale). Note it; `/kit-tools:close-session` will prune it.
+
+If census returns `[]` or this isn't a git repo, skip silently.
+
 ## Step 2: Create fresh scratchpad
 
 Create `kit_tools/SESSION_SCRATCH.md` with this content:
@@ -159,6 +176,7 @@ Once oriented, provide a quick summary of:
 - Current project status (from SYNOPSIS.md)
 - **Active feature specs and their progress** (list each with story completion count, e.g., "feature-auth.md: 3/5 stories complete")
 - Milestone progress from MILESTONES.md
+- **Execution worktrees** (if any): live executions to leave alone, plus any finished/flagged/orphaned trees worth cleaning via `/kit-tools:close-session`
 - Open audit findings count (N critical, N warning, N info) — if any exist
 - Any concerns or inconsistencies noticed
 

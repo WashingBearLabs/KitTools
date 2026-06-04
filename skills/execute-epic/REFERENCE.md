@@ -92,11 +92,19 @@ When `epic_specs` is present, the orchestrator runs in epic mode. When absent, i
 
 The correct approach reads agent templates via Python file I/O:
 
+> **Registration happens in Step 4, not here.** For autonomous/guarded mode,
+> `registry.py provision-worktree` already created the worktree and registered
+> the execution (with `env_link` recorded). This script only writes the config
+> file into that worktree. Pass `project_dir` = the `worktree` path returned by
+> provisioning, and `main_repo` = the main checkout. (Supervised mode: pass the
+> main checkout for both; there's no worktree and nothing to register.)
+
 ```python
 import json, os, sys
 
 plugin_root = sys.argv[1]   # passed as first argument from the skill
-project_dir = sys.argv[2]   # absolute path to the project
+project_dir = sys.argv[2]   # WORKTREE path (from provision-worktree) for autonomous/guarded; main checkout for supervised
+main_repo   = sys.argv[3]   # main checkout (== project_dir in supervised mode)
 
 with open(f"{plugin_root}/agents/story-implementer.md") as f:
     impl_template = f.read()
@@ -105,7 +113,8 @@ with open(f"{plugin_root}/agents/story-verifier.md") as f:
 
 config = {
     # --- fill remaining fields from skill context ---
-    "project_dir": project_dir,
+    "project_dir": project_dir,     # the orchestrator runs here (the worktree)
+    "main_repo": main_repo,         # where the .kit/ registry lives (Phase 1+)
     "mode": "autonomous",           # or "guarded"
     "max_retries": None,
     "tmux_session": "kit-exec-<name>",
@@ -135,7 +144,10 @@ config = {
     # "epic_specs": [...]
 }
 
+# Config lives inside the worktree (project_dir), so the orchestrator finds it
+# regardless of the user's cwd in the main checkout.
 output_path = f"{project_dir}/kit_tools/specs/.execution-config.json"
+os.makedirs(os.path.dirname(output_path), exist_ok=True)
 with open(output_path, "w") as f:
     json.dump(config, f, indent=2)
 
@@ -146,11 +158,16 @@ print(f"Config written to {output_path}")
 
 Write the script to a temp file, then execute it — avoid inline `-c` strings for multi-line scripts:
 
+Substitute **literal absolute paths** for the two arguments — the worktree path is the `worktree` field from the `provision-worktree` JSON (Step 4), and the main checkout is `registry.py resolve-main`. Don't rely on shell variables set in an earlier command; they don't persist between separate command invocations.
+
 ```bash
 cat > /tmp/kit_write_config.py << 'PYEOF'
 <script content — safe because PYEOF wraps Python source, not file contents>
 PYEOF
-python3 /tmp/kit_write_config.py "$CLAUDE_PLUGIN_ROOT" "$(pwd)"
+# Autonomous/guarded: <worktree> = provision-worktree's `worktree`, <main> = resolve-main.
+python3 /tmp/kit_write_config.py "$CLAUDE_PLUGIN_ROOT" "<worktree>" "<main>"
+# Supervised: no worktree — pass the main checkout for both.
+#   python3 /tmp/kit_write_config.py "$CLAUDE_PLUGIN_ROOT" "<main>" "<main>"
 rm /tmp/kit_write_config.py
 ```
 
@@ -347,32 +364,46 @@ Claude Code prevents running `claude -p` from within an existing Claude session 
 
 ### Launch command
 
+The config lives **inside the worktree** and its `project_dir` points there, so
+the orchestrator's working directory must be the worktree. Substitute the
+literal absolute worktree path (`provision-worktree`'s `worktree` field) for
+`<worktree>` — shell variables don't persist between separate commands:
+
 ```bash
-tmux new-session -d -s {session_name} \
+tmux new-session -d -s {session_name} -c "<worktree>" \
   "unset CLAUDECODE; python3 \"$CLAUDE_PLUGIN_ROOT/scripts/execute_orchestrator.py\" \
-  --config \"$(pwd)/kit_tools/specs/.execution-config.json\""
+  --config \"<worktree>/kit_tools/specs/.execution-config.json\""
 ```
+
+(Supervised fallback, no worktree: use `$(pwd)` for `-c` and the config path.)
 
 ### Fallback (no tmux)
 
 If `which tmux` fails, print a copy-pasteable command for the user to run in a separate terminal window. Use the actual resolved paths (not environment variables) so the command works standalone:
 
 ```
+cd "/resolved/worktree/path" && \
 python3 "/resolved/plugin/root/scripts/execute_orchestrator.py" \
-  --config "/resolved/project/dir/kit_tools/specs/.execution-config.json"
+  --config "/resolved/worktree/path/kit_tools/specs/.execution-config.json"
 ```
 
 ### Monitoring commands
 
-After launching, report these to the user (using the actual session name):
+After launching, report these to the user (using the actual session name and
+resolved worktree path). The execution's state/log/pause files live **inside
+the worktree**, not the user's main checkout — `/kit-tools:execution-status`
+resolves this automatically via the registry, so prefer it for monitoring:
 
 | Command | Purpose |
 |---------|---------|
-| `/kit-tools:execution-status` | Full status report with progress, errors, and actions |
+| `/kit-tools:execution-status` | Full status report with progress, errors, and actions (registry-resolved — run from anywhere) |
 | `tmux attach -t {session_name}` | Attach to watch live output |
-| `tail -f kit_tools/EXECUTION_LOG.md` | Follow the execution log |
-| `cat kit_tools/specs/.execution-state.json` | Check current state |
-| `touch kit_tools/.pause_execution` | Pause after current story |
+| `tail -f "<worktree>/kit_tools/EXECUTION_LOG.md"` | Follow the execution log |
+| `cat "<worktree>/kit_tools/specs/.execution-state.json"` | Check current state |
+| `touch "<worktree>/kit_tools/.pause_execution"` | Pause after current story |
+
+(Substitute the resolved absolute worktree path for `<worktree>` when you print
+these, so they're copy-pasteable from the main checkout.)
 
 ---
 

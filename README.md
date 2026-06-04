@@ -127,6 +127,7 @@ kit-tools provides 30 documentation templates organized by category:
 - `TROUBLESHOOTING.md` — Common issues and solutions
 - `TESTING_GUIDE.md` — Testing strategy and patterns
 - `PRODUCT_VISION.md` — Product vision (via create-vision)
+- `worktree.yaml` — Worktree & environment contract for autonomous execution
 - `specs/*` — Feature specs and epics
 - `roadmap/*` — Milestone tracking and backlog
 
@@ -154,6 +155,7 @@ your-project/
 │   ├── PRODUCT_VISION.md    # Product vision (populate via create-vision)
 │   ├── SESSION_LOG.md       # Session history
 │   ├── AUDIT_FINDINGS.md    # Code quality findings
+│   ├── worktree.yaml        # Worktree & environment contract
 │   ├── arch/                # Architecture docs
 │   ├── docs/                # Operational docs
 │   ├── testing/             # Testing docs
@@ -277,7 +279,15 @@ Three execution modes:
 
 For autonomous and guarded modes, optional **supervisor monitoring** keeps the launching Claude session active, checking health every 30 minutes. The supervisor can split oversized stories, restart crashed orchestrators, and pause on repeated failures — all through JSON file communication (no system permissions needed).
 
-Autonomous execution uses git branch isolation (`feature/[feature-name]`), independent story verification, and a pause mechanism (`touch kit_tools/.pause_execution`). Progress is tracked in `kit_tools/EXECUTION_LOG.md` and feature spec checkboxes.
+Autonomous execution uses git branch isolation (`epic/[epic-name]`), independent story verification, and a pause mechanism (`touch kit_tools/.pause_execution`). Progress is tracked in `kit_tools/EXECUTION_LOG.md` and feature spec checkboxes.
+
+#### Worktree isolation
+
+Autonomous and guarded executions run in a dedicated **git worktree** (under `~/.kit/worktrees/<project-id>/<epic>/`), not your live checkout — so the background orchestrator never shares a working directory with you. You can keep editing, planning the next epic, or running another execution in the same repo without contaminating each other's commits or fighting over checked-out branches. A gitignored `.kit/` registry tracks running executions so `/kit-tools:execution-status`, `/kit-tools:close-session`, and friends find them from anywhere.
+
+Each project carries a committed `kit_tools/worktree.yaml` contract: where worktrees live, the `env_bootstrap` commands that make a fresh worktree runnable (e.g. `uv sync`, `pnpm install`), and the gitignored secret files (`env_link`, e.g. `.env`) to symlink in. When a run finishes, `/kit-tools:complete-implementation` and `/kit-tools:close-session` safely tear down merged worktrees and flag (never destroy) any with unmerged or uncommitted work.
+
+> **Supervised mode** is unaffected — it's an in-session, single-writer flow that runs in your main checkout as before.
 
 ## Template Versioning
 
