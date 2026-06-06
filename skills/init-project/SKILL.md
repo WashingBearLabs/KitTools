@@ -190,7 +190,7 @@ This context will be used to:
     2. **Merge** - Add missing templates only (preserve existing content)
     3. **Replace** - Start fresh (will lose existing customizations)
   - Wait for user response before proceeding
-  - **Note**: This choice only affects templates (Steps 4-5). Hooks (Step 6) and CLAUDE.md (Step 7) are always installed/updated regardless of this choice.
+  - **Note**: This choice only affects templates (Steps 4-5). Hooks (Step 6), CLAUDE.md (Step 7), and git/`.gitignore` setup (Step 8) are always installed/updated regardless of this choice — so re-running init-project cleanly retrofits these onto an existing project.
 
 ## Step 2: Select project type
 
@@ -502,29 +502,20 @@ Report what was committed (and that `.gitignore` kept transient state out). If t
 
 ### 8b: Configure .gitignore
 
-KitTools writes transient runtime files that must **never** be committed: execution state/config, the pause file, notifications, the events log, the session scratchpad, and — for worktree-isolated execution — the `.kit/` registry that points at active execution worktrees.
+KitTools writes transient runtime files that must **never** be committed: execution state/config, the pause file, notifications, the events log, the session scratchpad, and — for worktree-isolated execution — the `.kit/` registry that points at active execution worktrees. Ensure the gitignore block idempotently (creates `.gitignore` if needed, adds only missing lines, never removes existing entries):
 
-1. If a `.gitignore` exists at the project root, read it. If not, you'll create one.
-2. Append a clearly-delimited KitTools block containing **only the entries not already present** (don't duplicate lines the project already ignores, and never remove existing entries):
-
-```gitignore
-# --- KitTools (transient runtime state — do not commit) ---
-.kit/
-kit_tools/specs/.execution-config.json
-kit_tools/specs/.execution-state.json
-kit_tools/specs/.execution-health.json
-kit_tools/specs/.execution-control.json
-kit_tools/.pause_execution
-kit_tools/.execution-notifications
-kit_tools/.execution-events.jsonl
-kit_tools/SESSION_SCRATCH.md
-# --- end KitTools ---
+```bash
+python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" ensure-gitignore
 ```
 
-3. **`kit_tools/worktree.yaml` is committed, not ignored** — it is the shared team contract (see the template's header for the security rationale). Do not add it to `.gitignore`.
-4. If the user configured an in-repo `worktree.root` in `kit_tools/worktree.yaml` (uncommon — the default lives outside the repo at `~/.kit/worktrees/`), also add that path to `.gitignore` so worktree checkouts aren't tracked.
+(Works without a git repo too — it just edits `.gitignore`. Report what it added.) Then:
 
-> Sequence matters: write `.gitignore` (8b) **before** the initial commit (8a) so transient state and the worktree registry never land in the first commit.
+- **`kit_tools/worktree.yaml` is committed, not ignored** — it is the shared team contract (see the template's header for the security rationale). Do not add it to `.gitignore`.
+- If the user configured an in-repo `worktree.root` in `kit_tools/worktree.yaml` (uncommon — the default lives outside the repo at `~/.kit/worktrees/`), also add that path to `.gitignore` so worktree checkouts aren't tracked.
+
+> Sequence matters: ensure `.gitignore` (8b) **before** the initial commit (8a) so transient state and the worktree registry never land in the first commit.
+
+> **Retrofit:** re-running `/kit-tools:init-project` on an existing project is the supported way to pick up worktree isolation — Step 8 runs regardless of the skip/merge/replace choice, so it adds the `.gitignore` block and (via merge mode) `worktree.yaml` to projects that predate 2.6.0.
 
 ## Step 9: Validate setup
 

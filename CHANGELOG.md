@@ -5,6 +5,22 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.1] - 2026-06-05
+
+### Added
+
+- **`path_links` contract key — local/sibling path dependencies** — Worktree-isolated execution broke for any project with a local path dependency (e.g. `pyproject.toml` `path = "../Roots"`, a pnpm/yarn workspace pointing at `../shared`, a Cargo `path = "../crate"`): a fresh worktree has no sibling to resolve against, so the dependency install failed. The new `path_links:` key in `kit_tools/worktree.yaml` lists sibling paths to make available; provisioning resolves each from the main checkout and symlinks it at the worktree's matching relative path (portable — no absolute path in the committed contract). Always symlinked, never copied; left in place on teardown (a project's epics share them) and reported so they're not silent orphans. New `--link-path` flag on `registry.py provision-worktree`.
+
+### Fixed
+
+- **Registry not reconciled to `completed` on success** — On a clean finish the orchestrator marks the execution `completed` in the `.kit/` registry by epic/feature key; if that key ever diverged from the key the worktree was registered under, the update silently no-op'd and the record stuck at `running`. Because the execution state file is deleted on cleanup, the registry is the durable signal that drives the reap — so a stuck record blocked `close-session`/`complete-implementation` from classifying the worktree `reapable`. Completion now reconciles by **worktree path** (which the orchestrator unambiguously owns) as a fallback, so key-naming divergence can't strand a record. New `registry.py set_status_by_worktree`.
+- **Teardown unaware of the project worktree root** — After reaping the last execution under a project's worktree root (`~/.kit/worktrees/<project-id>/`), teardown now accounts for it: an empty root is removed; a root still holding shared `path_links` (reused by future runs) is reported, not deleted.
+
+### Changed
+
+- **Upgrade safety for pre-2.6.0 projects** — `execute-epic` now silently ensures `.kit/` is gitignored before launching (a project that predates 2.6.0 wouldn't have it — a `git add -A` could otherwise commit the registry), and offers to scaffold `kit_tools/worktree.yaml` when it's missing. New idempotent `registry.py ensure-gitignore` is the single source of truth for the gitignore block (used by both `init-project` and `execute-epic`); `init-project`'s git/gitignore step is documented as always-run, making a re-run a clean retrofit.
+- **Live status in `census`** — Each census record now surfaces `state_status` and `state_updated_at` read from the worktree's `.execution-state.json`, so raw output reflects real execution progress instead of the registration-time `updated_at` (the live `disposition`/`tmux_alive` signals were already correct).
+
 ## [2.6.0] - 2026-06-04
 
 ### Added

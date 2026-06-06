@@ -47,6 +47,25 @@ REGISTRY_DIRNAME = ".kit"
 EXECUTIONS_SUBDIR = "executions"
 DEFAULT_WORKTREE_HOME = "~/.kit/worktrees"
 
+# Canonical .gitignore block for KitTools' transient runtime state. Single
+# source of truth: init-project writes it at setup, and execute-epic re-asserts
+# it on the worktree path so a pre-2.6.0 repo (where it's missing) can't commit
+# the `.kit/` registry. `.kit/` is the critical line — the rest are transient
+# state that simply shouldn't be tracked.
+GITIGNORE_MARKER = "# --- KitTools (transient runtime state — do not commit) ---"
+GITIGNORE_END = "# --- end KitTools ---"
+GITIGNORE_LINES = [
+    ".kit/",
+    "kit_tools/specs/.execution-config.json",
+    "kit_tools/specs/.execution-state.json",
+    "kit_tools/specs/.execution-health.json",
+    "kit_tools/specs/.execution-control.json",
+    "kit_tools/.pause_execution",
+    "kit_tools/.execution-notifications",
+    "kit_tools/.execution-events.jsonl",
+    "kit_tools/SESSION_SCRATCH.md",
+]
+
 # Statuses an execution record may carry. Mirrors the orchestrator's own state
 # machine (.execution-state.json `status`), plus "paused" for the pause file.
 VALID_STATUSES = frozenset(
@@ -187,6 +206,38 @@ def default_branch(repo: str) -> str:
     return "main"
 
 
+def ensure_gitignore(main_repo: str) -> dict:
+    """Idempotently ensure KitTools' transient-state entries are gitignored.
+
+    Appends any of ``GITIGNORE_LINES`` not already present (matched line-exactly
+    anywhere in the file) under a marker block, creating ``.gitignore`` if
+    needed. This is the retrofit/safety path for pre-2.6.0 repos where ``.kit/``
+    isn't ignored — committing the registry would be a contamination footgun.
+
+    Returns ``{"modified": bool, "added": [lines]}``.
+    """
+    path = os.path.join(main_repo, ".gitignore")
+    existing = ""
+    if os.path.exists(path):
+        try:
+            with open(path, "r") as f:
+                existing = f.read()
+        except OSError:
+            return {"modified": False, "added": []}
+    present = {line.strip() for line in existing.splitlines()}
+    missing = [line for line in GITIGNORE_LINES if line not in present]
+    if not missing:
+        return {"modified": False, "added": []}
+    block = "\n".join([GITIGNORE_MARKER, *missing, GITIGNORE_END])
+    prefix = "" if existing.endswith("\n") or not existing else "\n"
+    try:
+        with open(path, "a") as f:
+            f.write(f"{prefix}{block}\n")
+    except OSError:
+        return {"modified": False, "added": []}
+    return {"modified": True, "added": missing}
+
+
 def registry_dir(main_repo: str) -> str:
     """Path to the executions directory under the main repo's ``.kit/``."""
     return os.path.join(main_repo, REGISTRY_DIRNAME, EXECUTIONS_SUBDIR)
@@ -323,6 +374,23 @@ def set_status(main_repo: str, epic: str, status: str) -> bool:
     return True
 
 
+def set_status_by_worktree(main_repo: str, worktree_path: str, status: str) -> bool:
+    """Update the status of whichever execution owns ``worktree_path``.
+
+    Reconciliation fallback for completion: the orchestrator unambiguously knows
+    its own worktree (``project_dir``), but the registry *key* is the epic/feature
+    name — and if those ever diverge, a key-based ``set_status`` silently no-ops,
+    leaving the record stuck at ``running`` after the state file is cleaned up.
+    Matching by worktree path can't diverge. Returns True if a record matched.
+    """
+    target = os.path.realpath(worktree_path)
+    for record in list_all(main_repo):
+        wt = record.get("worktree")
+        if wt and os.path.realpath(wt) == target:
+            return set_status(main_repo, record["epic"], status)
+    return False
+
+
 def deregister(main_repo: str, epic: str) -> bool:
     """Delete an execution's registry file. Returns True if a file was removed."""
     path = execution_file(main_repo, epic)
@@ -359,6 +427,26 @@ def _worktree_dirty(worktree_path: str | None) -> bool:
         return False
     r = _run_git(["status", "--porcelain"], worktree_path)
     return bool(r.stdout.strip())
+
+
+def _read_state_progress(worktree_path: str | None) -> tuple[str | None, str | None]:
+    """Read live ``status``/``updated_at`` from the worktree's execution state.
+
+    The registry record's own ``updated_at`` is frozen at registration; the
+    orchestrator advances its `.execution-state.json` instead. Surfacing the
+    state file's timestamp keeps raw census output from *looking* stale even
+    though the live signals (``tmux_alive``, ``disposition``) are already
+    correct. Returns ``(None, None)`` if the state file is absent/unreadable.
+    """
+    if not worktree_path:
+        return (None, None)
+    path = os.path.join(worktree_path, "kit_tools", "specs", ".execution-state.json")
+    try:
+        with open(path, "r") as f:
+            state = json.load(f)
+        return (state.get("status"), state.get("updated_at"))
+    except (OSError, json.JSONDecodeError):
+        return (None, None)
 
 
 def _tmux_alive(session: str | None) -> bool:
@@ -413,6 +501,8 @@ def census(main_repo: str) -> list[dict]:
         else:
             disposition = "flag"
 
+        state_status, state_updated_at = _read_state_progress(worktree_path)
+
         enriched = dict(record)
         enriched.update({
             "worktree_exists": exists,
@@ -420,6 +510,10 @@ def census(main_repo: str) -> list[dict]:
             "branch_merged": merged,
             "tmux_alive": alive,
             "disposition": disposition,
+            # Live progress from the worktree's state file (the registry record's
+            # own updated_at is frozen at registration).
+            "state_status": state_status,
+            "state_updated_at": state_updated_at,
         })
         out.append(enriched)
     return out
@@ -475,9 +569,52 @@ def _provision_secret(main_repo: str, worktree_path: str, rel: str) -> str:
             return "skip"
 
 
+def _provision_path_link(main_repo: str, worktree_path: str, rel: str) -> str:
+    """Symlink a path (typically a sibling repo / directory) into the worktree's
+    namespace.
+
+    Source is resolved from ``main_repo`` and destination from ``worktree_path``
+    using the *same* relative path, so ``../Roots`` links the main checkout's
+    sibling to the worktree's sibling — portable across machines, no absolute
+    path baked into the committed contract. Always a symlink (never copy a whole
+    directory). Idempotent: an existing correct symlink is left as-is; a real
+    file/dir already at the destination is not clobbered.
+
+    Returns ``"linked"``, ``"exists"`` (already present / correct), or ``"skip"``
+    (source missing or symlink failed). Note the destination may live *outside*
+    ``worktree_path`` (a sibling) — that's intentional and shared across a
+    project's epics; teardown leaves those in place.
+    """
+    src = os.path.normpath(os.path.join(main_repo, rel))
+    dst = os.path.normpath(os.path.join(worktree_path, rel))
+    if not os.path.exists(src):
+        return "skip"
+    if os.path.islink(dst):
+        try:
+            if os.path.realpath(dst) == os.path.realpath(src):
+                return "exists"
+        except OSError:
+            pass
+        try:
+            os.remove(dst)
+        except OSError:
+            pass
+    elif os.path.exists(dst):
+        return "exists"  # a real file/dir is already there — don't clobber
+    parent = os.path.dirname(dst)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    try:
+        os.symlink(os.path.abspath(src), dst)
+        return "linked"
+    except (OSError, NotImplementedError):
+        return "skip"
+
+
 def provision_worktree(main_repo: str, key: str, branch: str, *,
                        base: str | None = None, root: str | None = None,
                        env_link: list[str] | None = None,
+                       path_links: list[str] | None = None,
                        tmux: str | None = None, mode: str | None = None) -> dict:
     """Create and register an isolated execution worktree.
 
@@ -494,6 +631,7 @@ def provision_worktree(main_repo: str, key: str, branch: str, *,
     (bool), and ``messages``.
     """
     env_link = env_link or []
+    path_links = path_links or []
     base = base or default_branch(main_repo)
     base_root = root or default_worktree_base(derive_project_id(main_repo))
     worktree_path = compute_worktree_path(base_root, key)
@@ -501,6 +639,7 @@ def provision_worktree(main_repo: str, key: str, branch: str, *,
         "epic": key, "branch": branch, "worktree": worktree_path,
         "main_repo": main_repo, "created": False,
         "linked": [], "copied": [], "skipped": [],
+        "path_linked": [], "path_skipped": [],
         "registered": False, "messages": [],
     }
 
@@ -520,9 +659,21 @@ def provision_worktree(main_repo: str, key: str, branch: str, *,
             result["skipped"].append(rel)
             result["messages"].append(f"env_link source not found, skipped: {rel}")
 
+    for rel in path_links:
+        status = _provision_path_link(main_repo, worktree_path, rel)
+        if status in ("linked", "exists"):
+            result["path_linked"].append(rel)
+        else:
+            result["path_skipped"].append(rel)
+            result["messages"].append(
+                f"path_link source not found in main checkout's namespace, "
+                f"skipped: {rel}"
+            )
+
     record = {
         "epic": key, "branch": branch, "worktree": worktree_path,
-        "main_repo": main_repo, "status": "running", "env_link": list(env_link),
+        "main_repo": main_repo, "status": "running",
+        "env_link": list(env_link), "path_links": list(path_links),
     }
     if tmux:
         record["tmux"] = tmux
@@ -654,7 +805,50 @@ def teardown(main_repo: str, epic: str, *, force: bool = False,
         if swept:
             result["swept_attempt_branches"] = swept
 
+    # path_links (e.g. a sibling `../Roots`) typically live *outside* the
+    # worktree subdir, at the project's shared worktree root — `git worktree
+    # remove` doesn't touch them, and other epics of this project may still rely
+    # on them. Leave them in place; just report so they're not a silent orphan.
+    left = record.get("path_links") or []
+    if left:
+        result["left_path_links"] = left
+        result["messages"].append(
+            "left shared path-link(s) in place (used by other epics of this "
+            f"project; remove manually if this was the last): {', '.join(left)}"
+        )
+
     result["deregistered"] = deregister(main_repo, epic)
+
+    # Account for the *project* worktree root (the parent that holds per-epic
+    # worktrees and any shared path-link symlinks). After this teardown, if no
+    # other execution lives under it, surface it: an empty root is removed; a
+    # root still holding shared links is reported (not deleted — a future run of
+    # this project reuses them, and a manual symlink shouldn't be nuked).
+    if worktree_path:
+        base_root = os.path.dirname(os.path.abspath(worktree_path))
+        if os.path.isdir(base_root):
+            remaining = [
+                r for r in list_all(main_repo)
+                if r.get("worktree") and os.path.realpath(
+                    os.path.dirname(r["worktree"])) == os.path.realpath(base_root)
+            ]
+            if not remaining:
+                leftovers = sorted(os.listdir(base_root))
+                if not leftovers:
+                    try:
+                        os.rmdir(base_root)
+                        result["messages"].append(
+                            f"removed empty project worktree root {base_root}")
+                    except OSError:
+                        pass
+                else:
+                    result["project_root_orphaned"] = base_root
+                    result["messages"].append(
+                        f"no active executions remain under {base_root} — it "
+                        f"holds shared artifacts reused by future runs of this "
+                        f"project ({', '.join(leftovers)}); remove it manually if "
+                        f"you're done with the project")
+
     return result
 
 
@@ -755,6 +949,7 @@ def _cli(argv: list[str]) -> int:
         p.add_argument("--tmux", default=None)
         p.add_argument("--mode", default=None)
         p.add_argument("--link", action="append", default=[])
+        p.add_argument("--link-path", action="append", default=[])
         p.add_argument("--dir", default=None)
         try:
             ns = p.parse_args(rest)
@@ -766,7 +961,8 @@ def _cli(argv: list[str]) -> int:
             return 1
         res = provision_worktree(
             main, ns.key, ns.branch, base=ns.base, root=ns.root or None,
-            env_link=ns.link, tmux=ns.tmux, mode=ns.mode,
+            env_link=ns.link, path_links=getattr(ns, "link_path"),
+            tmux=ns.tmux, mode=ns.mode,
         )
         print(json.dumps(res, indent=2))
         return 0 if res["created"] else 1
@@ -782,6 +978,14 @@ def _cli(argv: list[str]) -> int:
             return 1
         removed = scrub_secret_copies(main, rest[0])
         print(json.dumps(removed, indent=2))
+        return 0
+
+    if cmd == "ensure-gitignore":
+        main = _main_from(rest, 0)
+        if not main:
+            print("not a git repository", file=sys.stderr)
+            return 1
+        print(json.dumps(ensure_gitignore(main), indent=2))
         return 0
 
     if cmd == "is-worktree":

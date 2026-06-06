@@ -35,6 +35,7 @@ _DEFAULT_CONTRACT = {
     "root": None,
     "env_bootstrap": [],
     "env_link": [],
+    "path_links": [],
     "cleanup_policy": "remove-on-success",
 }
 
@@ -69,7 +70,7 @@ def load_contract(main_repo: str) -> dict:
     if isinstance(root, str) and root.strip():
         contract["root"] = root.strip()
 
-    for list_key in ("env_bootstrap", "env_link"):
+    for list_key in ("env_bootstrap", "env_link", "path_links"):
         value = loaded.get(list_key)
         if isinstance(value, list):
             contract[list_key] = [str(v) for v in value if str(v).strip()]

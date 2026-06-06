@@ -170,9 +170,19 @@ Autonomous and guarded modes spawn a background orchestrator: a **second writer*
 
 The deterministic git/registry mechanics (resolve main → `git worktree add` → symlink secrets → register) are done in **one tested command**, `registry.py provision-worktree`, so this skill doesn't orchestrate them through fragile multi-step shell. The only parts that stay here are the genuinely project-specific ones: reading the contract and the **echo-and-confirm gate** for bootstrap commands.
 
-1. **Read the contract** `kit_tools/worktree.yaml` (created by `init-project`) for `root`, `env_bootstrap`, `env_link`. If it's missing (older project), use empty bootstrap/link and the default root, and suggest the user run `/kit-tools:init-project` to add it. Let `<key>` = the epic name (or feature name in standalone fallback).
+0. **Retrofit safety (pre-2.6.0 projects).** Before anything, make sure this repo has the worktree-isolation furniture — a project that predates 2.6.0 won't:
+   - **Ensure `.kit/` is gitignored** (silent, non-negotiable — otherwise a `git add -A` could commit the registry):
+     ```bash
+     python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" ensure-gitignore
+     ```
+     If it reports `modified: true`, mention you added the KitTools `.gitignore` block.
+   - **If `kit_tools/worktree.yaml` is missing,** offer to scaffold it from `$CLAUDE_PLUGIN_ROOT/templates/worktree.yaml` (or point the user to re-run `/kit-tools:init-project`). Don't silently proceed with no contract on a project that clearly has dependencies.
 
-   **⚠️ Dependency reality check.** A fresh worktree does **not** inherit gitignored files — `.venv`, `node_modules`, build outputs are absent. If `env_bootstrap` is **empty** *and* the repo has a dependency manifest (`package.json`, `pyproject.toml`, `requirements.txt`, `Cargo.toml`, `go.mod`, `Gemfile`, …), the worktree won't have installed dependencies and **verification tests will fail with import/module errors**. Warn the user and recommend they add the install command(s) to `env_bootstrap` in `kit_tools/worktree.yaml` (e.g. `uv sync`, `npm install` — KitTools is language-agnostic, so the command is theirs to specify). Ask whether to proceed anyway (fine for dependency-free projects or vendored deps).
+1. **Read the contract** `kit_tools/worktree.yaml` for `root`, `env_bootstrap`, `env_link`, `path_links`. If it's still missing after step 0, use empty values and the default root. Let `<key>` = the epic name (or feature name in standalone fallback).
+
+   **⚠️ Dependency reality check.** A fresh worktree does **not** inherit gitignored files — `.venv`, `node_modules`, build outputs are absent. If `env_bootstrap` is **empty** *and* the repo has a dependency manifest (`package.json`, `pyproject.toml`, `requirements.txt`, `Cargo.toml`, `go.mod`, `Gemfile`, …), the worktree won't have installed dependencies and **verification tests will fail with import/module errors**. Warn the user and recommend they add the install command(s) to `env_bootstrap` (e.g. `uv sync`, `npm install` — KitTools is language-agnostic, so the command is theirs to specify). Ask whether to proceed anyway (fine for dependency-free projects or vendored deps).
+
+   **⚠️ Local path-dependency check.** If a manifest declares a **local sibling dependency** (e.g. `pyproject.toml` `path = "../Roots"`, a pnpm/yarn workspace pointing at `../shared`, a Cargo `path = "../crate"`), a fresh worktree has no sibling to resolve it against and the install fails. Add those sibling paths to `path_links` in `kit_tools/worktree.yaml` (e.g. `path_links: ["../Roots"]`) — provisioning symlinks them at the worktree's matching relative path, portably.
 
 2. **Derive the tmux session name** now: `kit-exec-<key>`. Check for a collision — `tmux has-session -t kit-exec-<key> 2>/dev/null`; if it exists, **do NOT kill it** (another execution may own it) — append a suffix (`-2`) or ask the user. You'll pass the final name to provisioning so the registry record carries it.
 
@@ -183,13 +193,14 @@ The deterministic git/registry mechanics (resolve main → `git worktree add` �
    - **Guarded:** require explicit confirmation before proceeding.
    - **Autonomous:** log the exact commands prominently to `EXECUTION_LOG.md` and proceed (trusted contract, but never run hidden).
 
-4. **Provision the worktree** — one call creates the worktree (new branch or resume), symlinks each `env_link` secret (copy-fallback where symlinks are unavailable), and registers the execution:
+4. **Provision the worktree** — one call creates the worktree (new branch or resume), symlinks each `env_link` secret (copy-fallback where unavailable) and each `path_links` sibling, and registers the execution:
    ```bash
    python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" provision-worktree \
      "<key>" --branch "epic/<key>" --mode "<autonomous|guarded>" --tmux "kit-exec-<key>" \
-     [--root "<contract root>"] [--link ".env" --link ".env.vault"]
+     [--root "<contract root>"] [--link ".env" --link ".env.vault"] \
+     [--link-path "../Roots" --link-path "../shared"]
    ```
-   It prints JSON: `{worktree, branch, created, linked, copied, skipped, registered, messages}`. **Read the `worktree` value from that JSON and use it as a literal absolute path in every later command** (do not rely on a shell variable surviving between commands — it won't). If `created` is `false` (e.g. the branch is already checked out in another worktree → a live execution), **stop and report** the `messages`; don't force.
+   Pass one `--link` per `env_link` entry and one `--link-path` per `path_links` entry from the contract. It prints JSON: `{worktree, branch, created, linked, copied, skipped, path_linked, path_skipped, registered, messages}`. **Read the `worktree` value from that JSON and use it as a literal absolute path in every later command** (do not rely on a shell variable surviving between commands — it won't). If `created` is `false` (e.g. the branch is already checked out in another worktree → a live execution), **stop and report** the `messages`; don't force. If any `path_skipped` entries appear, warn that those sibling deps weren't found and the install may fail.
 
 5. **Bootstrap env:** run each confirmed `env_bootstrap` command with cwd = the worktree path from step 4, in order, stopping at the first failure. On failure, warn that the worktree may not be runnable (verification could fail) and ask whether to continue. (Provisioning records `env_link` in the registry so teardown/close-session can scrub copied secrets later — a no-op for symlinks.)
 

@@ -1,4 +1,4 @@
-# Template Version: 1.0.0
+# Template Version: 1.1.0
 #
 # KitTools worktree & environment contract.
 #
@@ -40,6 +40,22 @@ env_bootstrap: []
 #   - .env
 #   - .env.vault
 env_link: []
+
+# Paths to make available *relative to the worktree* — typically sibling repos
+# that a local path-dependency points at. A fresh worktree has no siblings, so a
+# dependency like `pyproject.toml: roots = { path = "../Roots" }` (or a
+# pnpm/yarn workspace pointing at `../shared`) fails to install without this.
+#
+# Each entry is resolved from your MAIN checkout and symlinked at the SAME
+# relative path next to the worktree — so `../Roots` links your real
+# `<repo>/../Roots` to `<worktree>/../Roots`. This is portable: no absolute,
+# machine-specific path goes in this committed file. Always symlinked (never
+# copied), and left in place on teardown since a project's epics share them.
+# Example:
+# path_links:
+#   - ../Roots
+#   - ../shared-lib
+path_links: []
 
 # What to do with the worktree when an execution finishes:
 #   remove-on-success  (default) — remove the tree on a clean finish; keep it

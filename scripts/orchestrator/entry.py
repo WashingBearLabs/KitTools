@@ -58,11 +58,19 @@ def _update_registry_status(config: dict, status: str) -> None:
     otherwise-healthy execution.
     """
     main_repo = config.get("main_repo")
-    key = config.get("epic_name") or config.get("feature_name")
-    if not main_repo or not key:
+    if not main_repo:
         return
+    key = config.get("epic_name") or config.get("feature_name")
+    project_dir = config.get("project_dir")
     try:
-        registry.set_status(main_repo, key, status)
+        # Prefer the key, but fall back to matching by worktree path so a
+        # key/epic-name divergence can't strand the record at "running" (the
+        # state file is deleted on cleanup, so the registry is the durable
+        # signal that drives the reap).
+        if key and registry.set_status(main_repo, key, status):
+            return
+        if project_dir:
+            registry.set_status_by_worktree(main_repo, project_dir, status)
     except Exception:
         pass
 
