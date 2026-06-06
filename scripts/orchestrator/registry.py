@@ -391,6 +391,21 @@ def set_status_by_worktree(main_repo: str, worktree_path: str, status: str) -> b
     return False
 
 
+def reconcile_status(main_repo: str, status: str, *, key: str | None = None,
+                     worktree: str | None = None) -> bool:
+    """Set an execution's status, preferring the key but falling back to the
+    worktree path so a key/epic-name divergence can't strand the record.
+
+    The single robust entry point used by both the orchestrator's completion
+    path and its crash handler. Returns True if a record was updated.
+    """
+    if key and set_status(main_repo, key, status):
+        return True
+    if worktree and set_status_by_worktree(main_repo, worktree, status):
+        return True
+    return False
+
+
 def deregister(main_repo: str, epic: str) -> bool:
     """Delete an execution's registry file. Returns True if a file was removed."""
     path = execution_file(main_repo, epic)

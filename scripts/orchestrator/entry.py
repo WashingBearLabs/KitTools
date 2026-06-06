@@ -24,6 +24,7 @@ from .executor import execute_spec_stories
 from .git_ops import (
     GitRecoveryFailed,
     cleanup_attempt_branches,
+    commit_feature_work,
     commit_tracking_files,
     complete_feature,
     is_git_repo,
@@ -60,17 +61,16 @@ def _update_registry_status(config: dict, status: str) -> None:
     main_repo = config.get("main_repo")
     if not main_repo:
         return
-    key = config.get("epic_name") or config.get("feature_name")
-    project_dir = config.get("project_dir")
     try:
         # Prefer the key, but fall back to matching by worktree path so a
         # key/epic-name divergence can't strand the record at "running" (the
         # state file is deleted on cleanup, so the registry is the durable
         # signal that drives the reap).
-        if key and registry.set_status(main_repo, key, status):
-            return
-        if project_dir:
-            registry.set_status_by_worktree(main_repo, project_dir, status)
+        registry.reconcile_status(
+            main_repo, status,
+            key=config.get("epic_name") or config.get("feature_name"),
+            worktree=config.get("project_dir"),
+        )
     except Exception:
         pass
 
@@ -309,8 +309,10 @@ def run_epic(config: dict) -> None:
             wait_for_pause_removal(project_dir, config=config)
             log("  Resuming after pause.")
 
-        # Commit tracking files for this feature spec
-        commit_tracking_files(project_dir, feature_name)
+        # Commit this spec's work — including any source files the validation
+        # session edited directly (in a worktree this stages everything; in a
+        # legacy in-dir run it falls back to the narrow tracking-file list).
+        commit_feature_work(project_dir, feature_name, config)
 
         # Tag checkpoint
         tag_checkpoint(project_dir, epic_name, feature_name)

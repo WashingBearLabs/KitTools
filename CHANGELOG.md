@@ -5,6 +5,13 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.2] - 2026-06-06
+
+### Fixed
+
+- **Validation source fixes were never committed (HIGH)** — When the per-spec `validate-implementation` session fixed a real bug by editing source files directly (its own judgment or a fixer agent), those edits stayed in the worktree but were never staged: `commit_tracking_files` staged a hardcoded `EXECUTION_LOG.md`/`AUDIT_FINDINGS.md` list, and the spec-completion commit used `--allow-empty` with no `git add`. So the fix missed the epic PR and shipped to main with the bug still live — while the working tree masked the loss from every later reviewer (they `Read` files; only `git diff main...HEAD` would have shown it). The orchestrator now commits the full worktree (`git add -A`) after each spec's validation and before opening a PR — safe because it runs in an isolated worktree (no user working copy to contaminate; legacy in-dir runs keep the narrow allowlist). A clean tree is now an invariant before the PR, with a warning if anything remains. New `commit_feature_work()`.
+- **Registry reliably reconciled to `completed` before cleanup** — Completion now writes the `completed` status to the `.kit/` registry at the *start* of `complete_feature`, before the execution state file is deleted — so a clean finish can never be left looking like a crash, even if PR/merge then hiccups. Reconciliation prefers the epic key but falls back to the worktree path (introduced in 2.6.1) via the shared `registry.reconcile_status()`, so a key/worktree-name divergence can't strand a record at `running` and block the reap. (Builds on the 2.6.1 worktree-path fallback; the report that surfaced this was against 2.6.0.)
+
 ## [2.6.1] - 2026-06-05
 
 ### Added

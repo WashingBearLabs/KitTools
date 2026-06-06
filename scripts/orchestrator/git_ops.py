@@ -256,6 +256,35 @@ def commit_tracking_files(project_dir: str, feature_name: str) -> None:
     )
 
 
+def commit_feature_work(project_dir: str, feature_name: str, config: dict) -> bool:
+    """Commit work pending in the tree after stories/validation/fixer passes.
+
+    **The fix for the "validation fixes never committed" bug:** the per-spec
+    validation session can edit *source* files directly (its own judgment, or a
+    fixer agent). Those edits live in the working tree but were never staged —
+    so they missed the PR while the working tree masked the loss to every later
+    reviewer that reads files.
+
+    In an isolated worktree, ``git add -A`` is the correct, safe behaviour:
+    there is no user working copy to contaminate (that was the only reason for
+    the narrow tracking-file allowlist), and a clean tree must be an invariant
+    before the orchestrator opens a PR or moves to the next spec. In a legacy
+    in-dir execution we keep the narrow allowlist to avoid scooping the user's
+    uncommitted changes. Returns True if a commit was actually made.
+    """
+    if _is_worktree_execution(config):
+        run_git(["add", "-A"], project_dir)
+        # No check=True: a clean tree makes `git commit` exit non-zero, which is
+        # the expected "nothing to commit" case, not an error.
+        result = run_git(
+            ["commit", "-m", f"chore({feature_name}): validation fixes and tracking"],
+            project_dir,
+        )
+        return result.returncode == 0
+    commit_tracking_files(project_dir, feature_name)
+    return True
+
+
 def is_validation_clean(project_dir: str) -> bool:
     """Check if the last validation run was clean (no critical findings, no pause).
 
@@ -461,6 +490,17 @@ def complete_feature(config: dict, state: dict, validation_clean: bool) -> None:
     branch = config["branch_name"]
     feature_name = config.get("feature_name") or config.get("epic_name", "feature")
 
+    # Durable completion signal FIRST — before any state-file cleanup below, and
+    # robust to key/worktree divergence. The state file gets deleted on cleanup,
+    # so the registry is the only signal that survives; setting it here means a
+    # clean finish is never mistaken for a crash (even if PR/merge then hiccups).
+    if config.get("main_repo"):
+        registry.reconcile_status(
+            config["main_repo"], "completed",
+            key=config.get("epic_name") or config.get("feature_name"),
+            worktree=project_dir,
+        )
+
     # Archive spec if single mode and spec still exists
     if not config.get("epic_specs"):
         spec_path = config.get("spec_path", "")
@@ -471,8 +511,15 @@ def complete_feature(config: dict, state: dict, validation_clean: bool) -> None:
                 project_dir, check=True
             )
 
-    # Commit tracking files
-    commit_tracking_files(project_dir, feature_name)
+    # Commit any remaining tree changes (incl. source fixes the validation
+    # session made directly) so the PR is complete and the worktree is clean.
+    commit_feature_work(project_dir, feature_name, config)
+
+    # Clean-tree invariant: the worktree should be clean before we open a PR.
+    if _is_worktree_execution(config):
+        still_dirty = get_worktree_dirty_summary(project_dir)
+        if still_dirty:
+            log(f"WARNING: worktree still dirty after commit before PR:\n  {still_dirty[:300]}")
 
     # --- Merge strategy ---
     if strategy == "merge":
