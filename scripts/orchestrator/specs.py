@@ -11,10 +11,21 @@ import yaml
 from .utils import log, run_git
 
 def parse_spec_frontmatter(spec_path: str) -> dict:
-    """Parse YAML frontmatter from a feature spec markdown file using PyYAML."""
+    """Parse YAML frontmatter from a feature spec markdown file using PyYAML.
+
+    The frontmatter block is NOT always on line 1: the 2.x templates emit a
+    ``<!-- Template Version: X -->`` comment first (and EPIC.md an additional
+    multi-line ``<!-- Seeding: ... -->`` block). Anchoring the match at byte 0
+    silently failed for every template-generated spec — returning ``{}`` so the
+    ``size:`` hint was ignored and every story ran at the M-size timeout. Skip
+    any leading run of HTML comments and blank lines before matching.
+    """
     with open(spec_path, "r") as f:
         content = f.read()
-    match = re.match(r'^---\s*\n(.*?)\n---', content, re.DOTALL)
+    # Strip a leading run of HTML comments (incl. multi-line) + surrounding
+    # whitespace, so the frontmatter is found even when it isn't on line 1.
+    body = re.sub(r"\A(?:\s*<!--.*?-->)*\s*", "", content, count=1, flags=re.DOTALL)
+    match = re.match(r'^---[ \t]*\r?\n(.*?)\r?\n---', body, re.DOTALL)
     if not match:
         return {}
     try:

@@ -5,6 +5,15 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.3] - 2026-06-09
+
+### Fixed
+
+- **`size:` frontmatter was silently ignored — every story ran at the M timeout (HIGH)** — `parse_spec_frontmatter` anchored the YAML block at byte 0, but the 2.x templates emit a `<!-- Template Version: X -->` comment as line 1 (and `EPIC.md` an additional multi-line `<!-- Seeding: … -->` block), pushing `---` to line 2+. The regex never matched → `{}` → `get_size_timeouts` fell back to M (900s impl) for *every* template-generated spec regardless of `size: L`/`XL`, so large stories timed out forever — silently. The parser now skips leading HTML comments and blank lines before matching, and `get_size_timeouts` logs a warning when a spec has no parseable frontmatter instead of failing silently.
+- **Failed-attempt cleanup could strand the worktree on a dirty branch** — When an implementation attempt left uncommitted changes (a killed/timed-out session, or a verify-fail caught mid-edit), `delete_attempt_branch`'s plain `git checkout <feature>` failed ("local changes would be overwritten"), so HEAD stayed on the attempt branch and `git branch -D` then failed ("used by worktree") — leaving the worktree stranded on the dirty branch so the next retry inherited the mess, and orphaned untracked files (e.g. a new migration) survived to trip the startup clean-tree gate. Cleanup now force-checks-out the feature branch and `git clean -fdq`s untracked cruft (gitignored files like `.venv`/`.env` preserved).
+- **Stopping the orchestrator orphaned its child `claude` session** — Each story session is spawned in its own process group (so timeouts can kill the whole tree), but the orchestrator's own stop path only marked state crashed and killed tmux — it never reaped the *live* child. So stopping the orchestrator (Ctrl+C, `pkill execute_orchestrator.py`, tmux kill) left the child running in its separate group; it finished writing partial/unverified work and re-dirtied the worktree after cleanup. The signal/exit handlers now reap the live child's process group first (reusing the existing `_kill_process_group` machinery via a new `kill_active_child_sessions`), and handle SIGINT/SIGHUP in addition to SIGTERM.
+- **Guarded-mode retry pause was invisible to monitoring** — On exhausted retries, guarded mode did a blocking `input("Press Enter to retry…")` on stdin. A detached/tmux orchestrator has no interactive stdin, so the run parked silently (once ~14h overnight) while the registry/health kept reporting `running` — indistinguishable from a hang, and resumable only by a literal keystroke. It now pauses via the standard mechanism (`.pause_execution` + `status: paused` + a notification), visible to `/kit-tools:execution-status` and the supervisor and resumable by removing the pause file — and honors a supervisor control action (skip/split/abort) written while paused.
+
 ## [2.6.2] - 2026-06-06
 
 ### Fixed

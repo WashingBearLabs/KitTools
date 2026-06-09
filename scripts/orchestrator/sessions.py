@@ -47,11 +47,41 @@ def get_size_timeouts(spec_path: str | None) -> tuple[int, int]:
     if not spec_path or not os.path.exists(spec_path):
         return size_map["M"]
     fm = parse_spec_frontmatter(spec_path)
+    if not fm:
+        # No parseable frontmatter — surface it rather than silently using M.
+        # (This is what masked the size: hint being ignored for every
+        # template-generated spec; the parser now skips leading comments.)
+        log(f"  WARNING: no parseable frontmatter in {os.path.basename(spec_path)} "
+            f"— using M-size timeouts (any size: hint ignored)")
+        return size_map["M"]
     size = str(fm.get("size", "M")).upper()
     if size in size_map:
         return size_map[size]
     log(f"  WARNING: Unrecognized size '{fm.get('size')}' in spec frontmatter — using M defaults")
     return size_map["M"]
+
+
+# Process groups of currently-running child `claude` sessions. Each child is
+# spawned in its own session (start_new_session=True) so a timeout can kill the
+# whole tree; we also track the live pgid(s) here so the orchestrator's OWN
+# signal/exit handlers can reap the child when the orchestrator is stopped
+# (Ctrl+C, SIGTERM/SIGHUP, `pkill execute_orchestrator.py`, tmux kill). Without
+# this the child is orphaned (it's in a separate process group), keeps running,
+# and finishes writing partial/unverified work — re-dirtying the worktree after
+# teardown/cleanup.
+_ACTIVE_CHILD_PGIDS: set[int] = set()
+
+
+def kill_active_child_sessions() -> None:
+    """Reap any still-running child `claude` process groups.
+
+    Safe to call from a signal handler or atexit, and idempotent — used by the
+    orchestrator's stop/teardown path so stopping the orchestrator also stops
+    its child session.
+    """
+    for pgid in list(_ACTIVE_CHILD_PGIDS):
+        _kill_process_group(pgid)
+        _ACTIVE_CHILD_PGIDS.discard(pgid)
 
 
 def _kill_process_group(pgid: int) -> None:
@@ -103,45 +133,51 @@ def run_claude_session(
                 env=clean_env,
                 start_new_session=True,
             )
+            # Track the live child's process group so the orchestrator's signal/
+            # exit handlers can reap it if the orchestrator is stopped mid-session.
+            _ACTIVE_CHILD_PGIDS.add(proc.pid)
 
             try:
-                stdout, stderr_out = proc.communicate(timeout=timeout)
-            except subprocess.TimeoutExpired:
-                # Kill the entire process group (claude + all children like pytest, node, etc.)
-                _kill_process_group(proc.pid)
                 try:
-                    proc.kill()
-                except OSError:
-                    pass
-                # Bound the final wait — if SIGKILL didn't take (zombie,
-                # uninterruptible sleep, permissions), we prefer a leaked PID
-                # over a hung orchestrator.
-                try:
-                    proc.wait(timeout=10)
+                    stdout, stderr_out = proc.communicate(timeout=timeout)
                 except subprocess.TimeoutExpired:
-                    log(f"  WARNING: subprocess {proc.pid} did not exit after SIGKILL — continuing with process leaked")
-                return f"SESSION_ERROR: Timed out after {timeout}s"
+                    # Kill the entire process group (claude + all children like pytest, node, etc.)
+                    _kill_process_group(proc.pid)
+                    try:
+                        proc.kill()
+                    except OSError:
+                        pass
+                    # Bound the final wait — if SIGKILL didn't take (zombie,
+                    # uninterruptible sleep, permissions), we prefer a leaked PID
+                    # over a hung orchestrator.
+                    try:
+                        proc.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        log(f"  WARNING: subprocess {proc.pid} did not exit after SIGKILL — continuing with process leaked")
+                    return f"SESSION_ERROR: Timed out after {timeout}s"
 
-            # Session finished — kill any orphaned children in the process group
-            _kill_process_group(proc.pid)
+                # Session finished — kill any orphaned children in the process group
+                _kill_process_group(proc.pid)
 
-            if proc.returncode == 0:
-                return stdout
+                if proc.returncode == 0:
+                    return stdout
 
-            stderr = stderr_out.strip()
-            is_network = any(kw in stderr.lower() for kw in ("network", "connection", "timeout", "econnrefused"))
+                stderr = stderr_out.strip()
+                is_network = any(kw in stderr.lower() for kw in ("network", "connection", "timeout", "econnrefused"))
 
-            # Retry network errors (unless this is the last attempt)
-            if is_network and attempt < NETWORK_MAX_RETRIES:
-                log(f"  Network error (attempt {attempt}/{NETWORK_MAX_RETRIES}), retrying in {NETWORK_RETRY_WAIT}s...")
-                time.sleep(NETWORK_RETRY_WAIT)
-                continue
+                # Retry network errors (unless this is the last attempt)
+                if is_network and attempt < NETWORK_MAX_RETRIES:
+                    log(f"  Network error (attempt {attempt}/{NETWORK_MAX_RETRIES}), retrying in {NETWORK_RETRY_WAIT}s...")
+                    time.sleep(NETWORK_RETRY_WAIT)
+                    continue
 
-            # Final network attempt or non-network error — return error
-            if is_network:
-                return f"SESSION_ERROR: Network error after {NETWORK_MAX_RETRIES} attempts\n{stderr}"
-            prefix = "SESSION_ERROR_PERMANENT" if _is_permanent_error(stderr) else "SESSION_ERROR"
-            return f"{prefix}: Exit code {proc.returncode}\n{stderr}\n{stdout}"
+                # Final network attempt or non-network error — return error
+                if is_network:
+                    return f"SESSION_ERROR: Network error after {NETWORK_MAX_RETRIES} attempts\n{stderr}"
+                prefix = "SESSION_ERROR_PERMANENT" if _is_permanent_error(stderr) else "SESSION_ERROR"
+                return f"{prefix}: Exit code {proc.returncode}\n{stderr}\n{stdout}"
+            finally:
+                _ACTIVE_CHILD_PGIDS.discard(proc.pid)
 
         except FileNotFoundError:
             return "SESSION_ERROR_PERMANENT: 'claude' command not found. Ensure Claude CLI is installed and in PATH."

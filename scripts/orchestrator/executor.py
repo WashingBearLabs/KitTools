@@ -157,17 +157,62 @@ def execute_spec_stories(
             if max_retries is not None and attempt > max_retries:
                 if mode == "guarded":
                     log(f"Story {story['id']} failed after {max_retries} attempts.")
-                    log("Guarded mode: waiting for user input...")
+                    # Pause via the standard, monitorable mechanism — NOT a
+                    # blocking stdin read. A detached/tmux orchestrator has no
+                    # interactive stdin, and a raw input() is invisible to
+                    # /kit-tools:execution-status and the supervisor (they see
+                    # status:running + a frozen heartbeat, indistinguishable
+                    # from a hang — a run once sat silently parked overnight).
+                    # Writing the pause file + paused status + a notification
+                    # makes it visible, and a human OR the supervisor can resume
+                    # it (remove .pause_execution) or intervene with a control
+                    # action (skip/split), honored below.
+                    log("Guarded mode: pausing for review (retries exhausted).")
+                    pause_path = os.path.join(project_dir, "kit_tools", ".pause_execution")
                     try:
-                        input("Press Enter to retry, or Ctrl+C to stop: ")
-                    except (KeyboardInterrupt, EOFError):
-                        log("User stopped execution.")
-                        state["status"] = "paused"
-                        save_state(state, config)
-                        commit_tracking_files(project_dir, feature_name)
-                        clean_result_files(project_dir)
-                        sys.exit(0)
-                    attempt = 1  # Reset for new round
+                        with open(pause_path, "w") as f:
+                            f.write(
+                                f"Guarded mode: story {story['id']} exhausted "
+                                f"{max_retries} retries.\nRemove this file to retry "
+                                f"the story, or send a skip/split via "
+                                f"/kit-tools:execution-status.\n"
+                            )
+                    except OSError:
+                        pass
+                    state["status"] = "paused"
+                    save_state(state, config)
+                    commit_tracking_files(project_dir, feature_name)
+                    write_notification(
+                        config, "execution_paused",
+                        f"Guarded pause: {story['id']} retries exhausted",
+                        f"Story {story['id']} failed {max_retries} attempts. "
+                        f"Remove .pause_execution to retry, or send a skip/split "
+                        f"control action.",
+                        severity="warning",
+                    )
+                    wait_for_pause_removal(project_dir, config=config)
+                    # On resume, honor any supervisor control action written
+                    # while paused (skip/split/pause/abort).
+                    control = read_control_file(config)
+                    if control:
+                        result = handle_control_action(
+                            control, config, state, spec_path, feature_name, spec_key
+                        )
+                        if result == "abort":
+                            commit_tracking_files(project_dir, feature_name)
+                            clean_result_files(project_dir)
+                            sys.exit(1)
+                        if result == "stories_updated":
+                            # Story was skipped/split — leave the attempt loop so
+                            # the per-story loop re-derives and picks the next.
+                            if spec_key is not None:
+                                stories_state = state["specs"][spec_key]
+                            else:
+                                stories_state = state
+                            break
+                    state["status"] = "running"
+                    save_state(state, config)
+                    attempt = 1  # Reset for a new round of retries
                     continue
                 else:
                     log(f"Story {story['id']} exceeded max retries ({max_retries}). Stopping.")

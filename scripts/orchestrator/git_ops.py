@@ -111,12 +111,25 @@ def delete_attempt_branch(project_dir: str, feature_branch: str, attempt_branch:
     """Delete a failed attempt branch and return to the feature branch.
 
     Returns the captured diff (for retry context) before deleting.
+
+    Uses a **forced** checkout + clean rather than a plain `git checkout`. A
+    killed/timed-out session, or a verify-fail caught mid-edit, can leave the
+    attempt branch with uncommitted changes; a plain checkout then fails
+    ("local changes would be overwritten"), HEAD stays on the attempt branch,
+    and `git branch -D` fails ("cannot delete branch used by worktree") — leaving
+    the worktree stranded on a dirty attempt branch so the next retry inherits
+    the mess. `-f` discards the failed attempt's tracked changes; `clean -fdq`
+    removes untracked cruft it left (e.g. an orphan migration) that would
+    otherwise survive across attempts and later trip the startup clean-tree
+    gate. Gitignored files (`.venv`, `node_modules`, the `.execution-*` state)
+    are preserved (no `-x`).
     """
     # Capture the diff before deleting
     diff = get_attempt_diff(project_dir, feature_branch, attempt_branch)
-    # Switch back to feature branch
-    run_git(["checkout", feature_branch], project_dir, check=True)
-    # Force-delete the attempt branch
+    # Force back to the feature branch, discarding the failed attempt's tree.
+    run_git(["checkout", "-f", feature_branch], project_dir, check=True)
+    run_git(["clean", "-fdq"], project_dir)
+    # Force-delete the attempt branch (now safe — no longer checked out).
     run_git(["branch", "-D", attempt_branch], project_dir, check=True)
     log(f"  Deleted failed attempt branch: {attempt_branch}")
     return diff

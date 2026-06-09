@@ -34,7 +34,12 @@ from .git_ops import (
 )
 from .prompts import persist_learnings
 from . import registry
-from .sessions import clean_result_files, is_session_error, run_claude_session
+from .sessions import (
+    clean_result_files,
+    is_session_error,
+    kill_active_child_sessions,
+    run_claude_session,
+)
 from .specs import archive_spec, check_dependencies_archived, tag_checkpoint
 from .state import (
     StateCorrupt,
@@ -81,6 +86,10 @@ def register_crash_handler(config: dict) -> None:
 
     def _on_exit():
         try:
+            # Reap any live child `claude` session FIRST so a stopped orchestrator
+            # can't leave an orphan that keeps writing partial work and re-dirties
+            # the worktree after teardown. No-op on a clean exit (no live child).
+            kill_active_child_sessions()
             kill_tmux_session(config)
             if not os.path.exists(state_path):
                 return
@@ -108,11 +117,17 @@ def register_crash_handler(config: dict) -> None:
 
     atexit.register(_on_exit)
 
-    def _on_sigterm(signum, frame):
+    def _on_signal(signum, frame):
         _on_exit()
         sys.exit(1)
 
-    signal.signal(signal.SIGTERM, _on_sigterm)
+    # Reap the child on any stop signal — not just SIGTERM. SIGINT (Ctrl+C) and
+    # SIGHUP (tmux kill-session / terminal close) must also stop the child
+    # session, otherwise it's orphaned in its own process group and keeps running.
+    signal.signal(signal.SIGTERM, _on_signal)
+    signal.signal(signal.SIGINT, _on_signal)
+    if hasattr(signal, "SIGHUP"):
+        signal.signal(signal.SIGHUP, _on_signal)
 
 
 def run_single_spec(config: dict) -> None:
