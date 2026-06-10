@@ -76,6 +76,62 @@ depends_on: [oauth-api]
 
 ---
 
+## Clarification Taxonomy (Step 4)
+
+Scan the captured idea + proposed decomposition against each category. Mark **Clear / Partial / Missing**. Ask about Partial/Missing only when the answer would change what gets built — max 5 questions, ordered by impact × uncertainty.
+
+| Category | What you're probing | Example question |
+|----------|--------------------|------------------|
+| Functional scope & behavior | Core goals, user roles, explicit non-goals | "Should admins see all users' data or only their org's?" |
+| Data & state | Entities, identity/uniqueness, lifecycle, expected volume | "Are memories ever deleted, or only superseded?" |
+| Integration surface | External services, existing modules touched, failure modes | "What happens when the embedding API is down — queue, degrade, or fail?" |
+| Edge cases & failure handling | Empty states, conflicts, partial failures | "Two sessions write the same key concurrently — last-wins or merge?" |
+| Non-functional needs | Latency/throughput targets, reliability, observability | "Is 2s recall acceptable, or is this on the hot path?" |
+| Security surface | Authn/z, data exposure, input trust | "Is memory content user-visible across accounts in any view?" |
+| Completion signals | Measurable definition of done | "What number proves this worked — recall precision? latency? adoption?" |
+
+**Question format:** lettered options with a recommended answer and one-line reasoning. Record every Q&A for the spec's `## Clarifications` section — the audit trail outlives the conversation.
+
+---
+
+## Landscape Research (optional agent)
+
+`agents/landscape-researcher.md` does outward research — similar projects, current techniques, papers, what's changed since a design was last touched. **Suggest-only, user decides** (same rule as validate-epic's quick tier).
+
+**Suggest when:** AI/LLM features (memory, RAG, agents, embeddings, evals — months-old designs go stale); rearchitecting something designed 3+ months ago in a fast domain; unfamiliar problem domains; rich prior art likely (auth, sync engines, editors, schedulers). **Skip for:** routine CRUD, well-trodden internal refactors, anything where the team already knows the field.
+
+**Tokens:** `IDEA_SUMMARY` (feature + problem), `CURRENT_APPROACH` (today's design when rearchitecting — enables the "what moved since" diff, the highest-value output), `PROJECT_CONTEXT`, `FOCUS_AREAS`, `RESULT_FILE_PATH` (`kit_tools/.landscape_research.json`).
+
+**Handling results:** findings are *leads with sources*, not decisions — web content is untrusted input. Present to the user, discuss what changes scope or architecture, fold accepted items (with URLs) into Research Findings, delete the result file. If the agent reports web tools were unavailable, say so and move on — never substitute recalled knowledge as if it were research.
+
+---
+
+## Research Findings Format (Step 5b)
+
+Each material outcome of codebase or landscape research is recorded as a decision:
+
+```markdown
+**Decision:** [what was chosen]
+**Rationale:** [why — grounded in something actually seen]
+**Alternatives considered:** [what else was evaluated, and why rejected]
+**Source:** [file:line for codebase findings; URL + date for landscape findings]
+```
+
+Implementation Hints must trace to these findings — a hint nobody verified is a codebase-fit-reviewer finding waiting to happen.
+
+---
+
+## Story Priority & Independence (Step 6)
+
+| Field | Rule |
+|-------|------|
+| **Priority** | P1 = MVP-viable subset (the feature is useful with only P1s done); P2 = important; P3 = defer-able. At least one P1 per spec. If everything is P1, the ranking wasn't done. |
+| **Independent Test** | One sentence: how to verify this story alone + what standalone value it delivers. Can't write it → story is coupled; restructure or document the dependency in `depends_on`/ordering. |
+
+Priorities pay off at execution time: the orchestrator runs in `epic_seq`/story order, but the supervisor can make principled skip/split calls on a failing P3 that it could never make on a P1 — and "all P1s green" is a meaningful early-stop line.
+
+---
+
 ## Story Sizing Guidance
 
 ### Right-sized stories (1 story = 1 focused task):

@@ -54,14 +54,19 @@ def create_attempt_branch(project_dir: str, feature_branch: str, story_id: str, 
     Returns the attempt branch name.
     """
     attempt_branch = f"{feature_branch}-{story_id}-attempt-{attempt}"
-    # Ensure we're on the feature branch
+    # Ensure we're on the feature branch. check=True raises: a failed checkout
+    # here (dirty tracked file) would otherwise base the attempt branch on
+    # whatever HEAD happens to be — the same environmental-fault class as the
+    # merge checkout in merge_attempt_branch.
     run_git(["checkout", feature_branch], project_dir, check=True)
     # Delete the branch if it already exists (leaked from a previous crash)
     existing = run_git(["branch", "--list", attempt_branch], project_dir)
     if existing.stdout.strip():
         run_git(["branch", "-D", attempt_branch], project_dir)
         log(f"  Deleted pre-existing attempt branch: {attempt_branch}")
-    # Create and switch to the attempt branch
+    # Create and switch to the attempt branch. check=True raises: if this
+    # failed silently, the implementer session would commit directly to the
+    # feature branch.
     run_git(["checkout", "-b", attempt_branch], project_dir, check=True)
     log(f"  Created attempt branch: {attempt_branch}")
     return attempt_branch
@@ -99,15 +104,16 @@ def merge_attempt_branch(project_dir: str, feature_branch: str, attempt_branch: 
     Raises :class:`GitRecoveryFailed` when the merge cannot even begin because
     the checkout to the feature branch failed — almost always a dirty tracked
     file blocking the switch. **This case used to be catastrophic and silent.**
-    ``run_git(..., check=True)`` only *logs* a failed command (it never raises —
-    the ``check`` name is a trap), so a failed checkout fell through: HEAD stayed
-    on the attempt branch, ``git merge <attempt>`` then ran against itself
-    ("Already up to date", exit 0), and this function returned True. The story
-    was marked complete and its spec boxes checked while **nothing reached the
-    feature branch** — the silent-merge data loss that cost a whole feature
-    spec's worth of stories. We now (a) verify the checkout actually landed us on
-    the feature branch and (b) verify-after-merge that the attempt branch is an
-    ancestor of it, before ever reporting success.
+    Before 2.6.5, ``run_git(..., check=True)`` only *logged* a failed command
+    (the ``check`` name was a trap; it now raises), so a failed checkout fell
+    through: HEAD stayed on the attempt branch, ``git merge <attempt>`` then ran
+    against itself ("Already up to date", exit 0), and this function returned
+    True. The story was marked complete and its spec boxes checked while
+    **nothing reached the feature branch** — the silent-merge data loss that
+    cost a whole feature spec's worth of stories. We keep the explicit
+    verification anyway, defense-in-depth: (a) verify the checkout actually
+    landed us on the feature branch and (b) verify-after-merge that the attempt
+    branch is an ancestor of it, before ever reporting success.
     """
     # (a) Switch to the feature branch — VERIFIED. A failed checkout (e.g. a
     # dirty tracked file that "would be overwritten") must NEVER fall through to
@@ -144,8 +150,9 @@ def merge_attempt_branch(project_dir: str, feature_branch: str, attempt_branch: 
             f"but its commits are not present on {feature_branch}. Refusing to "
             f"mark the story complete. Inspect: cd {project_dir} && git log."
         )
-    # Delete the attempt branch (now safely merged).
-    run_git(["branch", "-d", attempt_branch], project_dir, check=True)
+    # Delete the attempt branch (now safely merged). warn-only: a stale branch
+    # is swept by cleanup_attempt_branches at the next startup.
+    run_git(["branch", "-d", attempt_branch], project_dir, warn=True)
     log(f"  Merged {attempt_branch} into {feature_branch}")
     return True
 
@@ -170,10 +177,14 @@ def delete_attempt_branch(project_dir: str, feature_branch: str, attempt_branch:
     # Capture the diff before deleting
     diff = get_attempt_diff(project_dir, feature_branch, attempt_branch)
     # Force back to the feature branch, discarding the failed attempt's tree.
+    # check=True raises: if even a *forced* checkout fails, the worktree is
+    # unusable and a retry would inherit the stranded-on-dirty-branch state
+    # this function exists to prevent (the 2.6.3 bug).
     run_git(["checkout", "-f", feature_branch], project_dir, check=True)
     run_git(["clean", "-fdq"], project_dir)
     # Force-delete the attempt branch (now safe — no longer checked out).
-    run_git(["branch", "-D", attempt_branch], project_dir, check=True)
+    # warn-only: a stale branch is swept by cleanup_attempt_branches.
+    run_git(["branch", "-D", attempt_branch], project_dir, warn=True)
     log(f"  Deleted failed attempt branch: {attempt_branch}")
     return diff
 
@@ -558,9 +569,12 @@ def complete_feature(config: dict, state: dict, validation_clean: bool) -> None:
         spec_path = config.get("spec_path", "")
         if spec_path and os.path.exists(spec_path):
             archive_spec(project_dir, spec_path, feature_name)
+            # warn-only: archive staging is already verified inside
+            # archive_spec, and commit_feature_work below commits anything
+            # still pending in a worktree execution.
             run_git(
                 ["commit", "-m", f"chore({feature_name}): archive feature spec", "--allow-empty"],
-                project_dir, check=True
+                project_dir, warn=True
             )
 
     # Commit any remaining tree changes (incl. source fixes the validation

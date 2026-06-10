@@ -3,9 +3,15 @@
 harvest_signals.py - Capture skill telemetry from KitTools artifacts.
 
 Trigger: Stop
-Writes signals to $PLUGIN_ROOT/.feedback/signals.jsonl for retrospective analysis.
+Writes signals to ~/.kit/feedback/<project-id>/signals.jsonl for retrospective
+analysis. (Before 2.6.5 signals went to $PLUGIN_ROOT/.feedback/ — but
+marketplace installs get a new install path per plugin version, so the data
+was scattered across stale version directories and lost on every update.
+~/.kit/ is the same per-user home the worktree registry already uses.)
 Silent no-op if no kit_tools/ directory exists in the project.
 """
+import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -13,10 +19,61 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+FEEDBACK_HOME = Path("~/.kit/feedback").expanduser()
+
 
 def resolve_plugin_root():
     """Derive plugin root from this script's own location."""
     return Path(__file__).resolve().parent.parent
+
+
+def derive_project_id(project_dir: str) -> str:
+    """Stable per-project id, matching the worktree registry's derivation.
+
+    Imports ``scripts/orchestrator/registry.py`` by path so the two stay in
+    lockstep (basename + 8-hex hash of the normalised origin remote, falling
+    back to the absolute path). If the import fails for any reason, falls back
+    to the same shape computed from the absolute path alone — stable, just
+    not remote-aware.
+    """
+    registry_path = resolve_plugin_root() / "scripts" / "orchestrator" / "registry.py"
+    try:
+        spec = importlib.util.spec_from_file_location("_kit_registry", registry_path)
+        if spec and spec.loader:
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module.derive_project_id(project_dir)
+    except Exception:
+        pass
+    key = os.path.abspath(project_dir)
+    digest = hashlib.sha1(key.encode("utf-8")).hexdigest()[:8]
+    basename = re.sub(r"[^A-Za-z0-9._-]+", "-", os.path.basename(key)).strip("-") or "project"
+    return f"{basename}-{digest}"
+
+
+def migrate_legacy_signals(plugin_root: Path) -> None:
+    """One-time move of pre-2.6.5 signals out of the plugin install dir.
+
+    The old global file mixes projects, so it moves wholesale to
+    ``~/.kit/feedback/legacy-signals.jsonl`` (appending if several stale
+    install dirs each held one) rather than being split per-project.
+    """
+    old_file = plugin_root / ".feedback" / "signals.jsonl"
+    if not old_file.exists():
+        return
+    try:
+        content = old_file.read_text()
+        FEEDBACK_HOME.mkdir(parents=True, exist_ok=True)
+        legacy = FEEDBACK_HOME / "legacy-signals.jsonl"
+        with open(legacy, "a") as f:
+            f.write(content)
+        old_file.unlink()
+        try:
+            old_file.parent.rmdir()  # only removes if now empty
+        except OSError:
+            pass
+    except OSError:
+        pass
 
 
 def detect_skill(kit_dir: Path) -> tuple[str | None, dict]:
@@ -232,10 +289,10 @@ def extract_validate_signal(data: dict, project_name: str) -> dict:
     }
 
 
-def write_signal(plugin_root: Path, signal: dict):
-    """Append a signal line to the feedback JSONL file."""
-    feedback_dir = plugin_root / ".feedback"
-    feedback_dir.mkdir(exist_ok=True)
+def write_signal(project_dir: str, signal: dict):
+    """Append a signal line to the project's feedback JSONL under ~/.kit/."""
+    feedback_dir = FEEDBACK_HOME / derive_project_id(project_dir)
+    feedback_dir.mkdir(parents=True, exist_ok=True)
 
     signal["timestamp"] = datetime.now(timezone.utc).isoformat()
 
@@ -258,7 +315,7 @@ def main():
     if not kit_dir.is_dir():
         return
 
-    plugin_root = resolve_plugin_root()
+    migrate_legacy_signals(resolve_plugin_root())
     project_name = Path(project_dir).name
 
     skill, data = detect_skill(kit_dir)
@@ -273,7 +330,7 @@ def main():
         return
 
     signal["project_dir"] = project_dir
-    write_signal(plugin_root, signal)
+    write_signal(project_dir, signal)
 
 
 if __name__ == "__main__":

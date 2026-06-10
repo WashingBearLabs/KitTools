@@ -226,9 +226,14 @@ def persist_learnings(project_dir: str, state: dict) -> None:
     """Persist top learnings from current execution to JSONL file.
 
     Appends up to 10 learnings (most recent stories first), deduplicates by exact text,
-    and caps file at PERSISTENT_LEARNINGS_MAX entries. Uses fcntl for file locking.
+    and caps file at PERSISTENT_LEARNINGS_MAX entries. Uses fcntl for file locking
+    where available (POSIX); on platforms without fcntl (Windows) it degrades to
+    lock-free best-effort rather than crashing at call time.
     """
-    import fcntl
+    try:
+        import fcntl
+    except ImportError:
+        fcntl = None
 
     path = _get_persistent_learnings_path(project_dir)
 
@@ -268,10 +273,11 @@ def persist_learnings(project_dir: str, state: dict) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
 
     try:
-        # Lock file for concurrent safety
+        # Lock file for concurrent safety (no-op where fcntl is unavailable)
         fd = os.open(path, os.O_RDWR | os.O_CREAT)
         try:
-            fcntl.flock(fd, fcntl.LOCK_EX)
+            if fcntl is not None:
+                fcntl.flock(fd, fcntl.LOCK_EX)
             f = os.fdopen(fd, "r+")
 
             # Read existing entries
@@ -303,10 +309,11 @@ def persist_learnings(project_dir: str, state: dict) -> None:
                 f.write(json.dumps(entry) + "\n")
             f.flush()
         finally:
-            try:
-                fcntl.flock(fd, fcntl.LOCK_UN)
-            except OSError:
-                pass
+            if fcntl is not None:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                except OSError:
+                    pass
             # fd is closed by fdopen
     except OSError as e:
         log(f"  WARNING: Could not persist learnings: {e}")

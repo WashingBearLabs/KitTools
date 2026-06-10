@@ -550,18 +550,6 @@ def run_regression_check(
         return True, f"Error: {e} — skipped"
 
 
-def make_quiet(test_command: str) -> str:
-    """Add quiet flags for full-suite runs. Suppresses PASSED noise, preserves failure tracebacks."""
-    if not test_command:
-        return test_command
-    if "pytest" in test_command:
-        # Remove -v if present, add -q --tb=short (preserves failure tracebacks)
-        cmd = re.sub(r"\s+-v\b", "", test_command)
-        return f"{cmd} -q --tb=short"
-    # jest and vitest default output already focuses on failures
-    return test_command
-
-
 def detect_test_command(project_dir: str) -> str | None:
     """Auto-detect the project's test command.
 

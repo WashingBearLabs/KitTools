@@ -125,6 +125,7 @@ Write to: `{{RESULT_FILE_PATH}}`
 {
   "story_id": "{{STORY_ID}}",
   "status": "complete|partial|failed",
+  "canonical_verdict": "ready|needs-work|not-ready",
   "files_changed": [
     "path/to/file.ts (created|modified|deleted)"
   ],
@@ -137,6 +138,8 @@ Write to: `{{RESULT_FILE_PATH}}`
   ]
 }
 ```
+
+**canonical_verdict** (cross-agent vocabulary, see FINDING_SCHEMA.md): complete → ready, partial → needs-work, failed → not-ready.
 
 Use the Write tool to create this file. Ensure it is valid JSON.
 

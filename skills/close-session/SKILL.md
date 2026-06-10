@@ -157,7 +157,20 @@ python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" scrub-secrets "<e
 
 This is a **no-op for the default symlinked secrets** (a symlink holds nothing at rest) and only removes the Windows copy-fallback duplicates. If it reports removed files, tell the user those secret *copies* were cleaned from the kept worktree (the originals in the main checkout are untouched; the worktree will re-provision them on the next execution).
 
+> **Who cleans what:** a *successful* teardown removes the whole worktree directory — copies and all — and teardown's own keep-and-flag path already auto-scrubs copied secrets. The explicit `scrub-secrets` call above is the belt-and-braces for trees flagged by the census *without* a teardown attempt; running it on an already-scrubbed tree is harmless.
+
 Summarize: reaped (N), still running (N), kept-and-flagged (N, with reasons), secret copies scrubbed (N).
+
+## Step 4c: Compact execution learnings
+
+If `kit_tools/.execution-learnings.jsonl` exists and has more than ~10 entries, give it a compaction pass — exact-duplicate dedup happens automatically at write time, but *rephrased* near-duplicates accumulate across epics and dilute the injected context:
+
+1. Read the file (one JSON object per line: `text`, `source`, `date`).
+2. **Merge semantic duplicates** — entries that teach the same lesson in different words. Keep one entry per lesson: the clearest phrasing, the most recent `date`, and combine `source` references (e.g. `"US-003 (feature-a), US-011 (feature-b)"`).
+3. **Promote recurring lessons** — anything that appears (or merged from) 3+ times, or states a durable project truth rather than a one-off observation, belongs in permanent docs: add gotcha-shaped lessons ("X breaks when Y") to `kit_tools/docs/GOTCHAS.md` and convention-shaped ones ("always do X here") to `kit_tools/docs/CONVENTIONS.md`. Leave a single compacted entry in the learnings file noting it was promoted.
+4. Rewrite the file with the compacted entries (same JSONL shape — the orchestrator reads `text` and injects the most recent ones into implementation prompts).
+
+Skip silently if the file is missing or already small. Mention in the summary: "learnings compacted: N → M (K promoted to GOTCHAS/CONVENTIONS)".
 
 ## Step 5: Delete scratchpad
 

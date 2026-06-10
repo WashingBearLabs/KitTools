@@ -532,6 +532,14 @@ Run a quick validation to ensure everything is in place:
 - [ ] `.gitignore` contains the KitTools block (`.kit/` + transient execution state)
 - [ ] This is a git repository (`git rev-parse --git-dir` succeeds) with at least one commit — or the user explicitly declined and was warned that execution needs git
 
+**Then run the doctor** for plugin-integrity and environment checks (broken skill→agent references, agent token drift, missing tmux/PyYAML, stale plugin install, worktree.yaml sanity):
+
+```bash
+python3 "$CLAUDE_PLUGIN_ROOT/scripts/doctor.py" --project "$(pwd)"
+```
+
+Include its findings in the validation report. Doctor findings are advisory — surface environment warnings with their consequence (e.g. "no tmux → autonomous execution won't launch; supervised mode works") rather than treating them as setup failures. The user can re-run this anytime via `/kit-tools:doctor`.
+
 **Report any issues** — if validation finds problems, list them clearly.
 
 ## Step 10: Summary
@@ -547,7 +555,7 @@ Report to the user:
 - That `kit_tools/worktree.yaml` was created (note it's committed; mention they can set `env_bootstrap`/`env_link` if execute-epic worktrees need deps or secrets)
 - Git status: whether a repo was initialized (and on `main`) or already existed, and the detected integration branch if not `main`
 - That `.gitignore` was updated with the KitTools transient-state block
-- Validation status (pass/issues found)
+- Validation status (pass/issues found), including the doctor result (healthy / warnings / errors)
 
 **Remind the user:**
 - Run `/kit-tools:seed-project` next to populate templates with project-specific content

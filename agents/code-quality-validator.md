@@ -68,6 +68,7 @@ Write a JSON file to `{{RESULT_FILE_PATH}}` matching the unified Finding Schema 
   "review_type": "code-quality",
   "target": "<branch or changeset identifier>",
   "overall_verdict": "clean|warnings|issues",
+  "canonical_verdict": "ready|needs-work|not-ready",
   "findings": [
     {
       "severity": "critical|warning|info",
@@ -82,6 +83,8 @@ Write a JSON file to `{{RESULT_FILE_PATH}}` matching the unified Finding Schema 
 ```
 
 Use the Write tool. Empty `findings: []` with `overall_verdict: "clean"` when no issues.
+
+**canonical_verdict** (cross-agent vocabulary, see `agents/FINDING_SCHEMA.md`): map your overall_verdict — clean → ready, warnings → needs-work, issues → not-ready.
 
 ### Severity Guidelines
 

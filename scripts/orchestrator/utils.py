@@ -67,6 +67,29 @@ def _atomic_json_write(path: str, data) -> None:
         raise
 
 
+def atomic_write_text(path: str, text: str) -> None:
+    """Atomically write text to `path` — same temp-file + fsync + os.replace
+    pattern as `_atomic_json_write`, for non-JSON files (e.g. spec files whose
+    checkboxes are rewritten mid-run). A crash mid-write leaves the original
+    intact instead of a truncated file.
+    """
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".", suffix=".tmp", dir=directory)
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def strip_frontmatter(text: str) -> str:
     """Strip YAML frontmatter from a template string.
 
@@ -145,20 +168,50 @@ def log(message: str) -> None:
 # --- domain module depend on utils without circular imports.)
 
 
-def run_git(args: list[str], project_dir: str, check: bool = False) -> subprocess.CompletedProcess:
-    """Run a git command with optional error logging.
+class GitCommandError(RuntimeError):
+    """Raised by ``run_git(check=True)`` when the git command exits non-zero.
+
+    Caught at ``entry.main()``, which writes a critical notification and
+    aborts — the fail-loud counterpart to the silent fall-through that caused
+    the 2.6.4 silent-merge data loss.
+    """
+
+    def __init__(self, cmd: str, returncode: int, stderr: str):
+        super().__init__(
+            f"git command failed (exit {returncode}): {cmd}\n  stderr: {stderr}"
+        )
+        self.cmd = cmd
+        self.returncode = returncode
+        self.stderr = stderr
+
+
+def run_git(args: list[str], project_dir: str, check: bool = False,
+            warn: bool = False) -> subprocess.CompletedProcess:
+    """Run a git command.
 
     Args:
         args: Git subcommand and arguments (e.g., ["checkout", "main"]).
         project_dir: Working directory for the command.
-        check: If True, log a warning when the command fails (non-fatal).
+        check: If True, raise :class:`GitCommandError` on non-zero exit —
+            real ``subprocess.run`` semantics. (Before 2.6.5 this flag only
+            *logged* the failure; that name-trap let a failed checkout fall
+            through to a no-op merge reported as success — the 2.6.4 data
+            loss. Log-only behavior is now spelled ``warn=True``.)
+        warn: If True, log a warning on non-zero exit and continue. For
+            mutations whose failure is expected/recoverable (cleanup sweeps,
+            tag-already-exists on resume) or verified separately by the
+            caller.
     """
     result = subprocess.run(
         ["git"] + args, cwd=project_dir, capture_output=True, text=True
     )
-    if check and result.returncode != 0:
+    if result.returncode != 0:
         cmd_str = "git " + " ".join(args)
-        log(f"  WARNING: git command failed: {cmd_str}\n    stderr: {result.stderr.strip()[:200]}")
+        stderr = result.stderr.strip()[:200]
+        if check:
+            raise GitCommandError(cmd_str, result.returncode, stderr)
+        if warn:
+            log(f"  WARNING: git command failed: {cmd_str}\n    stderr: {stderr}")
     return result
 
 

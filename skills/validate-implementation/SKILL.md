@@ -89,7 +89,7 @@ Spawn via Task tool. Read the result file, parse `findings[]` using the unified 
 
 ## Step 4b: Test Execution
 
-1. **Detect test command** — Check: `package.json`, `pyproject.toml`, `pytest.ini`, `Makefile`, `TESTING_GUIDE.md`
+1. **Detect test command** — Check in this order, **first hit wins** (this matches the orchestrator's `detect_test_command`, so manual and autonomous validation behave identically): `package.json` test script → `pyproject.toml` → `pytest.ini` → `Makefile` test target → `kit_tools/testing/TESTING_GUIDE.md` Quick Start command. TESTING_GUIDE.md is the *fallback*, not an override — if its command disagrees with the manifest's, surface that as a docs-drift info finding.
 2. **Run tests with minimal output** — Execute with 5-minute timeout. Use quiet flags to suppress per-test PASSED lines:
    - pytest: add `-q --tb=short` (and remove `-v` if present) — suppresses passing tests, preserves failure tracebacks
    - jest: default output is fine (only verbose on failure)
@@ -120,7 +120,7 @@ Reviews:
 
 ### Aggregate findings from Steps 3, 4, 4b, 5.
 
-All findings arrive in the same shape (unified Finding Schema), so merging them is straightforward: concatenate each review's `findings[]` array, tagging each entry with its `review_type` so later presentation can group by source. Assign IDs: `YYYY-MM-DD-NNN`.
+All findings arrive in the same shape (unified Finding Schema), so merging them is straightforward: concatenate each review's `findings[]` array, tagging each entry with its `review_type` so later presentation can group by source. Assign IDs: `YYYY-MM-DD-NNN`. Each result file also carries `canonical_verdict` (`ready|needs-work|not-ready`) alongside the native `overall_verdict` — prefer it when summarizing per-reviewer verdicts; fall back to the native field for results from pre-2.7.0 agents.
 
 ### Determine mode from `$EXEC_DIR/kit_tools/specs/.execution-state.json` (default: supervised).
 

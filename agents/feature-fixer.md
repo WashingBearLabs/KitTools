@@ -94,6 +94,7 @@ Write a JSON result file at `{{RESULT_FILE_PATH}}` with this structure:
 
 ```json
 {
+  "canonical_verdict": "ready|needs-work|not-ready",
   "findings_fixed": [
     {"id": "YYYY-MM-DD-NNN", "description": "What was fixed and how"}
   ],
@@ -103,6 +104,8 @@ Write a JSON result file at `{{RESULT_FILE_PATH}}` with this structure:
   "files_changed": ["path/to/file.ts"]
 }
 ```
+
+**canonical_verdict** (cross-agent vocabulary, see FINDING_SCHEMA.md): all findings fixed → ready, some unfixable → needs-work, none fixed → not-ready.
 
 Write the file using the Write tool. The skill reads this file to determine fix outcomes.
 

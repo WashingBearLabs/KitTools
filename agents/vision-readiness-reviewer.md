@@ -88,6 +88,7 @@ Write your findings as a JSON file to `{{RESULT_FILE_PATH}}`.
 {
   "review_mode": "spec-readiness",
   "overall_readiness": "ready|needs-work|not-ready",
+  "canonical_verdict": "ready|needs-work|not-ready",
   "feature_assessments": [
     {
       "feature_id": "T1.1",
@@ -126,6 +127,8 @@ Write your findings as a JSON file to `{{RESULT_FILE_PATH}}`.
 | `ready` | All feature areas can be specced, no structural blockers |
 | `needs-work` | Most features are speccable but some need revision first |
 | `not-ready` | Significant gaps — vision needs another revision pass before speccing can start |
+
+**canonical_verdict** (cross-agent vocabulary, see FINDING_SCHEMA.md): mirrors `overall_readiness` — this reviewer's native vocabulary is already the canonical one, so emit the same value in both fields.
 
 ---
 

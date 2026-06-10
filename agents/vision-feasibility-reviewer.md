@@ -73,6 +73,7 @@ Write your findings as a JSON file to `{{RESULT_FILE_PATH}}`.
 {
   "review_mode": "feasibility",
   "overall_score": 3,
+  "canonical_verdict": "ready|needs-work|not-ready",
   "dimensions": {
     "technical_feasibility": {
       "score": 2,
@@ -105,6 +106,8 @@ Write your findings as a JSON file to `{{RESULT_FILE_PATH}}`.
 | 1 | Fundamentally infeasible as written — needs major rework |
 
 `overall_score` is the rounded average of dimension scores.
+
+**canonical_verdict** (cross-agent vocabulary, see FINDING_SCHEMA.md): all dimension scores ≥ 4 → ready; any dimension < 3 → not-ready; otherwise needs-work.
 
 ---
 

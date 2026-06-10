@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 import yaml
 
-from .utils import log, run_git
+from .utils import atomic_write_text, log, run_git
 
 def parse_spec_frontmatter(spec_path: str) -> dict:
     """Parse YAML frontmatter from a feature spec markdown file using PyYAML.
@@ -144,8 +144,9 @@ def update_spec_checkboxes(spec_path: str, story_id: str) -> bool:
         return False  # Nothing to update
 
     content = content[:match.start()] + updated_section + content[match.end():]
-    with open(spec_path, "w") as f:
-        f.write(content)
+    # Atomic: a crash mid-write must not leave a truncated spec — the spec file
+    # is both the human-readable record and the orchestrator's story source.
+    atomic_write_text(spec_path, content)
     return True
 
 
@@ -191,7 +192,9 @@ def check_dependencies_archived(project_dir: str, spec_path: str) -> tuple[bool,
 def tag_checkpoint(project_dir: str, epic_name: str, feature_name: str) -> None:
     """Create a git tag marking a feature spec checkpoint within an epic."""
     tag_name = f"{epic_name}/{feature_name}-complete"
-    run_git(["tag", tag_name], project_dir, check=True)
+    # warn-only: the tag may already exist when a crashed run resumes past a
+    # previously completed spec — not an error.
+    run_git(["tag", tag_name], project_dir, warn=True)
     log(f"  Tagged checkpoint: {tag_name}")
 
 
@@ -233,8 +236,11 @@ def archive_spec(project_dir: str, spec_path: str, feature_name: str) -> None:
     # Stage changes
     rel_dest = os.path.relpath(dest, project_dir)
     rel_src = os.path.relpath(spec_path, project_dir)
-    run_git(["add", rel_dest], project_dir, check=True)
-    run_git(["rm", "--cached", "-f", rel_src], project_dir, check=True)
+    # warn-only: the staging that actually matters is verified explicitly
+    # below (raising GitRecoveryFailed); `rm --cached` on a never-committed
+    # spec is a benign "did not match any files".
+    run_git(["add", rel_dest], project_dir, warn=True)
+    run_git(["rm", "--cached", "-f", rel_src], project_dir, warn=True)
 
     # Verify-after-mutate: the archived copy MUST be staged, or the completed
     # feature spec silently never reaches the branch/PR — and the subsequent

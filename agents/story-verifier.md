@@ -113,6 +113,7 @@ Write to: `{{RESULT_FILE_PATH}}`
 {
   "story_id": "{{STORY_ID}}",
   "verdict": "pass|pass_with_warnings|fail",
+  "canonical_verdict": "ready|needs-work|not-ready",
   "tests_passed": true,
   "tests_run": [
     {
@@ -135,6 +136,8 @@ Write to: `{{RESULT_FILE_PATH}}`
   "recommendations": "What to fix on retry (if fail, else null)"
 }
 ```
+
+**canonical_verdict** (cross-agent vocabulary, see FINDING_SCHEMA.md): pass → ready, pass_with_warnings → needs-work, fail → not-ready.
 
 Use the Write tool to create this file. Ensure it is valid JSON.
 

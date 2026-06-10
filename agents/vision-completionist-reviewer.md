@@ -80,6 +80,7 @@ Write your findings as a JSON file to `{{RESULT_FILE_PATH}}`.
 {
   "review_mode": "completeness",
   "overall_score": 3,
+  "canonical_verdict": "ready|needs-work|not-ready",
   "dimensions": {
     "target_users": {
       "score": 4,
@@ -112,6 +113,8 @@ Write your findings as a JSON file to `{{RESULT_FILE_PATH}}`.
 | 1 | Missing/Unusable — dimension not addressed or too vague |
 
 `overall_score` is the rounded average of dimension scores.
+
+**canonical_verdict** (cross-agent vocabulary, see FINDING_SCHEMA.md): all dimension scores ≥ 4 → ready; any dimension < 3 → not-ready; otherwise needs-work.
 
 ---
 

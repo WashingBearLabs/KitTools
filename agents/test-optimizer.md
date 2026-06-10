@@ -127,6 +127,7 @@ Write your findings as a JSON file to `{{RESULT_FILE_PATH}}`.
   "review_type": "test-optimizer",
   "project_dir": "{{PROJECT_DIR}}",
   "timestamp": "ISO-8601 timestamp",
+  "canonical_verdict": "ready|needs-work|not-ready",
   "suite_summary": {
     "total_test_files": 0,
     "total_test_functions": 0,
@@ -152,6 +153,8 @@ Write your findings as a JSON file to `{{RESULT_FILE_PATH}}`.
   "summary": "Overall assessment of test suite health — key stats, most important issues, and recommended priority order for fixes."
 }
 ```
+
+**canonical_verdict** (cross-agent vocabulary, see `agents/FINDING_SCHEMA.md`): map your suite health score — healthy → ready, warning → needs-work, critical → not-ready.
 
 ### Severity Guide
 

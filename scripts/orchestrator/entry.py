@@ -50,7 +50,7 @@ from .state import (
     save_state,
 )
 from .supervisor import pause_file_exists, wait_for_pause_removal
-from .utils import kill_tmux_session, log, now_iso, run_git
+from .utils import GitCommandError, kill_tmux_session, log, now_iso, run_git
 
 
 def _update_registry_status(config: dict, status: str) -> None:
@@ -341,10 +341,12 @@ def run_epic(config: dict) -> None:
         # Archive feature spec
         archive_spec(project_dir, spec_path, feature_name)
 
-        # Commit archive + tag
+        # Commit archive + tag. warn-only: archive staging is verified inside
+        # archive_spec, and commit_feature_work above already committed the
+        # spec's pending work.
         run_git(
             ["commit", "-m", f"chore({epic_name}): complete {feature_name}", "--allow-empty"],
-            project_dir, check=True
+            project_dir, warn=True
         )
 
         # Update state
@@ -491,6 +493,20 @@ def main():
             severity="critical",
         )
         log_event(config, "abort_git_recovery_failed", severity="critical", message=str(e))
+        sys.exit(1)
+    except GitCommandError as e:
+        # A git mutation the orchestrator declared fatal (run_git(check=True))
+        # failed. Almost always environmental — a dirty tracked file, broken
+        # commit config — that retrying can't fix. Abort loudly rather than
+        # record success the work never earned.
+        log(f"FATAL: {e}")
+        write_notification(
+            config, "execution_blocked",
+            "Git command failed — execution aborted",
+            str(e),
+            severity="critical",
+        )
+        log_event(config, "abort_git_command_failed", severity="critical", message=str(e))
         sys.exit(1)
 
     log("Orchestrator finished.")

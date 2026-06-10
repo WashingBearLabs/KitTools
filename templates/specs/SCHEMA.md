@@ -1,4 +1,4 @@
-<!-- Template Version: 1.0.0 -->
+<!-- Template Version: 1.1.0 -->
 <!-- Seeding:
   explorer_focus: none
   required_sections: []
@@ -33,7 +33,7 @@ updated: 2026-04-16             # required
 |-------|------|----------|--------|-------|
 | `feature` | string | yes | kebab-case (`user-auth`, `payment-flow`) | Used as feature branch suffix (`feature/user-auth`) and in orchestrator state keys. |
 | `status` | enum | yes | `active` \| `on-hold` \| `completed` | `completed` moves the spec to `specs/archive/` via `/kit-tools:complete-implementation`. |
-| `session_ready` | bool | yes | `true` \| `false` | `false` blocks execution. Set by `/kit-tools:plan-epic` / `/kit-tools:validate-epic` when story-quality checks fail. Manually set `true` only if you've resolved flagged issues. |
+| `session_ready` | bool | yes | `true` \| `false` | `false` blocks execution. Set by `/kit-tools:plan-epic` / `/kit-tools:validate-epic` when story-quality checks fail **or when any `[BLOCKING]` Open Question is unresolved**. Manually set `true` only if you've resolved flagged issues and blocking questions. |
 | `depends_on` | list[string] | yes | List of feature names | Hard gate: a feature spec is not picked up by `execute-epic` until all entries have archived specs. Use the feature name only (no `feature-` prefix). Empty list is valid. |
 | `vision_ref` | string | optional | Free-form reference into `PRODUCT_VISION.md` | Used by spec reviewers for vision-alignment checks. If absent, vision dimension is skipped (not flagged). |
 | `type` | enum | yes | `feature` \| `epic-child` | Always `feature` for standalone; `epic-child` for specs decomposed from an epic. |

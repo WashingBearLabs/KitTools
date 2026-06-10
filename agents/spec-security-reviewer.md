@@ -102,6 +102,7 @@ Write your findings as a JSON file to `{{RESULT_FILE_PATH}}`.
   "review_type": "spec-security",
   "spec_name": "{{SPEC_NAME}}",
   "overall_verdict": "ready|needs-work|not-ready",
+  "canonical_verdict": "ready|needs-work|not-ready",
   "findings": [
     {
       "severity": "critical|warning|info",
@@ -114,6 +115,8 @@ Write your findings as a JSON file to `{{RESULT_FILE_PATH}}`.
   "summary": "One-sentence security assessment — is this spec safe to implement as written?"
 }
 ```
+
+**canonical_verdict** (cross-agent vocabulary, see FINDING_SCHEMA.md): mirror your overall_verdict — your native vocabulary is already canonical.
 
 ### Verdict Guide
 

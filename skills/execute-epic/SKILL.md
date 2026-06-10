@@ -176,7 +176,7 @@ The deterministic git/registry mechanics (resolve main → `git worktree add` �
      python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" ensure-gitignore
      ```
      If it reports `modified: true`, mention you added the KitTools `.gitignore` block. If `untracked` is non-empty, mention you untracked stale run artifacts (e.g. a previously-committed `EXECUTION_LOG.md`) — a tracked, mid-run-rewritten log is the dirty-tree trigger behind the silent-merge data loss, so this is a real fix, not cosmetic.
-   - **If `kit_tools/worktree.yaml` is missing,** offer to scaffold it from `$CLAUDE_PLUGIN_ROOT/templates/worktree.yaml` (or point the user to re-run `/kit-tools:init-project`). Don't silently proceed with no contract on a project that clearly has dependencies.
+   - **If `kit_tools/worktree.yaml` is missing,** offer to scaffold it from `$CLAUDE_PLUGIN_ROOT/templates/worktree.yaml` (or point the user to re-run `/kit-tools:init-project`). If the user declines **and the repo has no dependency manifest**, proceed with an empty contract (defaults are fine for dependency-free projects). If the user declines and a dependency manifest **does** exist (`package.json`, `pyproject.toml`, etc.), **stop here** — a contract-less worktree won't be runnable and every verification will fail; require the scaffold or `/kit-tools:init-project` before continuing.
 
 1. **Read the contract** `kit_tools/worktree.yaml` for `root`, `env_bootstrap`, `env_link`, `path_links`. If it's still missing after step 0, use empty values and the default root. Let `<key>` = the epic name (or feature name in standalone fallback).
 
@@ -228,9 +228,9 @@ Agents read context files on-demand via their Read tool.
 
 ## Step 6: Initialize State
 
-**Autonomous/Guarded mode:** Do NOT create `.execution-state.json`. The orchestrator creates it with the correct schema (single-spec or epic) on first run. Pre-creating state causes schema mismatches.
+**Autonomous/Guarded mode:** Do NOT create `.execution-state.json`. The orchestrator creates it with the correct schema (single-spec or epic) on first run. Pre-creating state causes schema mismatches. If you find one already exists at this point without a running orchestrator (registry shows no live execution), it is stale — surface it to the user rather than launching over it.
 
-**Supervised mode:** Create `.execution-state.json` using the single-spec schema from REFERENCE.md (supervised mode does not support epics).
+**Supervised mode:** Create `.execution-state.json` **now, in this step — before entering the Step 7 loop** — using the single-spec schema from REFERENCE.md (supervised mode does not support epics). This is the only mode where the skill itself creates state.
 
 **All modes:** Append a run header to `EXECUTION_LOG.md`.
 

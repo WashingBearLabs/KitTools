@@ -370,12 +370,15 @@ def _handle_split_story(
 
     save_state(state, config)
 
-    # Commit the spec change
+    # Commit the spec change. warn-only: the on-disk spec is the source of
+    # truth mid-run, and if the commit fails the dirty spec makes the next
+    # attempt-branch checkout raise loudly (GitCommandError) at the point
+    # where it actually blocks progress.
     project_dir = config["project_dir"]
-    run_git(["add", spec_path], project_dir, check=True)
+    run_git(["add", spec_path], project_dir, warn=True)
     run_git(
         ["commit", "-m", f"chore({feature_name}): split {story_id} into {', '.join(s['id'] for s in new_stories)}"],
-        project_dir, check=True
+        project_dir, warn=True
     )
 
     write_notification(

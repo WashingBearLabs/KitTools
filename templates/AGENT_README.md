@@ -1,4 +1,4 @@
-<!-- Template Version: 2.0.0 -->
+<!-- Template Version: 2.0.1 -->
 <!-- Seeding:
   explorer_focus: architecture, tech-stack
   required_sections:
@@ -222,6 +222,8 @@ Every documentation file should include at the top:
 > Last updated: YYYY-MM-DD
 > Updated by: [Human/Claude]
 ```
+
+The canonical field is exactly `Last updated: YYYY-MM-DD` — the `update_doc_timestamps` hook rewrites it automatically on every edit to a kit_tools doc (it tolerates a capital "U" and a leading `> `, but write the canonical form so docs stay uniform).
 
 ### Cross-References
 Link related documentation:

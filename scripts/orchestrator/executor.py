@@ -432,7 +432,9 @@ def execute_spec_stories(
                 merge_ok = merge_attempt_branch(project_dir, feature_branch, attempt_branch)
                 if not merge_ok:
                     log(f"  Merge conflict — aborting merge, will retry implementation.")
-                    run_git(["merge", "--abort"], project_dir, check=True)
+                    # warn-only: the stuck-state check right below raises if
+                    # the abort didn't actually clean up.
+                    run_git(["merge", "--abort"], project_dir, warn=True)
                     is_clean, stuck = check_git_clean_recovery(project_dir)
                     if not is_clean:
                         raise GitRecoveryFailed(
@@ -460,7 +462,9 @@ def execute_spec_stories(
                     log(f"  {reg_msg[:300]}")
                     # Revert the merge to keep feature branch clean
                     merge_head = get_head_commit(project_dir)
-                    revert_result = run_git(["revert", "--no-edit", merge_head], project_dir, check=True)
+                    # warn-only: the returncode is inspected manually below,
+                    # escalating to GitRecoveryFailed with remediation steps.
+                    revert_result = run_git(["revert", "--no-edit", merge_head], project_dir, warn=True)
                     if revert_result.returncode != 0:
                         # Revert itself failed — most likely a conflict during revert.
                         # Check whether the repo is stuck or whether revert failed
@@ -501,7 +505,11 @@ def execute_spec_stories(
                 # Update feature spec checkboxes on the feature branch
                 if update_spec_checkboxes(spec_path, story["id"]):
                     log(f"  Updated feature spec checkboxes for {story['id']}")
-                    run_git(["add", spec_path], project_dir, check=True)
+                    run_git(["add", spec_path], project_dir, warn=True)
+                    # check=True raises: an uncommitted spec edit left behind
+                    # here is exactly the dirty-tracked-file trigger behind the
+                    # 2.6.4 silent-merge loss — fail loudly at the proximate
+                    # cause instead of one story later.
                     run_git(
                         ["commit", "-m", f"chore({feature_name}): mark {story['id']} criteria complete"],
                         project_dir, check=True

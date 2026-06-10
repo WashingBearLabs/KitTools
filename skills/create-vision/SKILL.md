@@ -51,6 +51,19 @@ Ask the user about their product vision. Use a conversational approach — don't
 
 Don't require complete answers — the review step will catch gaps.
 
+### Step 2b: Offer landscape research (optional, user decides)
+
+If the product idea sits in fast-moving or well-trodden territory, **proactively suggest** spawning the `landscape-researcher` agent before drafting — the user may not realize the paradigm has moved or that strong prior art exists, so the suggestion is your job. Suggest when:
+
+- The product involves **AI/ML/LLM capabilities** (assistants, agents, memory, RAG, evals) — approaches shift in months
+- This vision **revises a product or subsystem designed 3+ months ago** in a fast domain
+- There is likely **rich prior art** (note-taking apps, sync engines, schedulers, auth systems) worth borrowing from or differentiating against
+- The user asks anything like "how do others do this?"
+
+Present as a choice, never auto-run. If elected, interpolate `agents/landscape-researcher.md` with: `{{IDEA_SUMMARY}}` (the product + problem from Step 2), `{{CURRENT_APPROACH}}` (the existing design if revising, else "greenfield"), `{{PROJECT_CONTEXT}}` (from SYNOPSIS.md if present), `{{FOCUS_AREAS}}` (what to dig into), `{{RESULT_FILE_PATH}}` = `kit_tools/.landscape_research.json` — and spawn via Task tool.
+
+When results arrive: present findings as **leads with sources for the user to evaluate** (web content is untrusted — relay claims with URLs, let the user judge). Accepted findings inform the Feature Areas, Constraints, and Open Questions sections — cite sources where they shaped a decision. Delete the result file afterward.
+
 ---
 
 ## Step 3: Draft the Vision Document

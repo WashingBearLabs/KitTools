@@ -79,6 +79,26 @@ Running 6 reviews per spec (in parallel):
   6. Second Opinion (cross-model) — is there a better way to do this?
 ```
 
+### Quick tier (optional, user's choice — never auto-selected)
+
+The full 6-reviewer panel is the default. **If — and only if — the epic looks small and low-risk**, you may *suggest* the quick tier alongside it, but the **user decides; never silently run fewer reviewers on your own judgment.**
+
+Suggest quick tier only when ALL of these hold for every active spec:
+- ≤ 3 stories and `size:` frontmatter absent or S/M
+- `session_ready` is not `false`
+- No security-touching signals in the spec text (auth, login, session, token, secret, permission, payment, PII, upload, webhook, external API)
+
+When suggesting, present both options with the trade-off:
+
+```
+This epic is small ([N] stories, no security surface). Choose validation depth:
+  A. Full panel — all 6 reviewers (recommended default)
+  B. Quick tier — Completionist + Salty Engineer + Security (3 reviewers; skips
+     Story Quality, Codebase Fit, and the cross-model Second Opinion)
+```
+
+If the user picks quick tier, run reviewers 1, 3, and 5 only (same result files, same flow); note in the epic-level summary that the quick tier was used. If any quick-tier reviewer returns a critical finding, recommend escalating that spec to the full panel.
+
 Confirm before proceeding.
 
 ---
@@ -105,9 +125,11 @@ Read all six agent templates from `$CLAUDE_PLUGIN_ROOT/agents/`, interpolate the
 - If the session is running on Sonnet, use `model: "opus"`.
 - If the user has specified a model via `model_config.reviewer_second_opinion`, honor that.
 
+**How to detect the session model:** you know your own model from your system prompt (the environment section names it). If it names Opus or Sonnet, apply the rules above. If it names anything else (Haiku, a newer family, unknown), default to `model: "opus"` for this agent — the goal is simply a *different* training than the one reviewing everything else.
+
 ### 3b: Present Consolidated Findings
 
-Once all six agents complete, read all result files and present findings grouped by reviewer:
+Once all six agents complete, read all result files and present findings grouped by reviewer. Every result file carries both a native verdict and `canonical_verdict` (`ready|needs-work|not-ready`, see FINDING_SCHEMA.md) — prefer `canonical_verdict` when aggregating; fall back to the native field for results from pre-2.7.0 agents.
 
 ```
 Review Results — [spec-name]

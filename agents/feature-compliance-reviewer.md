@@ -79,6 +79,7 @@ Write a JSON file to `{{RESULT_FILE_PATH}}` matching the unified Finding Schema 
   "review_type": "feature-compliance",
   "target": "<feature spec path>",
   "overall_verdict": "clean|warnings|issues",
+  "canonical_verdict": "ready|needs-work|not-ready",
   "findings": [
     {
       "severity": "critical|warning|info",
@@ -93,6 +94,8 @@ Write a JSON file to `{{RESULT_FILE_PATH}}` matching the unified Finding Schema 
 ```
 
 Use the Write tool. Empty `findings: []` with `overall_verdict: "clean"` when all criteria are satisfied and no scope creep exists.
+
+**canonical_verdict** (cross-agent vocabulary, see `agents/FINDING_SCHEMA.md`): map your overall_verdict — clean → ready, warnings → needs-work, issues → not-ready.
 
 ### Severity Guidelines
 

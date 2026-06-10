@@ -108,7 +108,7 @@ def add_worktree(main_repo: str, worktree_path: str, branch: str,
         args = ["worktree", "add", worktree_path, branch]
     else:
         args = ["worktree", "add", worktree_path, "-b", branch, base]
-    result = run_git(args, main_repo, check=True)
+    result = run_git(args, main_repo, warn=True)
     if result.returncode == 0:
         log(f"  Created worktree {worktree_path} on branch {branch}")
     return result
@@ -125,7 +125,9 @@ def remove_worktree(main_repo: str, worktree_path: str, force: bool = False):
     if force:
         args.append("--force")
     args.append(worktree_path)
-    return run_git(args, main_repo, check=True)
+    # warn-only: a non-zero exit is an *expected* outcome here — git refusing
+    # to remove a dirty tree is the signal the caller uses to keep-and-flag.
+    return run_git(args, main_repo, warn=True)
 
 
 def prune_worktrees(main_repo: str):

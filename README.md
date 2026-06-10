@@ -79,6 +79,7 @@ git clone https://github.com/WashingBearLabs/KitTools.git
 | `/kit-tools:sync-project` | Full sync between code and docs (`--quick` for audit) |
 | `/kit-tools:validate-implementation` | Validate a feature branch against its feature spec (quality, security, compliance) |
 | `/kit-tools:execution-status` | Check execution progress and health; acts as supervisor when monitoring is enabled |
+| `/kit-tools:doctor` | Plugin self-integrity and environment health check — broken references, agent token drift, stale installs, missing tools |
 
 ## Hooks
 
@@ -94,7 +95,7 @@ kit-tools includes automation hooks that run automatically:
 | `check_execution_notifications` | UserPromptSubmit | Surfaces execution notifications (completions, failures, crashes, pauses) on next user message |
 | `remind_close_session` | Stop | Reminds to run close-session if scratchpad has notes |
 
-*Note: Setup validation is built into `/kit-tools:init-project` as a final step.*
+*Note: Setup validation is built into `/kit-tools:init-project` as a final step, including a `/kit-tools:doctor` integrity pass.*
 
 ## Project Types
 
