@@ -502,13 +502,13 @@ Report what was committed (and that `.gitignore` kept transient state out). If t
 
 ### 8b: Configure .gitignore
 
-KitTools writes transient runtime files that must **never** be committed: execution state/config, the pause file, notifications, the events log, the session scratchpad, and — for worktree-isolated execution — the `.kit/` registry that points at active execution worktrees. Ensure the gitignore block idempotently (creates `.gitignore` if needed, adds only missing lines, never removes existing entries):
+KitTools writes transient runtime files that must **never** be committed: execution state/config, the pause file, notifications, the events log, the session scratchpad, the per-run execution log and audit findings, and — for worktree-isolated execution — the `.kit/` registry that points at active execution worktrees. Ensure the gitignore block idempotently (creates `.gitignore` if needed, adds only missing lines, never removes existing entries) and untracks any of these a previous run committed:
 
 ```bash
 python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" ensure-gitignore
 ```
 
-(Works without a git repo too — it just edits `.gitignore`. Report what it added.) Then:
+(Works without a git repo too — it just edits `.gitignore`. Report what it `added`, and any stale artifacts it `untracked`.) Then:
 
 - **`kit_tools/worktree.yaml` is committed, not ignored** — it is the shared team contract (see the template's header for the security rationale). Do not add it to `.gitignore`.
 - If the user configured an in-repo `worktree.root` in `kit_tools/worktree.yaml` (uncommon — the default lives outside the repo at `~/.kit/worktrees/`), also add that path to `.gitignore` so worktree checkouts aren't tracked.

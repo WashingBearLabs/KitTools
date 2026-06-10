@@ -92,16 +92,59 @@ def get_diff_stat(project_dir: str, feature_branch: str, attempt_branch: str) ->
 def merge_attempt_branch(project_dir: str, feature_branch: str, attempt_branch: str) -> bool:
     """Merge a successful attempt branch into the feature branch.
 
-    Returns True if merge succeeded.
+    Returns True only when the attempt branch's commits actually land on the
+    feature branch. Returns False for a genuine merge *conflict* — the caller
+    aborts the merge and retries the story.
+
+    Raises :class:`GitRecoveryFailed` when the merge cannot even begin because
+    the checkout to the feature branch failed — almost always a dirty tracked
+    file blocking the switch. **This case used to be catastrophic and silent.**
+    ``run_git(..., check=True)`` only *logs* a failed command (it never raises —
+    the ``check`` name is a trap), so a failed checkout fell through: HEAD stayed
+    on the attempt branch, ``git merge <attempt>`` then ran against itself
+    ("Already up to date", exit 0), and this function returned True. The story
+    was marked complete and its spec boxes checked while **nothing reached the
+    feature branch** — the silent-merge data loss that cost a whole feature
+    spec's worth of stories. We now (a) verify the checkout actually landed us on
+    the feature branch and (b) verify-after-merge that the attempt branch is an
+    ancestor of it, before ever reporting success.
     """
-    # Switch to the feature branch
-    run_git(["checkout", feature_branch], project_dir, check=True)
-    # Merge the attempt branch (fast-forward if possible)
+    # (a) Switch to the feature branch — VERIFIED. A failed checkout (e.g. a
+    # dirty tracked file that "would be overwritten") must NEVER fall through to
+    # the merge below: that is the silent-data-loss path. This is an
+    # environmental fault the orchestrator can't fix by retrying the story, so
+    # it is fatal — main() turns GitRecoveryFailed into a critical alert + abort.
+    # The story's commits remain safe on the attempt branch.
+    checkout = run_git(["checkout", feature_branch], project_dir)
+    on_branch = get_current_branch(project_dir)
+    if checkout.returncode != 0 or on_branch != feature_branch:
+        raise GitRecoveryFailed(
+            f"Could not switch to {feature_branch} to merge {attempt_branch} "
+            f"(still on {on_branch!r}). This is almost always a dirty tracked "
+            f"file blocking the checkout. stderr: {checkout.stderr.strip()[:200]}. "
+            f"The story's commits are safe on {attempt_branch}. Clean the tree "
+            f"(cd {project_dir} && git status), then resume the execution."
+        )
+    # Merge the attempt branch (fast-forward if possible).
     result = run_git(["merge", attempt_branch, "--no-edit"], project_dir)
     if result.returncode != 0:
+        # Genuine merge conflict — retryable. Caller aborts + retries the story.
         log(f"  Merge failed: {result.stderr[:200]}")
         return False
-    # Delete the attempt branch
+    # (b) Verify-after-mutate: the attempt tip must now be an ancestor of the
+    # feature branch. This catches a no-op "Already up to date" that left the
+    # commits unlanded. (True for both fast-forward and merge-commit outcomes;
+    # also correctly True when the attempt legitimately made no commits.)
+    landed = run_git(
+        ["merge-base", "--is-ancestor", attempt_branch, feature_branch], project_dir
+    )
+    if landed.returncode != 0:
+        raise GitRecoveryFailed(
+            f"Merge of {attempt_branch} into {feature_branch} reported success "
+            f"but its commits are not present on {feature_branch}. Refusing to "
+            f"mark the story complete. Inspect: cd {project_dir} && git log."
+        )
+    # Delete the attempt branch (now safely merged).
     run_git(["branch", "-d", attempt_branch], project_dir, check=True)
     log(f"  Merged {attempt_branch} into {feature_branch}")
     return True
@@ -249,24 +292,20 @@ def verify_clean_worktree(project_dir: str) -> tuple[bool, str]:
 
 
 def commit_tracking_files(project_dir: str, feature_name: str) -> None:
-    """Commit tracking files (execution log, audit findings) after completion."""
-    files_to_commit = []
-    for rel_path in [
-        "kit_tools/EXECUTION_LOG.md",
-        "kit_tools/AUDIT_FINDINGS.md",
-    ]:
-        full_path = os.path.join(project_dir, rel_path)
-        if os.path.exists(full_path):
-            files_to_commit.append(rel_path)
+    """No-op retained for call-site stability.
 
-    if not files_to_commit:
-        return
+    EXECUTION_LOG.md and AUDIT_FINDINGS.md are gitignored run artifacts as of
+    2.6.4. A *tracked*, mid-run-rewritten EXECUTION_LOG.md was the dirty-tree
+    trigger behind the silent-merge data loss (a `git checkout` between stories
+    refused because of its uncommitted changes; see ``merge_attempt_branch``).
+    Untracking them removes the trigger — so there is nothing left to commit
+    here. The files persist on disk for inspection.
 
-    run_git(["add"] + files_to_commit, project_dir, check=True)
-    run_git(
-        ["commit", "-m", f"chore({feature_name}): execution log and audit findings"],
-        project_dir, check=True
-    )
+    The ~dozen call sites that previously checkpointed "persist the log before
+    exit" are left calling this so they don't all need touching; the durable
+    record now lives in the gitignored files on disk, not in git history.
+    """
+    return
 
 
 def commit_feature_work(project_dir: str, feature_name: str, config: dict) -> bool:

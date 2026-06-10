@@ -133,6 +133,9 @@ def register_crash_handler(config: dict) -> None:
 def run_single_spec(config: dict) -> None:
     """Execute a single feature spec (original behavior, backwards compatible)."""
     state, is_rerun = load_or_create_state(config)
+    # Stamp this process's start so the 24h safety net measures *this* launch,
+    # not the epic's original start — resuming a >24h-old run must not re-trip it.
+    state["run_started_at"] = now_iso()
     save_state(state, config)
 
     project_dir = config["project_dir"]
@@ -231,6 +234,9 @@ def run_single_spec(config: dict) -> None:
 def run_epic(config: dict) -> None:
     """Execute an epic: multiple feature specs in sequence on a shared branch."""
     state, is_rerun = load_or_create_epic_state(config)
+    # Stamp this process's start so the 24h safety net measures *this* launch,
+    # not the epic's original start — resuming a >24h-old run must not re-trip it.
+    state["run_started_at"] = now_iso()
     save_state(state, config)
 
     project_dir = config["project_dir"]

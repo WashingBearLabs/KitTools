@@ -175,7 +175,7 @@ The deterministic git/registry mechanics (resolve main → `git worktree add` �
      ```bash
      python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" ensure-gitignore
      ```
-     If it reports `modified: true`, mention you added the KitTools `.gitignore` block.
+     If it reports `modified: true`, mention you added the KitTools `.gitignore` block. If `untracked` is non-empty, mention you untracked stale run artifacts (e.g. a previously-committed `EXECUTION_LOG.md`) — a tracked, mid-run-rewritten log is the dirty-tree trigger behind the silent-merge data loss, so this is a real fix, not cosmetic.
    - **If `kit_tools/worktree.yaml` is missing,** offer to scaffold it from `$CLAUDE_PLUGIN_ROOT/templates/worktree.yaml` (or point the user to re-run `/kit-tools:init-project`). Don't silently proceed with no contract on a project that clearly has dependencies.
 
 1. **Read the contract** `kit_tools/worktree.yaml` for `root`, `env_bootstrap`, `env_link`, `path_links`. If it's still missing after step 0, use empty values and the default root. Let `<key>` = the epic name (or feature name in standalone fallback).

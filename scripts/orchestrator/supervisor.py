@@ -390,8 +390,15 @@ def _handle_split_story(
 
 
 def check_orchestrator_duration(state: dict) -> bool:
-    """Check if the orchestrator has exceeded its max duration. Returns True if expired."""
-    started = state.get("started_at") or ""
+    """Check if the orchestrator has exceeded its max duration. Returns True if expired.
+
+    Measures from ``run_started_at`` — stamped fresh on every orchestrator
+    (re)launch — rather than ``started_at``, which records when the epic *first*
+    began. Reading ``started_at`` here meant resuming a run that began >24h ago
+    instantly re-tripped this net before doing any work. Falls back to
+    ``started_at`` for state written before ``run_started_at`` existed.
+    """
+    started = state.get("run_started_at") or state.get("started_at") or ""
     if not started:
         return False
     try:

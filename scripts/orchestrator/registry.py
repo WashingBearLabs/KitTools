@@ -64,6 +64,14 @@ GITIGNORE_LINES = [
     "kit_tools/.execution-notifications",
     "kit_tools/.execution-events.jsonl",
     "kit_tools/SESSION_SCRATCH.md",
+    # Run artifacts (regenerated every run, not source). A *tracked*, mid-run-
+    # rewritten EXECUTION_LOG.md was the dirty-tree trigger behind the
+    # silent-merge data loss — an inter-story `git checkout` refused because of
+    # its uncommitted changes. Ignoring (and untracking) them removes the
+    # trigger. ``.md.1`` is the size-based rotation backup.
+    "kit_tools/EXECUTION_LOG.md",
+    "kit_tools/EXECUTION_LOG.md.1",
+    "kit_tools/AUDIT_FINDINGS.md",
 ]
 
 # Statuses an execution record may carry. Mirrors the orchestrator's own state
@@ -206,6 +214,35 @@ def default_branch(repo: str) -> str:
     return "main"
 
 
+def _untrack_ignored(main_repo: str, paths: list[str]) -> list[str]:
+    """``git rm --cached`` any of ``paths`` that git is currently tracking.
+
+    Adding a path to ``.gitignore`` does **not** stop git tracking a file that
+    is already committed — so a project that ran a pre-2.6.4 KitTools (which
+    *committed* EXECUTION_LOG.md / AUDIT_FINDINGS.md) would keep the tracked,
+    mid-run-rewritten log that triggers the silent-merge dirty-tree failure.
+    This untracks them so the new ignore actually takes effect, without touching
+    the working tree (``--cached`` leaves the file on disk). Every entry here is
+    transient KitTools state that should never have been tracked, so untracking
+    is always the correct migration. Best-effort and a no-op outside a git repo.
+
+    Returns the paths actually untracked.
+    """
+    untracked: list[str] = []
+    for p in paths:
+        # `ls-files --error-unmatch` exits non-zero when the path isn't tracked
+        # (and when this isn't a git repo) — the cheap, safe "is it tracked?"
+        # probe. Directory entries (e.g. ".kit/") never match a file here and
+        # are skipped, which is fine: the critical migration targets are files.
+        tracked = _run_git(["ls-files", "--error-unmatch", p], main_repo)
+        if tracked.returncode != 0:
+            continue
+        rm = _run_git(["rm", "--cached", "-r", "--quiet", p], main_repo)
+        if rm.returncode == 0:
+            untracked.append(p)
+    return untracked
+
+
 def ensure_gitignore(main_repo: str) -> dict:
     """Idempotently ensure KitTools' transient-state entries are gitignored.
 
@@ -214,7 +251,11 @@ def ensure_gitignore(main_repo: str) -> dict:
     needed. This is the retrofit/safety path for pre-2.6.0 repos where ``.kit/``
     isn't ignored — committing the registry would be a contamination footgun.
 
-    Returns ``{"modified": bool, "added": [lines]}``.
+    Also untracks (``git rm --cached``) any now-ignored path git is still
+    tracking, so the ignore takes effect for projects that committed these files
+    under an older KitTools. The working tree is never touched.
+
+    Returns ``{"modified": bool, "added": [lines], "untracked": [paths]}``.
     """
     path = os.path.join(main_repo, ".gitignore")
     existing = ""
@@ -223,19 +264,22 @@ def ensure_gitignore(main_repo: str) -> dict:
             with open(path, "r") as f:
                 existing = f.read()
         except OSError:
-            return {"modified": False, "added": []}
+            return {"modified": False, "added": [], "untracked": []}
     present = {line.strip() for line in existing.splitlines()}
     missing = [line for line in GITIGNORE_LINES if line not in present]
+    # Untrack on every call (not only when .gitignore changed): a file can be
+    # both already-listed *and* still-tracked if it predates the ignore line.
+    untracked = _untrack_ignored(main_repo, GITIGNORE_LINES)
     if not missing:
-        return {"modified": False, "added": []}
+        return {"modified": bool(untracked), "added": [], "untracked": untracked}
     block = "\n".join([GITIGNORE_MARKER, *missing, GITIGNORE_END])
     prefix = "" if existing.endswith("\n") or not existing else "\n"
     try:
         with open(path, "a") as f:
             f.write(f"{prefix}{block}\n")
     except OSError:
-        return {"modified": False, "added": []}
-    return {"modified": True, "added": missing}
+        return {"modified": bool(untracked), "added": [], "untracked": untracked}
+    return {"modified": True, "added": missing, "untracked": untracked}
 
 
 def registry_dir(main_repo: str) -> str:

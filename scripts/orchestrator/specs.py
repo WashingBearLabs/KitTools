@@ -236,6 +236,23 @@ def archive_spec(project_dir: str, spec_path: str, feature_name: str) -> None:
     run_git(["add", rel_dest], project_dir, check=True)
     run_git(["rm", "--cached", "-f", rel_src], project_dir, check=True)
 
+    # Verify-after-mutate: the archived copy MUST be staged, or the completed
+    # feature spec silently never reaches the branch/PR — and the subsequent
+    # `--allow-empty` completion commit would mask the loss as success. (The file
+    # is already on disk, so the dep-gate's filesystem check still passes, but
+    # git would not carry the move.) A `git add` of a just-written file only
+    # fails on a genuinely broken repo, so treat it as fatal rather than silent.
+    staged = run_git(["diff", "--cached", "--name-only"], project_dir)
+    if rel_dest not in staged.stdout.split("\n"):
+        # Deferred import avoids a specs <-> git_ops import cycle (git_ops
+        # imports archive_spec from this module).
+        from .git_ops import GitRecoveryFailed
+        raise GitRecoveryFailed(
+            f"Archived spec {rel_dest} could not be staged — the completed "
+            f"feature spec would not reach the branch. Inspect: "
+            f"cd {project_dir} && git status."
+        )
+
     log(f"  Archived: {os.path.basename(spec_path)} -> archive/")
 
 
