@@ -255,6 +255,49 @@ def check_agent_security_posture() -> None:
             f"{checked} agents carry a complete Security posture block")
 
 
+EPIC_REVIEWER_AGENTS = (
+    "salty-engineer-reviewer.md",
+    "codebase-fit-reviewer.md",
+    "spec-completionist-reviewer.md",
+    "story-quality-reviewer.md",
+    "spec-security-reviewer.md",
+    "spec-second-opinion.md",
+)
+
+
+def check_epic_reviewer_scores() -> None:
+    """The six validate-epic spec reviewers must each emit a per-reviewer
+    `readiness_score` (1–10, band-anchored to the verdict — canonical source:
+    agents/FINDING_SCHEMA.md). The score feeds validate-epic's gate and the
+    run trace; a reviewer that silently drops it loses that signal, and the
+    schema doc is where the band rule lives."""
+    agents_dir = os.path.join(PLUGIN_ROOT, "agents")
+    missing = 0
+    checked = 0
+    for name in EPIC_REVIEWER_AGENTS:
+        content = _read(os.path.join(agents_dir, name))
+        if content is None:
+            add("warning", "reviewer-scores",
+                f"agents/{name} not found — expected a validate-epic spec reviewer")
+            missing += 1
+            continue
+        checked += 1
+        if '"readiness_score"' not in content:
+            missing += 1
+            add("warning", "reviewer-scores",
+                f"agents/{name} emits no readiness_score in its output block",
+                remediation='Add "readiness_score": <1-10> per agents/FINDING_SCHEMA.md')
+    schema = _read(os.path.join(agents_dir, "FINDING_SCHEMA.md")) or ""
+    if "readiness_score" not in schema:
+        missing += 1
+        add("warning", "reviewer-scores",
+            "agents/FINDING_SCHEMA.md does not document the readiness_score band rule",
+            remediation="Document the 1–10 band anchoring in FINDING_SCHEMA.md")
+    if not missing:
+        add("info", "reviewer-scores",
+            f"{checked} validate-epic reviewers emit a band-anchored readiness_score")
+
+
 def check_orchestrator() -> None:
     """Every orchestrator module compiles; registry.py answers its CLI and
     implements every subcommand the skills invoke."""
@@ -529,6 +572,7 @@ def main(argv: list[str]) -> int:
     check_skill_references()
     check_agent_tokens()
     check_agent_security_posture()
+    check_epic_reviewer_scores()
     check_orchestrator()
     check_environment()
     check_install_freshness(manifest)

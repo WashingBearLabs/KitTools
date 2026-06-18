@@ -1,13 +1,25 @@
 #!/usr/bin/env python3
 """
-harvest_signals.py - Capture skill telemetry from KitTools artifacts.
+harvest_signals.py - Reduce a run's trace into a per-run telemetry record.
 
-Trigger: Stop
-Writes signals to ~/.kit/feedback/<project-id>/signals.jsonl for retrospective
-analysis. (Before 2.6.5 signals went to $PLUGIN_ROOT/.feedback/ — but
-marketplace installs get a new install path per plugin version, so the data
-was scattered across stale version directories and lost on every update.
-~/.kit/ is the same per-user home the worktree registry already uses.)
+Trigger: Stop. Reduces the append-only event stream
+(`kit_tools/.execution-events.jsonl`) plus the state snapshot into ONE
+structured record per run, and upserts it under
+`~/.kit/feedback/<project-id>/` so the record survives plugin updates (the
+same per-user home the worktree registry uses; before 2.6.5 signals lived in
+`$PLUGIN_ROOT/.feedback/` and were lost on every marketplace update).
+
+Design (see docs/trace-schema.md):
+- **Reducer, not scraper.** Derives detectors (rejection cycles, friction,
+  retries, escalations, crashes, merges-landed, completions) from typed events
+  instead of regex-scraping the prose log.
+- **Idempotent.** Keyed on `run_id`; running twice on the same run produces the
+  same record and upserts rather than appends. A run spans many sessions (the
+  Stop hook fires per session), so this reflects the latest authoritative state.
+- **Non-destructive.** Never deletes source artifacts.
+- **Leaves eval slots.** `functional_pass` / `intent_alignment_score` /
+  `spec_quality` are emitted null for a later eval layer to attach to, by run_id.
+
 Silent no-op if no kit_tools/ directory exists in the project.
 """
 import hashlib
@@ -20,6 +32,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 FEEDBACK_HOME = Path("~/.kit/feedback").expanduser()
+
+# Per-run record schema. Bump on a breaking change; additions are non-breaking
+# because every reader ignores unknown fields. v1 was the flat pre-2.7.0 line.
+SIGNAL_SCHEMA_VERSION = "2"
 
 
 def resolve_plugin_root():
@@ -76,67 +92,128 @@ def migrate_legacy_signals(plugin_root: Path) -> None:
         pass
 
 
-def detect_skill(kit_dir: Path) -> tuple[str | None, dict]:
-    """Detect which skill ran based on artifact presence. Returns (skill_name, raw_data)."""
+# --- Event-stream reduction --------------------------------------------------
 
-    exec_state = kit_dir / "specs" / ".execution-state.json"
-    exec_config = kit_dir / "specs" / ".execution-config.json"
-    exec_log = kit_dir / "EXECUTION_LOG.md"
 
-    if exec_state.exists():
-        try:
-            state = json.loads(exec_state.read_text())
-            config = {}
-            if exec_config.exists():
-                config = json.loads(exec_config.read_text())
-            return "execute-epic", {"state": state, "config": config, "log_path": exec_log}
-        except (json.JSONDecodeError, OSError):
-            pass
-
-    validate_summary = kit_dir / ".validate_epic_summary.json"
-    if validate_summary.exists():
-        try:
-            summary = json.loads(validate_summary.read_text())
-            return "validate-epic", {"summary": summary, "summary_path": validate_summary}
-        except (json.JSONDecodeError, OSError):
-            pass
-
-    validate_files = list(kit_dir.glob(".validate_epic_*.json"))
-    if validate_files:
-        results = []
-        for f in sorted(validate_files):
+def read_events(kit_dir: Path) -> list[dict]:
+    """Parse the append-only event stream. Tolerant: skips unparseable lines so
+    a single corrupt line can't sink the whole reduction."""
+    events_path = kit_dir / ".execution-events.jsonl"
+    if not events_path.exists():
+        return []
+    events = []
+    try:
+        for line in events_path.read_text().splitlines():
+            if not line.strip():
+                continue
             try:
-                results.append(json.loads(f.read_text()))
-            except (json.JSONDecodeError, OSError):
-                pass
-        if results:
-            return "validate-epic", {"results": results}
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    except OSError:
+        return []
+    return events
 
-    return None, {}
+
+def group_events_by_run(events: list[dict]) -> dict[str, list[dict]]:
+    """Bucket events by run_id (events lacking one share the `_norun` bucket)."""
+    groups: dict[str, list[dict]] = {}
+    for e in events:
+        rid = (e.get("run") or {}).get("run_id") or "_norun"
+        groups.setdefault(rid, []).append(e)
+    return groups
 
 
-def extract_execute_signal(data: dict, project_name: str) -> dict:
-    """Extract signal from execute-epic artifacts."""
-    state = data.get("state", {})
-    config = data.get("config", {})
-    log_path = data.get("log_path")
+def classify_run(events: list[dict]) -> str | None:
+    """Decide which skill a run's events came from."""
+    types = {e.get("event_type", "") for e in events}
+    if "spec.validate.scored" in types:
+        return "validate-epic"
+    if any(t.startswith(("run.", "story.", "merge.")) for t in types):
+        return "execute-epic"
+    return None
 
+
+def compute_detectors(events: list[dict]) -> dict:
+    """Deterministic reliability detectors over one run's event list.
+
+    rejection_cycles = verifications that sent work back *with* feedback (the
+    productive kind). friction = backward movement *without* actionable feedback
+    (feedback-less rejections, verify infra errors, non-permanent impl errors) —
+    the Spec-Kitty distinction that separates "review working" from "thrashing".
+    """
+    d = {
+        "rejection_cycles": 0, "friction": 0, "retries": 0, "escalations": 0,
+        "crashes": 0, "recoveries": 0, "merges_attempted": 0,
+        "merges_landed": 0, "merges_failed": 0, "completions": 0,
+    }
+    for e in events:
+        et = e.get("event_type", "")
+        p = e.get("payload", {}) or {}
+        if et == "story.verify.rejected":
+            if p.get("has_feedback"):
+                d["rejection_cycles"] += 1
+            else:
+                d["friction"] += 1
+        elif et == "story.verify.error":
+            d["friction"] += 1
+        elif et == "story.implement.failed":
+            if not p.get("permanent"):
+                d["friction"] += 1
+        elif et == "retry.triggered":
+            d["retries"] += 1
+        elif et == "model.escalated":
+            d["escalations"] += 1
+        elif et in ("orchestrator_crashed", "crash"):
+            d["crashes"] += 1
+        elif et.startswith("recovery."):
+            d["recoveries"] += 1
+        elif et == "merge.attempted":
+            d["merges_attempted"] += 1
+        elif et == "merge.landed":
+            d["merges_landed"] += 1
+        elif et == "merge.failed":
+            d["merges_failed"] += 1
+        elif et == "story.completed":
+            d["completions"] += 1
+    return d
+
+
+def _empty_eval_slots() -> dict:
+    """Slots a later eval layer fills in, joined by run_id. Null = not yet
+    measured (never present an unmeasured run as a passing/zero result)."""
+    return {
+        "functional_pass": None,
+        "intent_alignment_score": None,
+        "spec_quality": None,
+    }
+
+
+def _duration_hours_from_state(state: dict) -> float | None:
+    started = state.get("started_at")
+    updated = state.get("updated_at")
+    if not (started and updated):
+        return None
+    try:
+        start_dt = datetime.fromisoformat(started.replace("Z", "+00:00"))
+        end_dt = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+        return round((end_dt - start_dt).total_seconds() / 3600, 2)
+    except (ValueError, TypeError):
+        return None
+
+
+def extract_execute_metrics(state: dict) -> dict:
+    """Roll up per-spec / per-story state into completion + retry counts.
+    Shared by the event path and the legacy state-only fallback."""
     is_epic = "epic" in state
-    mode = state.get("mode", config.get("mode", "unknown"))
-
     if is_epic:
         specs = state.get("specs", {})
         specs_completed = sum(1 for s in specs.values() if s.get("status") == "completed")
         specs_failed = sum(1 for s in specs.values() if s.get("status") == "failed")
         specs_total = len(specs)
-
-        stories_completed = 0
-        stories_failed = 0
-        total_retries = 0
-        failure_patterns = []
-
-        for spec_name, spec_data in specs.items():
-            for story_id, story_data in spec_data.get("stories", {}).items():
+        stories_completed = stories_failed = total_retries = 0
+        for spec_data in specs.values():
+            for story_data in spec_data.get("stories", {}).values():
                 attempts = story_data.get("attempts", 0)
                 status = story_data.get("status", "unknown")
                 if status in ("passed", "completed"):
@@ -145,13 +222,6 @@ def extract_execute_signal(data: dict, project_name: str) -> dict:
                     stories_failed += 1
                 if attempts > 1:
                     total_retries += attempts - 1
-                    if attempts >= 3:
-                        failure_patterns.append({
-                            "story": story_id,
-                            "spec": spec_name,
-                            "attempts": attempts,
-                            "status": status,
-                        })
     else:
         specs_total = 1
         specs_completed = 1 if state.get("status") == "completed" else 0
@@ -160,145 +230,242 @@ def extract_execute_signal(data: dict, project_name: str) -> dict:
         stories_completed = sum(1 for s in stories.values() if s.get("status") in ("passed", "completed"))
         stories_failed = sum(1 for s in stories.values() if s.get("status") == "failed")
         total_retries = sum(max(0, s.get("attempts", 1) - 1) for s in stories.values())
-        failure_patterns = [
-            {"story": sid, "attempts": s.get("attempts", 0), "status": s.get("status", "unknown")}
-            for sid, s in stories.items()
-            if s.get("attempts", 0) >= 3
-        ]
 
-    duration_hours = None
-    started = state.get("started_at")
-    updated = state.get("updated_at")
-    if started and updated:
-        try:
-            start_dt = datetime.fromisoformat(started.replace("Z", "+00:00"))
-            end_dt = datetime.fromisoformat(updated.replace("Z", "+00:00"))
-            duration_hours = round((end_dt - start_dt).total_seconds() / 3600, 2)
-        except (ValueError, TypeError):
-            pass
-
-    log_patterns = extract_log_patterns(log_path) if log_path else {}
-
-    signal = {
-        "skill": "execute-epic",
-        "project": project_name,
-        "mode": mode,
-        "outcome": state.get("status", "unknown"),
+    return {
         "is_epic": is_epic,
-        "metrics": {
-            "specs_total": specs_total,
-            "specs_completed": specs_completed,
-            "specs_failed": specs_failed,
-            "stories_completed": stories_completed,
-            "stories_failed": stories_failed,
-            "total_retries": total_retries,
-            "sessions": state.get("sessions", {}),
-        },
-        "duration_hours": duration_hours,
+        "specs_total": specs_total,
+        "specs_completed": specs_completed,
+        "specs_failed": specs_failed,
+        "stories_completed": stories_completed,
+        "stories_failed": stories_failed,
+        "total_retries": total_retries,
+        "sessions": state.get("sessions", {}),
+        "duration_hours": _duration_hours_from_state(state),
     }
 
-    if failure_patterns:
-        signal["failure_patterns"] = failure_patterns
-    if log_patterns:
-        signal["log_patterns"] = log_patterns
 
-    return signal
-
-
-def extract_log_patterns(log_path: Path) -> dict:
-    """Scan EXECUTION_LOG.md for recurring patterns worth capturing."""
-    if not log_path or not log_path.exists():
-        return {}
-
-    try:
-        content = log_path.read_text()
-    except OSError:
-        return {}
-
-    patterns = {}
-
-    fail_matches = re.findall(r"(?:FAIL|FAILED|failed verification)", content)
-    if len(fail_matches) > 0:
-        patterns["total_failures_logged"] = len(fail_matches)
-
-    retry_matches = re.findall(r"[Rr]etry|[Aa]ttempt (\d+)", content)
-    if retry_matches:
-        patterns["retry_mentions"] = len(retry_matches)
-
-    pause_matches = re.findall(r"[Pp]aus(?:e|ed|ing)", content)
-    if pause_matches:
-        patterns["pause_mentions"] = len(pause_matches)
-
-    return patterns
+def _tokens_block(state: dict | None) -> dict:
+    """Estimate vs measured tokens, kept honestly separate. `measured` is None
+    when no session reported real usage (older CLI / parse miss)."""
+    state = state or {}
+    est = state.get("token_estimates") or {}
+    measured = state.get("token_usage")
+    return {
+        "estimate": {"input": est.get("input", 0), "output": est.get("output", 0)},
+        "measured": measured,  # {input, output, cost_usd, measured_calls, ...} or None
+    }
 
 
-def extract_validate_signal(data: dict, project_name: str) -> dict:
-    """Extract signal from validate-epic artifacts."""
-    summary = data.get("summary")
-    summary_path = data.get("summary_path")
+def reduce_execute_run(
+    run_id: str, events: list[dict], state: dict | None, project_name: str,
+) -> dict:
+    detectors = compute_detectors(events)
+    # Final outcome: prefer the authoritative state.status when state belongs to
+    # this run; else the run.completed event; else unknown.
+    outcome = "unknown"
+    if state is not None and state.get("run_id") == run_id:
+        outcome = state.get("status", "unknown")
+    else:
+        for e in events:
+            if e.get("event_type") == "run.completed":
+                outcome = (e.get("payload") or {}).get("outcome", "completed")
 
-    if summary:
-        signal = {
-            "skill": "validate-epic",
-            "project": project_name,
-            "outcome": summary.get("overall_readiness", "unknown"),
-            "metrics": {
-                "epic_name": summary.get("epic_name"),
-                "specs_reviewed": summary.get("specs_reviewed", 0),
-                "reviewer_verdicts": summary.get("reviewer_verdicts", {}),
-                "findings": summary.get("finding_counts", {}),
-            },
+    state_for_metrics = state if (state is not None and state.get("run_id") == run_id) else None
+    if state_for_metrics is not None:
+        metrics = extract_execute_metrics(state_for_metrics)
+    else:
+        # Event-only fallback (state file already cleaned up or from another run)
+        metrics = {
+            "stories_completed": detectors["completions"],
+            "total_retries": detectors["retries"],
         }
-        if summary_path:
-            try:
-                Path(summary_path).unlink()
-            except OSError:
-                pass
-        return signal
 
-    results = data.get("results", [])
+    return {
+        "schema_version": SIGNAL_SCHEMA_VERSION,
+        "run_id": run_id if run_id != "_norun" else None,
+        "skill": "execute-epic",
+        "project": project_name,
+        "outcome": outcome,
+        "metrics": metrics,
+        "detectors": detectors,
+        "tokens": _tokens_block(state_for_metrics),
+        "eval": _empty_eval_slots(),
+    }
 
-    verdicts = {}
-    finding_counts = {"critical": 0, "warning": 0, "info": 0}
 
-    for result in results:
-        review_type = result.get("review_type", "unknown")
-        verdict = result.get("overall_verdict", "unknown")
-        verdicts[review_type] = verdict
+def reduce_validate_run(run_id: str, events: list[dict], project_name: str) -> dict:
+    """Reduce spec.validate.scored events into per-spec reviewer verdicts +
+    readiness vector. The vector is preserved (never averaged); the gate signal
+    is the worst score, and the vector seeds the eval layer's spec_quality."""
+    verdicts: dict[str, dict] = {}
+    scores: dict[str, dict] = {}
+    finding_counts: dict = {}
+    for e in events:
+        if e.get("event_type") != "spec.validate.scored":
+            continue
+        p = e.get("payload") or {}
+        spec = (e.get("run") or {}).get("spec") or p.get("spec") or "unknown"
+        reviewer = p.get("reviewer", "unknown")
+        verdicts.setdefault(spec, {})[reviewer] = p.get("canonical_verdict")
+        if p.get("readiness_score") is not None:
+            scores.setdefault(spec, {})[reviewer] = p.get("readiness_score")
+        if p.get("finding_counts"):
+            finding_counts = p["finding_counts"]
 
-        for finding in result.get("findings", []):
-            severity = finding.get("severity", "info")
-            if severity in finding_counts:
-                finding_counts[severity] += 1
-
+    all_scores = [v for spec_scores in scores.values() for v in spec_scores.values()]
+    worst = min(all_scores) if all_scores else None
     overall = "ready"
-    if finding_counts["critical"] > 0:
+    if finding_counts.get("critical", 0) > 0:
         overall = "not-ready"
-    elif finding_counts["warning"] > 0:
+    elif finding_counts.get("warning", 0) > 0:
         overall = "needs-work"
 
     return {
+        "schema_version": SIGNAL_SCHEMA_VERSION,
+        "run_id": run_id if run_id != "_norun" else None,
         "skill": "validate-epic",
         "project": project_name,
         "outcome": overall,
         "metrics": {
-            "reviewers_run": len(results),
-            "verdicts": verdicts,
-            "findings": finding_counts,
+            "reviewer_verdicts": verdicts,
+            "reviewer_scores": scores,   # per-reviewer vector, never averaged
+            "worst_readiness": worst,
+            "finding_counts": finding_counts,
         },
+        "eval": {**_empty_eval_slots(), "spec_quality": scores or None},
     }
 
 
-def write_signal(project_dir: str, signal: dict):
-    """Append a signal line to the project's feedback JSONL under ~/.kit/."""
-    feedback_dir = FEEDBACK_HOME / derive_project_id(project_dir)
-    feedback_dir.mkdir(parents=True, exist_ok=True)
+# --- Legacy fallbacks (no event stream) --------------------------------------
 
-    signal["timestamp"] = datetime.now(timezone.utc).isoformat()
+
+def reduce_legacy_execute(state: dict, project_name: str) -> dict:
+    """State-only reduction for pre-2.7.0 runs with no event stream."""
+    return {
+        "schema_version": SIGNAL_SCHEMA_VERSION,
+        "run_id": state.get("run_id"),
+        "skill": "execute-epic",
+        "project": project_name,
+        "outcome": state.get("status", "unknown"),
+        "metrics": extract_execute_metrics(state),
+        "detectors": None,  # not derivable without events
+        "tokens": _tokens_block(state),
+        "eval": _empty_eval_slots(),
+    }
+
+
+def reduce_legacy_validate(summary: dict, project_name: str) -> dict:
+    """Summary-only reduction when the emitter script didn't run (no events)."""
+    scores = summary.get("reviewer_scores", {}) or {}
+    all_scores = [v for spec_scores in scores.values() for v in spec_scores.values()]
+    return {
+        "schema_version": SIGNAL_SCHEMA_VERSION,
+        "run_id": None,
+        "skill": "validate-epic",
+        "project": project_name,
+        "outcome": summary.get("overall_readiness", "unknown"),
+        "metrics": {
+            "epic_name": summary.get("epic_name"),
+            "specs_reviewed": summary.get("specs_reviewed", 0),
+            "reviewer_verdicts": summary.get("reviewer_verdicts", {}),
+            "reviewer_scores": scores,
+            "worst_readiness": min(all_scores) if all_scores else None,
+            "finding_counts": summary.get("finding_counts", {}),
+        },
+        "eval": {**_empty_eval_slots(), "spec_quality": scores or None},
+    }
+
+
+# --- Idempotent writes -------------------------------------------------------
+
+
+def _atomic_write(path: Path, text: str) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)
+
+
+def upsert_records(project_dir: str, records: list[dict]) -> None:
+    """Write each per-run record idempotently:
+    - `runs/<run_id>.json` — authoritative per-run reduction (overwrite).
+    - `signals.jsonl` — upsert-by-run_id (replace the line for this run, append
+      if new) so `/retrospective` keeps a flat readable log without duplicates.
+    Records without a run_id (legacy) are appended (can't be keyed).
+    """
+    if not records:
+        return
+    feedback_dir = FEEDBACK_HOME / derive_project_id(project_dir)
+    runs_dir = feedback_dir / "runs"
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    now = datetime.now(timezone.utc).isoformat()
 
     signals_file = feedback_dir / "signals.jsonl"
-    with open(signals_file, "a") as f:
-        f.write(json.dumps(signal, separators=(",", ":")) + "\n")
+    existing: list[str] = []
+    replace_ids = {r["run_id"] for r in records if r.get("run_id")}
+    if signals_file.exists():
+        for line in signals_file.read_text().splitlines():
+            if not line.strip():
+                continue
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                existing.append(line)  # preserve foreign/legacy lines verbatim
+                continue
+            if obj.get("run_id") and obj.get("run_id") in replace_ids:
+                continue  # drop the prior version of this run
+            existing.append(line)
+
+    for record in records:
+        record["timestamp"] = now
+        record["project_dir"] = project_dir
+        existing.append(json.dumps(record, separators=(",", ":")))
+        if record.get("run_id"):
+            safe = re.sub(r"[^A-Za-z0-9._-]+", "-", record["run_id"])
+            _atomic_write(runs_dir / f"{safe}.json", json.dumps(record, indent=2))
+
+    _atomic_write(signals_file, "\n".join(existing) + "\n")
+
+
+# --- Entry -------------------------------------------------------------------
+
+
+def build_records(kit_dir: Path, project_name: str) -> list[dict]:
+    """Reduce everything present in a project's kit_tools/ into per-run records."""
+    events = read_events(kit_dir)
+    records: list[dict] = []
+
+    # Load the state snapshot once (used to enrich the matching execute run).
+    state = None
+    exec_state = kit_dir / "specs" / ".execution-state.json"
+    if exec_state.exists():
+        try:
+            state = json.loads(exec_state.read_text())
+        except (json.JSONDecodeError, OSError):
+            state = None
+
+    if events:
+        for run_id, run_events in group_events_by_run(events).items():
+            kind = classify_run(run_events)
+            if kind == "validate-epic":
+                records.append(reduce_validate_run(run_id, run_events, project_name))
+            elif kind == "execute-epic":
+                records.append(reduce_execute_run(run_id, run_events, state, project_name))
+        if records:
+            return records
+
+    # --- Legacy fallbacks: no usable event stream ---
+    if state is not None:
+        records.append(reduce_legacy_execute(state, project_name))
+        return records
+
+    validate_summary = kit_dir / ".validate_epic_summary.json"
+    if validate_summary.exists():
+        try:
+            summary = json.loads(validate_summary.read_text())
+            records.append(reduce_legacy_validate(summary, project_name))
+        except (json.JSONDecodeError, OSError):
+            pass
+    return records
 
 
 def main():
@@ -318,19 +485,8 @@ def main():
     migrate_legacy_signals(resolve_plugin_root())
     project_name = Path(project_dir).name
 
-    skill, data = detect_skill(kit_dir)
-    if not skill:
-        return
-
-    if skill == "execute-epic":
-        signal = extract_execute_signal(data, project_name)
-    elif skill == "validate-epic":
-        signal = extract_validate_signal(data, project_name)
-    else:
-        return
-
-    signal["project_dir"] = project_dir
-    write_signal(project_dir, signal)
+    records = build_records(kit_dir, project_name)
+    upsert_records(project_dir, records)
 
 
 if __name__ == "__main__":

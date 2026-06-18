@@ -6,7 +6,7 @@ import os
 import sys
 
 from .config import get_model_config
-from .events import write_notification
+from .events import log_event, write_notification
 from .execution_log import log_story_failure, log_story_success
 from .git_ops import (
     check_git_clean_recovery,
@@ -34,6 +34,7 @@ from .sessions import (
     read_implementation_result,
     read_verification_result,
     run_claude_session,
+    usage_tokens,
 )
 from .specs import (
     find_next_uncompleted_story,
@@ -42,6 +43,7 @@ from .specs import (
 )
 from .state import (
     _store_attempt_diff,
+    accumulate_token_usage,
     save_state,
     update_state_story,
 )
@@ -152,6 +154,12 @@ def execute_spec_stories(
 
         while True:
             attempt += 1
+
+            if attempt >= 2:
+                log_event(
+                    config, "retry.triggered", spec=spec_key, story=story["id"],
+                    attempt=attempt, max_attempts=max_retries,
+                )
 
             # Check retry limit
             if max_retries is not None and attempt > max_retries:
@@ -264,23 +272,47 @@ def execute_spec_stories(
             # Estimate input tokens
             prompt_chars = len(prompt)
             models = get_model_config(config)
-            impl_model = models["implementer"]
+            base_impl_model = models["implementer"]
+            impl_model = base_impl_model
             if attempt > 1 and spec_size in ("L", "XL"):
                 impl_model = models.get("escalation", impl_model)
-                log(f"  Escalating to {impl_model} for retry of size-{spec_size} story")
+                if impl_model != base_impl_model:
+                    log(f"  Escalating to {impl_model} for retry of size-{spec_size} story")
+                    log_event(
+                        config, "model.escalated", spec=spec_key, story=story["id"],
+                        from_model=base_impl_model, to_model=impl_model,
+                        reason="retry-large-spec", spec_size=spec_size, attempt=attempt,
+                    )
             log(f"  Session timeout: {impl_timeout}s (implementation, model={impl_model})")
-            impl_output = run_claude_session(
+            log_event(
+                config, "story.implement.started", spec=spec_key, story=story["id"],
+                actor={"kind": "agent", "id": "story-implementer", "model": impl_model},
+                attempt=attempt,
+            )
+            impl_session = run_claude_session(
                 prompt, project_dir, timeout=impl_timeout, model=impl_model
             )
+            impl_output = impl_session.output
             output_chars = len(impl_output)
 
             state["sessions"]["total"] += 1
             state["sessions"]["implementation"] += 1
-            # Track token estimates
+            # Track token estimates (chars//4) and, when the CLI reported them,
+            # the REAL measured tokens/cost — kept in separate state slots.
             token_est = state.setdefault("token_estimates", {"input": 0, "output": 0})
             token_est["input"] += prompt_chars // 4
             token_est["output"] += output_chars // 4
+            real_in, real_out = usage_tokens(impl_session.usage)
+            accumulate_token_usage(state, real_in, real_out, impl_session.cost_usd)
             log(f"  Session tokens: ~{prompt_chars // 4000}k input, ~{output_chars // 4000}k output")
+            log_event(
+                config, "session.metrics", spec=spec_key, story=story["id"],
+                phase="implement", model=impl_model, attempt=attempt,
+                tokens_input=real_in, tokens_output=real_out,
+                cost_usd=impl_session.cost_usd,
+                token_estimate_input=prompt_chars // 4,
+                token_estimate_output=output_chars // 4,
+            )
             save_state(state, config)
 
             # Check for session errors
@@ -295,6 +327,11 @@ def execute_spec_stories(
                 )
                 state["status"] = "failed"
                 save_state(state, config)
+                log_event(
+                    config, "story.implement.failed", severity="critical",
+                    spec=spec_key, story=story["id"], attempt=attempt,
+                    failure_type=f_type, permanent=True, reason=impl_output[:200],
+                )
                 write_notification(
                     config, "story_failed",
                     f"Story {story['id']} permanent error",
@@ -315,6 +352,11 @@ def execute_spec_stories(
                     spec_key=spec_key, failure_type=f_type
                 )
                 save_state(state, config)
+                log_event(
+                    config, "story.implement.failed", severity="warning",
+                    spec=spec_key, story=story["id"], attempt=attempt,
+                    failure_type=f_type, permanent=False, reason=impl_output[:200],
+                )
                 # Delete the failed attempt branch (no diff to capture on session error)
                 delete_attempt_branch(project_dir, feature_branch, attempt_branch)
                 clean_result_files(project_dir)
@@ -324,6 +366,12 @@ def execute_spec_stories(
             impl_result, impl_error = read_implementation_result(project_dir)
             if impl_error:
                 log(f"  Implementation result: {impl_error}")
+            log_event(
+                config, "story.implement.completed", spec=spec_key, story=story["id"],
+                attempt=attempt,
+                status=(impl_result or {}).get("status", "unknown"),
+                has_result=impl_result is not None,
+            )
 
             # --- Get files changed from git (for verifier) ---
             git_files_result = run_git(
@@ -366,22 +414,38 @@ def execute_spec_stories(
             verify_prompt_chars = len(verify_prompt)
             verify_model = get_model_config(config)["verifier"]
             log(f"  Session timeout: {verify_timeout}s (verification, model={verify_model})")
-            verify_output = run_claude_session(
+            verify_session = run_claude_session(
                 verify_prompt, project_dir, timeout=verify_timeout, model=verify_model
             )
+            verify_output = verify_session.output
             verify_output_chars = len(verify_output)
 
             state["sessions"]["total"] += 1
             state["sessions"]["verification"] += 1
             token_est["input"] += verify_prompt_chars // 4
             token_est["output"] += verify_output_chars // 4
+            v_real_in, v_real_out = usage_tokens(verify_session.usage)
+            accumulate_token_usage(state, v_real_in, v_real_out, verify_session.cost_usd)
             log(f"  Session tokens: ~{verify_prompt_chars // 4000}k input, ~{verify_output_chars // 4000}k output")
+            log_event(
+                config, "session.metrics", spec=spec_key, story=story["id"],
+                phase="verify", model=verify_model, attempt=attempt,
+                tokens_input=v_real_in, tokens_output=v_real_out,
+                cost_usd=verify_session.cost_usd,
+                token_estimate_input=verify_prompt_chars // 4,
+                token_estimate_output=verify_output_chars // 4,
+            )
             save_state(state, config)
 
             # --- Check for verification session errors ---
             if is_session_error(verify_output):
                 f_type = classify_failure("", verify_output, None)
                 log(f"  Verification session error [{f_type}]: {verify_output[:200]}")
+                log_event(
+                    config, "story.verify.error", severity="warning",
+                    spec=spec_key, story=story["id"], attempt=attempt,
+                    failure_type=f_type, reason=verify_output[:200],
+                )
                 learnings = extract_learnings_from_results(impl_result, None)
                 learnings.append(f"Verify session error: {verify_output[:200]}")
                 log_story_failure(story, attempt, config, verify_output[:500], learnings)
@@ -407,6 +471,11 @@ def execute_spec_stories(
             if verify_error:
                 # Result file missing or invalid — treat as retryable failure
                 log(f"  Verification result error: {verify_error}")
+                log_event(
+                    config, "story.verify.error", severity="warning",
+                    spec=spec_key, story=story["id"], attempt=attempt,
+                    failure_type="VERIFY_RESULT_INVALID", reason=str(verify_error)[:200],
+                )
                 learnings = extract_learnings_from_results(impl_result, None)
                 log_story_failure(story, attempt, config, verify_error, learnings)
                 update_state_story(
@@ -428,10 +497,26 @@ def execute_spec_stories(
                     log(f"  {story['id']} PASSED with {len(verdict_warnings)} warnings (attempt {attempt})")
                 else:
                     log(f"  {story['id']} PASSED (attempt {attempt})")
+                log_event(
+                    config, "story.verify.passed", spec=spec_key, story=story["id"],
+                    actor={"kind": "agent", "id": "story-verifier", "model": verify_model},
+                    attempt=attempt, verdict=verdict["verdict"],
+                    warnings_count=len(verdict_warnings),
+                )
                 # Merge attempt branch into feature branch
+                log_event(
+                    config, "merge.attempted", spec=spec_key, story=story["id"],
+                    attempt=attempt, target_branch=feature_branch,
+                    attempt_branch=attempt_branch,
+                )
                 merge_ok = merge_attempt_branch(project_dir, feature_branch, attempt_branch)
                 if not merge_ok:
                     log(f"  Merge conflict — aborting merge, will retry implementation.")
+                    log_event(
+                        config, "merge.failed", severity="warning",
+                        spec=spec_key, story=story["id"], attempt=attempt,
+                        target_branch=feature_branch, reason="conflict",
+                    )
                     # warn-only: the stuck-state check right below raises if
                     # the abort didn't actually clean up.
                     run_git(["merge", "--abort"], project_dir, warn=True)
@@ -453,6 +538,10 @@ def execute_spec_stories(
                     save_state(state, config)
                     clean_result_files(project_dir)
                     continue
+                log_event(
+                    config, "merge.landed", spec=spec_key, story=story["id"],
+                    attempt=attempt, target_branch=feature_branch, verified=True,
+                )
                 # Run cross-story regression check
                 reg_passed, reg_msg = run_regression_check(
                     project_dir, state, story["id"], fail_fast_test, spec_key
@@ -490,6 +579,11 @@ def execute_spec_stories(
                     )
                     state["status"] = "failed"
                     save_state(state, config)
+                    log_event(
+                        config, "regression.detected", severity="critical",
+                        spec=spec_key, story=story["id"], attempt=attempt,
+                        reason=reg_msg[:200],
+                    )
                     write_notification(
                         config, "regression_detected",
                         f"Regression detected after {story['id']}",
@@ -523,6 +617,11 @@ def execute_spec_stories(
                     files_changed=changed_file_list
                 )
                 save_state(state, config)
+                log_event(
+                    config, "story.completed", spec=spec_key, story=story["id"],
+                    attempt=attempt, warnings_count=len(verdict_warnings),
+                    files_changed_count=len(changed_file_list),
+                )
                 write_notification(
                     config, "story_complete",
                     f"Story {story['id']} passed",
@@ -538,6 +637,14 @@ def execute_spec_stories(
                 f_type = classify_failure("", verify_output, verdict)
                 log(f"  {story['id']} FAILED verification (attempt {attempt}) [{f_type}]")
                 log(f"  Reason: {str(failure_details)[:200]}")
+                log_event(
+                    config, "story.verify.rejected", severity="warning",
+                    spec=spec_key, story=story["id"],
+                    actor={"kind": "agent", "id": "story-verifier", "model": verify_model},
+                    attempt=attempt, failure_type=f_type,
+                    has_feedback=bool(verdict.get("recommendations")),
+                    reason=str(failure_details)[:200],
+                )
                 log_story_failure(story, attempt, config, str(failure_details), learnings)
                 update_state_story(
                     state, story["id"], "retrying", attempt,

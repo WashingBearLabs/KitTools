@@ -181,6 +181,30 @@ def update_state_story(
     stories_dict[story_id] = entry
 
 
+def accumulate_token_usage(
+    state: dict, input_tokens: int | None, output_tokens: int | None,
+    cost_usd: float | None,
+) -> None:
+    """Accumulate REAL (measured) token usage + cost into state, kept separate
+    from the chars//4 `token_estimates`. A call with all-None figures means the
+    session wasn't measured (older CLI, JSON parse miss) — counted so a consumer
+    can tell "0 cost" (measured) from "unknown" (unmeasured). Never present an
+    unmeasured run as zero cost (honesty guardrail)."""
+    tu = state.setdefault(
+        "token_usage",
+        {"input": 0, "output": 0, "cost_usd": 0.0,
+         "measured_calls": 0, "unmeasured_calls": 0},
+    )
+    if input_tokens is None and output_tokens is None and cost_usd is None:
+        tu["unmeasured_calls"] += 1
+        return
+    tu["input"] += input_tokens or 0
+    tu["output"] += output_tokens or 0
+    if cost_usd:
+        tu["cost_usd"] = round(tu["cost_usd"] + cost_usd, 6)
+    tu["measured_calls"] += 1
+
+
 def _store_attempt_diff(state: dict, story_id: str, diff: str, spec_key: str | None) -> None:
     """Store last_attempt_diff in the correct location (single or epic mode)."""
     if spec_key is not None:

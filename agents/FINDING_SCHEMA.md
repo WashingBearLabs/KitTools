@@ -43,6 +43,7 @@ All KitTools review agents emit findings in this shape, written as JSON to `{{RE
 
 Agents may add fields beyond the core set. Skills ignore unknown fields.
 
+- `readiness_score: 1–10` — emitted by the six `validate-epic` spec reviewers (salty-engineer, codebase-fit, spec-completionist, story-quality, spec-security, spec-second-opinion). Per-reviewer execution-readiness score, anchored to the verdict. See "Readiness Score" below.
 - `confidence: high|medium|low` — used by `test-optimizer` and `drift-detector` where findings are heuristic
 - `trade_offs: "<what the alternative gains/sacrifices>"` — required by `spec-second-opinion` for alternative-approach and over-engineering categories
 - `evidence: {claim: "<doc says>", reality: "<code shows>"}` — `drift-detector` uses this to surface the specific divergence. `codebase-fit-reviewer` uses a variant: `{existing_code: "<path:line — what exists>", spec_proposes: "<what the spec plans instead>"}`
@@ -75,6 +76,24 @@ KitTools agents historically used five verdict vocabularies (this schema's `clea
 | feature-fixer | all fixed / some unfixable / none fixed | `ready` / `needs-work` / `not-ready` |
 
 Consumers (skills, hooks, the supervisor) should prefer `canonical_verdict` for new aggregation logic and fall back to the native field when reading results produced by pre-2.7.0 agents.
+
+## Readiness Score (spec-review family)
+
+The six `validate-epic` spec reviewers — salty-engineer, codebase-fit, spec-completionist, story-quality, spec-security, spec-second-opinion — each emit a `readiness_score`: an integer **1–10** for how ready *this reviewer* judges the spec for execution. It is **per-reviewer and never averaged.** The spread across reviewers (a high salty score against a low security score, say) is itself signal worth digging into; a mean would launder it away. `validate-epic` reports the full vector and gates on the **worst** reviewer, never on an aggregate.
+
+The score is **anchored to the verdict**, so the two can never contradict:
+
+| canonical_verdict | Band | Meaning |
+|---|---|---|
+| `not-ready` (any critical finding) | **1–4** | Would push back before execution |
+| `needs-work` (warnings, no criticals) | **5–7** | Executable, but risk worth reducing |
+| `ready` (clean / info only) | **8–10** | Execute with confidence |
+
+Within a band the score is the reviewer's graduated read: four real warnings → 5; one cosmetic info finding → 7; pristine → 9–10.
+
+**Scoring discipline:**
+- **Skew low when in doubt.** Between two bands, pick the **lower**. Reserve **9–10** for a spec you would execute *unsupervised*. A spec with a real caveat is a 7, not "a 9 with a caveat."
+- **Consistency is enforced.** `readiness_score` must fall inside the band implied by `canonical_verdict` (and `finding_counts`). A score outside its band is a bug: `validate-epic` flags the mismatch at aggregation time (exactly as it flags a `clean` verdict that carries a critical finding), and `doctor` separately verifies every reviewer still *declares* the field so it can't silently drift out.
 
 ## Why This Schema Exists
 

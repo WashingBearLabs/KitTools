@@ -8,9 +8,65 @@ import re
 import signal
 import subprocess
 import time
+from typing import NamedTuple
 
 from .specs import parse_spec_frontmatter
 from .utils import log
+
+
+class SessionResult(NamedTuple):
+    """Outcome of one `claude -p` session.
+
+    `output` is the agent's final text on success, or a `SESSION_ERROR*` marker
+    on failure (callers still gate on `is_session_error(result.output)`).
+    `usage` is the real token usage dict from `--output-format json` (keys like
+    `input_tokens`, `output_tokens`, cache variants) or None if unavailable;
+    `cost_usd` is the CLI-reported cost or None. None means "not measured" —
+    callers must never present a missing value as zero cost (honesty guardrail).
+    """
+    output: str
+    usage: dict | None = None
+    cost_usd: float | None = None
+
+
+def _parse_session_json(stdout: str) -> tuple[str, dict | None, float | None]:
+    """Parse a `--output-format json` session result into (text, usage, cost).
+
+    Falls back to (raw_stdout, None, None) if the output isn't the expected JSON
+    envelope, so a CLI format change degrades to estimate-only rather than
+    breaking the run.
+    """
+    try:
+        data = json.loads(stdout)
+    except (json.JSONDecodeError, ValueError):
+        return stdout, None, None
+    if not isinstance(data, dict):
+        return stdout, None, None
+    text = data.get("result")
+    if not isinstance(text, str):
+        text = stdout
+    usage = data.get("usage") if isinstance(data.get("usage"), dict) else None
+    cost = data.get("total_cost_usd")
+    cost = float(cost) if isinstance(cost, (int, float)) else None
+    return text, usage, cost
+
+
+def usage_tokens(usage: dict | None) -> tuple[int | None, int | None]:
+    """Collapse a Claude usage dict to (input_tokens, output_tokens).
+
+    Input includes cache-creation and cache-read tokens so the figure reflects
+    the real billed input. Returns (None, None) when usage is absent.
+    """
+    if not isinstance(usage, dict):
+        return None, None
+    inp = (
+        (usage.get("input_tokens") or 0)
+        + (usage.get("cache_creation_input_tokens") or 0)
+        + (usage.get("cache_read_input_tokens") or 0)
+    )
+    out = usage.get("output_tokens") or 0
+    return int(inp), int(out)
+
 
 SESSION_TIMEOUT = 900  # 15 minutes per claude session
 IMPL_SESSION_TIMEOUT = 900  # implementation sessions
@@ -105,12 +161,14 @@ def _kill_process_group(pgid: int) -> None:
 def run_claude_session(
     prompt: str, project_dir: str, timeout: int = SESSION_TIMEOUT,
     model: str | None = None,
-) -> str:
-    """Execute a claude -p session and capture output.
+) -> SessionResult:
+    """Execute a claude -p session and capture output + real token usage.
 
-    Retries up to NETWORK_MAX_RETRIES times for network errors.
-    Returns the session stdout on success, or a SESSION_ERROR/SESSION_ERROR_PERMANENT
-    string on failure.
+    Retries up to NETWORK_MAX_RETRIES times for network errors. Returns a
+    `SessionResult`: on success `.output` is the agent's final text and
+    `.usage`/`.cost_usd` carry the real figures parsed from `--output-format
+    json`; on failure `.output` is a SESSION_ERROR/SESSION_ERROR_PERMANENT
+    marker and usage/cost are None.
 
     Args:
         model: Optional model alias ("sonnet", "opus") or full model ID,
@@ -118,7 +176,13 @@ def run_claude_session(
     """
     clean_env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
 
-    cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions"]
+    # `--output-format json` wraps the final text in an envelope that also
+    # carries real `usage` + `total_cost_usd`. The orchestrator reads agent
+    # results from result *files*, not this stdout, so the only consumers of
+    # this string are SESSION_ERROR detection and the char-count fallback —
+    # both unaffected by the wrapping (we unwrap `.result` on success).
+    cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions",
+           "--output-format", "json"]
     if model:
         cmd.extend(["--model", model])
 
@@ -154,13 +218,14 @@ def run_claude_session(
                         proc.wait(timeout=10)
                     except subprocess.TimeoutExpired:
                         log(f"  WARNING: subprocess {proc.pid} did not exit after SIGKILL — continuing with process leaked")
-                    return f"SESSION_ERROR: Timed out after {timeout}s"
+                    return SessionResult(f"SESSION_ERROR: Timed out after {timeout}s")
 
                 # Session finished — kill any orphaned children in the process group
                 _kill_process_group(proc.pid)
 
                 if proc.returncode == 0:
-                    return stdout
+                    text, usage, cost = _parse_session_json(stdout)
+                    return SessionResult(text, usage, cost)
 
                 stderr = stderr_out.strip()
                 is_network = any(kw in stderr.lower() for kw in ("network", "connection", "timeout", "econnrefused"))
@@ -173,17 +238,17 @@ def run_claude_session(
 
                 # Final network attempt or non-network error — return error
                 if is_network:
-                    return f"SESSION_ERROR: Network error after {NETWORK_MAX_RETRIES} attempts\n{stderr}"
+                    return SessionResult(f"SESSION_ERROR: Network error after {NETWORK_MAX_RETRIES} attempts\n{stderr}")
                 prefix = "SESSION_ERROR_PERMANENT" if _is_permanent_error(stderr) else "SESSION_ERROR"
-                return f"{prefix}: Exit code {proc.returncode}\n{stderr}\n{stdout}"
+                return SessionResult(f"{prefix}: Exit code {proc.returncode}\n{stderr}\n{stdout}")
             finally:
                 _ACTIVE_CHILD_PGIDS.discard(proc.pid)
 
         except FileNotFoundError:
-            return "SESSION_ERROR_PERMANENT: 'claude' command not found. Ensure Claude CLI is installed and in PATH."
+            return SessionResult("SESSION_ERROR_PERMANENT: 'claude' command not found. Ensure Claude CLI is installed and in PATH.")
 
     # Should not reach here, but safety net
-    return "SESSION_ERROR: All retries exhausted"
+    return SessionResult("SESSION_ERROR: All retries exhausted")
 
 
 def get_impl_result_path(project_dir: str) -> str:
