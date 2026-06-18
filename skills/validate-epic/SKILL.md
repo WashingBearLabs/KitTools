@@ -131,18 +131,24 @@ Read all six agent templates from `$CLAUDE_PLUGIN_ROOT/agents/`, interpolate the
 
 Once all six agents complete, read all result files and present findings grouped by reviewer. Every result file carries both a native verdict and `canonical_verdict` (`ready|needs-work|not-ready`, see FINDING_SCHEMA.md) — prefer `canonical_verdict` when aggregating; fall back to the native field for results from pre-2.7.0 agents.
 
+Each reviewer also emits a `readiness_score` (1–10, anchored to its verdict — see FINDING_SCHEMA.md). **Report the per-reviewer vector; never average it.** The spread is signal: a high salty score against a low security score is worth digging into (*how* did a spec a senior engineer would ship still carry a security gap?). The gate reads the **worst** reviewer, not a mean — preserving every reviewer's score keeps that telemetry intact. For pre-2.7.0 results the score may be absent; show `—`.
+
+Sanity-check each score against its band before presenting: `not-ready` → 1–4, `needs-work` → 5–7, `ready` → 8–10. A score outside the band implied by that reviewer's `canonical_verdict` is a bug (like a `clean` verdict carrying a critical finding) — flag it and trust the verdict/findings over the number.
+
 ```
 Review Results — [spec-name]
 ═══════════════════════════════════════
 
-| Reviewer | Verdict | Critical | Warnings | Info |
-|----------|---------|----------|----------|------|
-| Completionist | ready | 0 | 0 | 1 |
-| Story Quality | needs-work | 0 | 3 | 2 |
-| Salty Engineer | needs-work | 1 | 2 | 0 |
-| Codebase Fit | needs-work | 0 | 4 | 1 |
-| Security | needs-work | 0 | 2 | 1 |
-| Second Opinion | ready | 0 | 1 | 0 |
+| Reviewer | Verdict | Readiness | Critical | Warnings | Info |
+|----------|---------|-----------|----------|----------|------|
+| Completionist | ready | 8 | 0 | 0 | 1 |
+| Story Quality | needs-work | 6 | 0 | 3 | 2 |
+| Salty Engineer | needs-work | 5 | 1 | 2 | 0 |
+| Codebase Fit | needs-work | 6 | 0 | 4 | 1 |
+| Security | needs-work | 5 | 0 | 2 | 1 |
+| Second Opinion | ready | 8 | 0 | 1 | 0 |
+
+Worst reviewer: **Salty Engineer / Security at 5** (`needs-work`) — that's the gate's read, not the 6.3 average (which the table deliberately does not compute).
 ```
 
 Then present findings by severity across all reviewers — critical first, then warnings, then info. For each finding, prefix with the reviewer name so the user knows the source.
@@ -158,10 +164,12 @@ Then present findings by severity across all reviewers — critical first, then 
 
 After presenting all findings, ask the user:
 
-> **[N] findings across [M] reviewers. Would you like to:**
+> **[N] findings across [M] reviewers (worst readiness: [score] — [reviewer]). Would you like to:**
 > - **A.** Update the spec and re-run specific reviewers
 > - **B.** Note findings as known risks and continue to the next spec
 > - **C.** Stop and address findings before continuing
+
+Use the worst reviewer's readiness score as graduated guidance on top of the critical-finding rule, and say so in the prompt: any critical finding → recommend **A**; otherwise worst score 1–4 → recommend **A**; 5–7 → **B** is reasonable if the user accepts the named risks; 8–10 → clean enough to proceed. This is advice, not a hard gate — the user always chooses.
 
 If the user picks **A**, ask which reviewers to re-run (only re-run the selected ones — no need to repeat reviewers that passed). Spawn the selected reviewers in parallel, collect results, and present the updated findings alongside the unchanged results from the other reviewers.
 
@@ -237,11 +245,31 @@ Overall readiness: [ready / needs-work / not-ready]
       "second-opinion": "ready"
     }
   },
+  "reviewer_scores": {
+    "feature-foo-schema.md": {
+      "completionist": 8,
+      "story-quality": 8,
+      "salty-engineer": 6,
+      "codebase-fit": 8,
+      "security": 5,
+      "second-opinion": 8
+    }
+  },
   "finding_counts": {"critical": 1, "warning": 4, "info": 3}
 }
 ```
 
-**Clean up:** Delete `kit_tools/.validate_epic_1.json` through `kit_tools/.validate_epic_6.json`. Leave the summary file — the Stop hook reads and deletes it.
+`reviewer_scores` mirrors `reviewer_verdicts`' shape (per spec, per reviewer) and is added **alongside** it, not merged into it — existing consumers that read `reviewer_verdicts` keep working unchanged. Record the raw per-reviewer scores; do **not** write an averaged or rolled-up score anywhere. Omit a reviewer's entry if it produced no score (a pre-2.7.0 result).
+
+**Emit trace events:** After writing the summary, append per-reviewer spec-quality events to the run trace so the benchmark/retrospective pipeline can join pre-execution spec quality to downstream outcomes:
+
+```bash
+python3 "$CLAUDE_PLUGIN_ROOT/scripts/emit_validate_events.py"
+```
+
+This reads the summary you just wrote and appends one `spec.validate.scored` event (reviewer, `canonical_verdict`, `readiness_score`, `finding_counts`) per reviewer to `kit_tools/.execution-events.jsonl` — the same stream the executor and `harvest_signals` reducer use. It is best-effort and deterministic (no model in the loop); if it prints a skip note, continue normally.
+
+**Clean up:** Delete `kit_tools/.validate_epic_1.json` through `kit_tools/.validate_epic_6.json`. Leave the summary file — the Stop hook reads it.
 
 ---
 

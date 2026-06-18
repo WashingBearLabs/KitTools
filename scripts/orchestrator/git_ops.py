@@ -7,7 +7,7 @@ import re
 import subprocess
 
 from . import registry
-from .events import write_notification
+from .events import log_event, write_notification
 from .specs import archive_spec
 from .supervisor import (
     CONTROL_FILE,
@@ -589,8 +589,16 @@ def complete_feature(config: dict, state: dict, validation_clean: bool) -> None:
 
     # --- Merge strategy ---
     if strategy == "merge":
+        log_event(
+            config, "merge.attempted", target_branch=branch,
+            validation_clean=validation_clean,
+        )
         if not validation_clean:
             log("Validation found critical issues — merge blocked. Falling back to PR.")
+            log_event(
+                config, "merge.blocked", severity="warning",
+                target_branch=branch, reason="validation-not-clean",
+            )
             write_notification(
                 config, "completion_fallback",
                 "Merge blocked — falling back to PR",
@@ -601,6 +609,13 @@ def complete_feature(config: dict, state: dict, validation_clean: bool) -> None:
         elif _is_worktree_execution(config):
             # Worktree execution: merge server-side, never `git checkout main`.
             outcome = _complete_merge_worktree(config, state, feature_name, branch)
+            log_event(
+                config,
+                "merge.landed" if outcome == "merged" else "merge.deferred",
+                severity="info" if outcome == "merged" else "warning",
+                target_branch=branch, status=outcome, via="pr-server",
+                verified=outcome == "merged",
+            )
             if outcome == "merged":
                 _cleanup_execution_artifacts(project_dir)
                 kill_tmux_session(config)
@@ -632,6 +647,10 @@ def complete_feature(config: dict, state: dict, validation_clean: bool) -> None:
                             f"Manual intervention required. Run: cd {project_dir} && git status"
                         )
                     run_git(["checkout", branch], project_dir)
+                    log_event(
+                        config, "merge.failed", severity="warning",
+                        target_branch=base, reason="conflict", via="local",
+                    )
                     write_notification(
                         config, "completion_fallback",
                         "Merge failed — falling back to PR",
@@ -643,6 +662,10 @@ def complete_feature(config: dict, state: dict, validation_clean: bool) -> None:
                     # Merge succeeded — delete feature branch
                     run_git(["branch", "-d", branch], project_dir)
                     log(f"Merged {branch} into main and deleted feature branch.")
+                    log_event(
+                        config, "merge.landed", target_branch=base,
+                        status="merged", via="local", verified=True,
+                    )
                     write_notification(
                         config, "feature_merged",
                         f"Feature merged: {feature_name}",

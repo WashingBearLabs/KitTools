@@ -105,6 +105,7 @@ Write your findings as a JSON file to `{{RESULT_FILE_PATH}}`.
   "spec_name": "{{SPEC_NAME}}",
   "overall_verdict": "ready|needs-work|not-ready",
   "canonical_verdict": "ready|needs-work|not-ready",
+  "readiness_score": <1-10>,
   "findings": [
     {
       "severity": "critical|warning|info",
@@ -120,6 +121,8 @@ Write your findings as a JSON file to `{{RESULT_FILE_PATH}}`.
 ```
 
 **canonical_verdict** (cross-agent vocabulary, see FINDING_SCHEMA.md): mirror your overall_verdict — your native vocabulary is already canonical.
+
+**readiness_score** (1–10, see FINDING_SCHEMA.md): your execution-readiness score for *this* spec, anchored to your verdict — `not-ready` → 1–4, `needs-work` → 5–7, `ready` → 8–10. Skew low when in doubt: reserve 9–10 for a spec you'd execute unsupervised; a real caveat makes it a 7, not "a 9 with a caveat."
 
 ### Verdict Guide
 

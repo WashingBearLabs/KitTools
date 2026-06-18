@@ -13,6 +13,7 @@ from .config import get_model_config, load_config
 from .events import (
     NOTIFICATION_FILE,
     log_event,
+    new_run_id,
     write_notification,
 )
 from .execution_log import (
@@ -39,11 +40,13 @@ from .sessions import (
     is_session_error,
     kill_active_child_sessions,
     run_claude_session,
+    usage_tokens,
 )
 from .specs import archive_spec, check_dependencies_archived, tag_checkpoint
 from .state import (
     StateCorrupt,
     _atomic_json_write,
+    accumulate_token_usage,
     get_state_path,
     load_or_create_epic_state,
     load_or_create_state,
@@ -130,13 +133,42 @@ def register_crash_handler(config: dict) -> None:
         signal.signal(signal.SIGHUP, _on_signal)
 
 
+def _elapsed_seconds(start_iso: str | None) -> float | None:
+    """Best-effort wall-clock seconds since an ISO-8601 timestamp."""
+    if not start_iso:
+        return None
+    try:
+        from datetime import datetime
+        start = datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
+        return round((datetime.now(start.tzinfo) - start).total_seconds(), 1)
+    except (ValueError, TypeError):
+        return None
+
+
+def _ensure_run_id(config: dict, state: dict) -> str:
+    """Mint a run_id on first launch, or reuse the one persisted in state on
+    resume, so every event in a run (across its many sessions) shares an id the
+    reducer can upsert on. Stamped on both config (read by log_event) and state
+    (durable across sessions)."""
+    run_id = state.get("run_id") or config.get("run_id") or new_run_id()
+    config["run_id"] = run_id
+    state["run_id"] = run_id
+    return run_id
+
+
 def run_single_spec(config: dict) -> None:
     """Execute a single feature spec (original behavior, backwards compatible)."""
     state, is_rerun = load_or_create_state(config)
     # Stamp this process's start so the 24h safety net measures *this* launch,
     # not the epic's original start — resuming a >24h-old run must not re-trip it.
     state["run_started_at"] = now_iso()
+    _ensure_run_id(config, state)
     save_state(state, config)
+    log_event(
+        config, "run.started",
+        mode=config["mode"], branch=config["branch_name"],
+        max_retries=config.get("max_retries"), is_rerun=is_rerun, epic=False,
+    )
 
     project_dir = config["project_dir"]
     spec_path = config["spec_path"]
@@ -187,6 +219,12 @@ def run_single_spec(config: dict) -> None:
         f"All stories passed for {feature_label}",
         severity="info",
     )
+    log_event(
+        config, "run.completed",
+        outcome="completed",
+        duration_seconds=_elapsed_seconds(state.get("run_started_at")),
+        sessions=state.get("sessions", {}),
+    )
 
     # Run implementation validation (may auto-invoke complete-implementation)
     spec_basename = os.path.basename(spec_path)
@@ -197,7 +235,14 @@ def run_single_spec(config: dict) -> None:
         f"Run /kit-tools:validate-implementation for feature spec {spec_basename}. "
         f"Mode: autonomous. Branch: {branch}."
     )
-    validate_output = run_claude_session(validate_prompt, project_dir, model=validator_model)
+    validate_session = run_claude_session(validate_prompt, project_dir, model=validator_model)
+    validate_output = validate_session.output
+    _v_in, _v_out = usage_tokens(validate_session.usage)
+    accumulate_token_usage(state, _v_in, _v_out, validate_session.cost_usd)
+    log_event(
+        config, "session.metrics", phase="validate", model=validator_model,
+        tokens_input=_v_in, tokens_output=_v_out, cost_usd=validate_session.cost_usd,
+    )
 
     if is_session_error(validate_output):
         log(f"Validation session error: {validate_output[:200]}")
@@ -237,11 +282,18 @@ def run_epic(config: dict) -> None:
     # Stamp this process's start so the 24h safety net measures *this* launch,
     # not the epic's original start — resuming a >24h-old run must not re-trip it.
     state["run_started_at"] = now_iso()
+    _ensure_run_id(config, state)
     save_state(state, config)
 
     project_dir = config["project_dir"]
     epic_name = config["epic_name"]
     epic_specs = config["epic_specs"]
+    log_event(
+        config, "run.started",
+        mode=config["mode"], branch=config["branch_name"],
+        max_retries=config.get("max_retries"), is_rerun=is_rerun,
+        epic=True, spec_count=len(epic_specs),
+    )
 
     log(f"Starting epic: {epic_name} ({len(epic_specs)} feature specs)")
     log(f"Branch: {config['branch_name']}")
@@ -316,9 +368,17 @@ def run_epic(config: dict) -> None:
             f"Mode: autonomous. Branch: {config['branch_name']}. "
             f"This is part of an epic — do NOT invoke complete-implementation."
         )
-        validate_output = run_claude_session(validate_prompt, project_dir, model=validator_model)
+        validate_session = run_claude_session(validate_prompt, project_dir, model=validator_model)
+        validate_output = validate_session.output
         state["sessions"]["total"] += 1
         state["sessions"]["validation"] += 1
+        _ev_in, _ev_out = usage_tokens(validate_session.usage)
+        accumulate_token_usage(state, _ev_in, _ev_out, validate_session.cost_usd)
+        log_event(
+            config, "session.metrics", spec=spec_basename, phase="validate",
+            model=validator_model, tokens_input=_ev_in, tokens_output=_ev_out,
+            cost_usd=validate_session.cost_usd,
+        )
 
         if is_session_error(validate_output):
             log(f"  Validation error: {validate_output[:200]}")
@@ -388,6 +448,13 @@ def run_epic(config: dict) -> None:
         "Epic complete",
         f"All {len(epic_specs)} feature specs complete for epic {epic_name}",
         severity="info",
+    )
+    log_event(
+        config, "run.completed",
+        outcome="completed",
+        duration_seconds=_elapsed_seconds(state.get("run_started_at")),
+        sessions=state.get("sessions", {}),
+        specs_total=len(epic_specs),
     )
 
     # Complete the epic using the configured strategy
