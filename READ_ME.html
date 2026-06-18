@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KitTools v2.7.0 — AI-Assisted Development Framework</title>
+  <title>KitTools v2.8.0 — AI-Assisted Development Framework</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap" rel="stylesheet">
@@ -1029,7 +1029,7 @@
       <div class="phase-body">
         <div class="step">
           <div class="step-cmd"><span class="step-cmd-text">/kit-tools:validate-epic</span></div>
-          <div class="step-desc">Six parallel agent reviews per feature spec. Results are consolidated and presented together; re-run individual reviewers selectively after spec updates. For small, low-risk epics the skill may <em>suggest</em> a 3-reviewer quick tier — the full panel stays the default, and you always make the call.</div>
+          <div class="step-desc">Six parallel agent reviews per feature spec. Results are consolidated and presented together; re-run individual reviewers selectively after spec updates. For small, low-risk epics the skill may <em>suggest</em> a 3-reviewer quick tier — the full panel stays the default, and you always make the call. Each reviewer also returns a <strong>1–10 readiness score</strong> anchored to its verdict — reported as a per-reviewer vector (never averaged), so the re-run-vs-execute call is legible and the gate reads the worst reviewer.</div>
           <div class="badges">
             <span class="badge-agent">spec-completionist-reviewer</span>
             <span class="badge-agent">story-quality-reviewer</span>
@@ -1341,7 +1341,7 @@
       <tr>
         <td><span class="hook-name">harvest_signals</span></td>
         <td><span class="hook-trigger">Stop</span></td>
-        <td>Captures skill telemetry from KitTools artifacts to <code>~/.kit/feedback/</code> for retrospective analysis — survives plugin updates</td>
+        <td>Reduces each run's structured event stream into an idempotent per-run telemetry record under <code>~/.kit/feedback/</code> for retrospective and benchmarking analysis — survives plugin updates</td>
       </tr>
     </tbody>
   </table>
