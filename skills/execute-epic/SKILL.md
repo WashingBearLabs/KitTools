@@ -73,6 +73,15 @@ Store as `monitor: true/false` in `.execution-config.json`. Default: `false`.
 >
 > Known quirk: if your laptop sleeps mid-run, cron fires queued during sleep may all run in quick succession on wake. This is usually harmless (each one just re-reads the health snapshot) but can produce a burst of supervisor log lines after your laptop wakes.
 
+Then ask:
+
+> **Keep the machine awake during the run?** A long unattended run is wasted if the laptop sleeps and suspends the orchestrator. This holds a sleep assertion (macOS `caffeinate`, Linux `systemd-inhibit`) that prevents idle/system sleep for the duration of the run — the display is still free to sleep, and the assertion releases automatically when the run finishes.
+>
+> - **A. Yes** (recommended for overnight / unattended runs)
+> - **B. No** — leave power settings alone
+
+Store as `keep_awake: true/false` in `.execution-config.json`. Default: `false`. The orchestrator starts the inhibitor on launch and releases it on exit (including crashes); on an unsupported OS it logs a no-op and continues.
+
 Skip this step for Supervised mode (the user is already present).
 
 ---

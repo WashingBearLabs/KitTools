@@ -52,6 +52,7 @@ from .state import (
     load_or_create_state,
     save_state,
 )
+from .keep_awake import start_keep_awake, stop_keep_awake
 from .supervisor import pause_file_exists, wait_for_pause_removal
 from .trace_reduce import finalize_run_trace
 from .utils import GitCommandError, kill_tmux_session, log, now_iso, run_git
@@ -573,6 +574,11 @@ def main():
         sys.exit(1)
 
     register_crash_handler(config)
+
+    # Hold a sleep assertion for the run if the user opted in. Released on any
+    # exit via atexit (which the signal handlers also trigger through sys.exit).
+    _keep_awake_proc = start_keep_awake(config)
+    atexit.register(lambda: stop_keep_awake(_keep_awake_proc))
 
     try:
         if config.get("epic_specs"):
