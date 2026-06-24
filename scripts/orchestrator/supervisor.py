@@ -11,7 +11,7 @@ import subprocess
 import time
 from datetime import datetime, timezone
 
-from .events import write_notification
+from .events import log_event, write_notification
 from .state import save_state, update_state_story
 from .utils import _atomic_json_write, log, now_iso, run_git
 
@@ -201,6 +201,16 @@ def handle_control_action(
       - "abort" — stop execution entirely
     """
     action = control.get("action", "")
+    # Operator/supervisor forced past normal flow — the Spec-Kitty force-override
+    # analog. One event covers every branch (pause/skip/split/abort); the reducer
+    # counts these so an experiment can tell autonomous success from a human
+    # rescue.
+    log_event(
+        config, "supervisor.action",
+        actor={"kind": "human", "id": "supervisor"},
+        spec=spec_key, story=control.get("story_id"),
+        action=action, reason=control.get("reason"),
+    )
 
     if action == "pause":
         reason = control.get("reason", "Supervisor requested pause")

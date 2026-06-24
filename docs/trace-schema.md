@@ -22,6 +22,16 @@ cost/token situation, and the eval slots a later layer fills in.
 normalised origin remote). Living under `~/.kit/` means the data survives plugin
 updates (marketplace installs get a fresh install path per version).
 
+**Who reduces, and when.** The reduction logic lives in
+`scripts/orchestrator/trace_reduce.py`. Two callers share it:
+- the `harvest_signals` **Stop hook** — fires per session, for mid-run snapshots
+  and for non-orchestrator skills (validate-epic);
+- the **orchestrator itself** — calls `finalize_run_trace(config, state)` at
+  end-of-run, with the live in-memory state, *before* artifact cleanup. This is
+  essential: a run's terminal status (`completed`/`failed`) is set in Python
+  after the last child session stops, so no Stop hook ever fires with it. The
+  hook alone would record `running`/`paused` forever and never the outcome.
+
 ## Event envelope
 
 Every line in `.execution-events.jsonl` is one JSON object:
@@ -52,21 +62,25 @@ Every line in `.execution-events.jsonl` is one JSON object:
 | `actor` | optional — who emitted it (`kind`: `agent`\|`runtime`\|`human`, plus `id`, `model`). |
 | `payload` | event-specific fields. |
 
-The envelope mirrors the **Spec Kitty** event shape (`event_id` / `event_name` /
-`at` / `actor` / mission identity / payload) so the two systems' traces stay
-structurally comparable for head-to-head evaluation.
+The envelope mirrors the **Spec Kitty** event shape so the two systems' traces
+stay structurally comparable for head-to-head evaluation. The one mapping a
+shared consumer must apply: our discriminator is **`event_type`**; Spec Kitty's
+is **`event_name`** (`event_id` / `at` / `actor` / run-vs-mission identity /
+payload line up directly).
 
 ## Event taxonomy
 
 Run lifecycle (`entry.py`):
 
-- `run.started` — `{mode, branch, max_retries, is_rerun, epic, spec_count?}`
+- `run.started` — `{mode, branch, max_retries, is_rerun, epic, spec_count?, config_snapshot}` — `config_snapshot` records the scaffold "knobs" the run executed with (`{models, completion_strategy, worktree_mode, epic_pause_between_specs}`) so an ablation can attribute an outcome change to the knob that changed.
 - `run.completed` — `{outcome, duration_seconds, sessions, specs_total?}`
+- `recovery.succeeded` — `{recovered_from, attempt}` — run recovered from a git-stuck state (e.g. merge-conflict abort) and continued.
+- `supervisor.action` — `{action, reason, story?}` (actor `human`) — operator/supervisor forced past normal flow (pause/skip/split/abort): the Spec-Kitty force-override analog.
 - `orchestrator_crashed`, `abort_*` — error/crash path (pre-existing)
 
 Per-story (`executor.py`):
 
-- `story.implement.started` — `{attempt}` (actor carries the model)
+- `story.implement.started` — `{attempt, spec_size}` (actor carries the model)
 - `story.implement.completed` — `{attempt, status, has_result}`
 - `story.implement.failed` — `{attempt, failure_type, permanent, reason}`
 - `story.verify.passed` — `{attempt, verdict, warnings_count}`
@@ -88,7 +102,7 @@ Merge (`executor.py` per-story attempt merge; `git_ops.py` final feature merge):
 
 Spec quality (`validate-epic`, via `scripts/emit_validate_events.py`):
 
-- `spec.validate.scored` — one per reviewer per spec: `{reviewer, canonical_verdict, readiness_score, finding_counts}`. `validate-epic` runs in the interactive session, not the orchestrator, so it bridges into the same stream through that emitter script.
+- `spec.validate.scored` — one per reviewer per spec: `{reviewer, canonical_verdict, readiness_score, finding_counts, spec_finding_counts?}`. `finding_counts` is the **epic** total; `spec_finding_counts` (optional) is the accurate **per-spec** breakdown — use it for per-spec analysis rather than the epic total. `validate-epic` runs in the interactive session, not the orchestrator, so it bridges into the same stream through the emitter script. Its run is keyed by a **stable per-epic** `run_id` (`validate-<epic-slug>`), so re-validating an epic upserts one record (latest pass wins) instead of accumulating.
 
 ## Compatibility rule
 
@@ -132,18 +146,44 @@ line):
   "run_id": "run-...",
   "skill": "execute-epic",
   "project": "myrepo",
+  "epic": "my-epic",
   "outcome": "completed",
-  "metrics": { "specs_completed": 3, "stories_completed": 12, "total_retries": 4, ... },
+  "metrics": { "specs_completed": 3, "stories_completed": 12, "total_retries": 4,
+               "per_spec": { "feature-a.md": {"status": "completed", "stories_completed": 4,
+                                              "stories_failed": 0, "retries": 1} }, ... },
   "detectors": { "rejection_cycles": 2, "friction": 1, "retries": 4, "escalations": 1,
-                 "merges_landed": 3, "merges_failed": 0, "completions": 12, "crashes": 0 },
+                 "supervisor_actions": 0, "recoveries": 1, "merges_landed": 3,
+                 "merges_failed": 0, "completions": 12, "crashes": 0 },
   "tokens": { "estimate": {"input": N, "output": N},
               "measured": {"input": N, "output": N, "cost_usd": N, "measured_calls": N} },
-  "eval": { "functional_pass": null, "intent_alignment_score": null, "spec_quality": null }
+  "functional_pass_proxy": true,
+  "eval": { "functional_pass": null, "intent_alignment_score": null, "spec_quality": null },
+  "last_reduced_at": "2026-06-23T..."
 }
 ```
 
 The record schema is versioned independently (`SIGNAL_SCHEMA_VERSION`, currently
-`"2"`; `"1"` was the flat pre-2.7.0 line).
+`"2"`; `"1"` was the flat pre-2.7.0 line). `last_reduced_at` is the reduction
+wall-clock — explicitly **not** part of the deterministic reduction (it's the one
+field that varies between two reductions of the same stream); named so consumers
+don't mistake it for a run timestamp.
+
+**`functional_pass_proxy`** is a provisional run-level signal derived from
+verifier verdicts (`completed` with no failed stories → `true`; `failed`/
+`crashed` → `false`; else `null`). It is deliberately **separate** from the
+eval-layer `eval.functional_pass` slot — the proxy gives a usable dependent
+variable on day one without pretending to be a real test/judge signal.
+
+### The keystone join
+
+The keystone question — does pre-execution spec quality predict downstream
+output quality? — joins a **validate-epic** record (carrying the per-reviewer
+`readiness_score` vector + per-spec verdicts) to the **execute-epic** record for
+the same spec. The two runs have independent `run_id`s, so the canonical join key
+is **`(project, epic, spec)`**: both record kinds now carry `epic` at top level,
+the validate record holds per-spec scores, and the execute record holds
+`metrics.per_spec[<spec>]` outcomes. (A future enhancement may also stamp the
+validate `run_id` onto the execute run for a direct link.)
 
 **Eval slots** are deliberately `null` and filled by a *later* evaluation layer,
 joined by `run_id`:

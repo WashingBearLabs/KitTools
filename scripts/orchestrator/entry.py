@@ -53,6 +53,7 @@ from .state import (
     save_state,
 )
 from .supervisor import pause_file_exists, wait_for_pause_removal
+from .trace_reduce import finalize_run_trace
 from .utils import GitCommandError, kill_tmux_session, log, now_iso, run_git
 
 
@@ -145,6 +146,25 @@ def _elapsed_seconds(start_iso: str | None) -> float | None:
         return None
 
 
+def _config_snapshot(config: dict) -> dict:
+    """The scaffold 'knobs' this run executed with — recorded on `run.started`
+    so an ablation can attribute an outcome change to the knob that changed
+    (model set, completion strategy, isolation mode). Without it, two runs that
+    differ only by implementer model are indistinguishable in the trace, and the
+    experimental design's "hold the model fixed, vary the scaffold" premise is
+    unverifiable from the record (T1-C)."""
+    try:
+        models = get_model_config(config)
+    except Exception:
+        models = {}
+    return {
+        "models": models,
+        "completion_strategy": config.get("completion_strategy", "none"),
+        "worktree_mode": bool(config.get("main_repo")),
+        "epic_pause_between_specs": bool(config.get("epic_pause_between_specs")),
+    }
+
+
 def _ensure_run_id(config: dict, state: dict) -> str:
     """Mint a run_id on first launch, or reuse the one persisted in state on
     resume, so every event in a run (across its many sessions) shares an id the
@@ -168,6 +188,7 @@ def run_single_spec(config: dict) -> None:
         config, "run.started",
         mode=config["mode"], branch=config["branch_name"],
         max_retries=config.get("max_retries"), is_rerun=is_rerun, epic=False,
+        config_snapshot=_config_snapshot(config),
     )
 
     project_dir = config["project_dir"]
@@ -239,9 +260,14 @@ def run_single_spec(config: dict) -> None:
     validate_output = validate_session.output
     _v_in, _v_out = usage_tokens(validate_session.usage)
     accumulate_token_usage(state, _v_in, _v_out, validate_session.cost_usd)
+    _v_est = state.setdefault("token_estimates", {"input": 0, "output": 0})
+    _v_est["input"] += len(validate_prompt) // 4
+    _v_est["output"] += len(validate_output) // 4
     log_event(
         config, "session.metrics", phase="validate", model=validator_model,
         tokens_input=_v_in, tokens_output=_v_out, cost_usd=validate_session.cost_usd,
+        token_estimate_input=len(validate_prompt) // 4,
+        token_estimate_output=len(validate_output) // 4,
     )
 
     if is_session_error(validate_output):
@@ -272,6 +298,10 @@ def run_single_spec(config: dict) -> None:
             wait_for_pause_removal(project_dir, config=config)
             log("Resuming after pause. Proceeding to completion.")
 
+    # Reduce the trace NOW, with live state + before complete_feature cleans up
+    # the state file — the Stop hook never fires again after this, so this is the
+    # only point the terminal `completed` outcome + token totals get recorded.
+    finalize_run_trace(config, state)
     complete_feature(config, state, validation_clean)
     _update_registry_status(config, "completed")
 
@@ -293,6 +323,7 @@ def run_epic(config: dict) -> None:
         mode=config["mode"], branch=config["branch_name"],
         max_retries=config.get("max_retries"), is_rerun=is_rerun,
         epic=True, spec_count=len(epic_specs),
+        config_snapshot=_config_snapshot(config),
     )
 
     log(f"Starting epic: {epic_name} ({len(epic_specs)} feature specs)")
@@ -374,10 +405,15 @@ def run_epic(config: dict) -> None:
         state["sessions"]["validation"] += 1
         _ev_in, _ev_out = usage_tokens(validate_session.usage)
         accumulate_token_usage(state, _ev_in, _ev_out, validate_session.cost_usd)
+        _ev_est = state.setdefault("token_estimates", {"input": 0, "output": 0})
+        _ev_est["input"] += len(validate_prompt) // 4
+        _ev_est["output"] += len(validate_output) // 4
         log_event(
             config, "session.metrics", spec=spec_basename, phase="validate",
             model=validator_model, tokens_input=_ev_in, tokens_output=_ev_out,
             cost_usd=validate_session.cost_usd,
+            token_estimate_input=len(validate_prompt) // 4,
+            token_estimate_output=len(validate_output) // 4,
         )
 
         if is_session_error(validate_output):
@@ -459,6 +495,8 @@ def run_epic(config: dict) -> None:
 
     # Complete the epic using the configured strategy
     validation_clean = is_validation_clean(project_dir)
+    # Terminal reduction before cleanup — see run_single_spec for why.
+    finalize_run_trace(config, state)
     complete_feature(config, state, validation_clean)
     _update_registry_status(config, "completed")
 
@@ -575,6 +613,11 @@ def main():
         )
         log_event(config, "abort_git_command_failed", severity="critical", message=str(e))
         sys.exit(1)
+    finally:
+        # Catch-all terminal reduction for failure/abort/exit paths (the normal
+        # completion path already finalized with live state before cleanup).
+        # Reads the state file if still present; no-op once cleaned up.
+        finalize_run_trace(config)
 
     log("Orchestrator finished.")
 

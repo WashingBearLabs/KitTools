@@ -255,11 +255,16 @@ Overall readiness: [ready / needs-work / not-ready]
       "second-opinion": 8
     }
   },
-  "finding_counts": {"critical": 1, "warning": 4, "info": 3}
+  "finding_counts": {"critical": 1, "warning": 4, "info": 3},
+  "per_spec_finding_counts": {
+    "feature-foo-schema.md": {"critical": 1, "warning": 2, "info": 1}
+  }
 }
 ```
 
 `reviewer_scores` mirrors `reviewer_verdicts`' shape (per spec, per reviewer) and is added **alongside** it, not merged into it — existing consumers that read `reviewer_verdicts` keep working unchanged. Record the raw per-reviewer scores; do **not** write an averaged or rolled-up score anywhere. Omit a reviewer's entry if it produced no score (a pre-2.7.0 result).
+
+`per_spec_finding_counts` is optional but recommended: the top-level `finding_counts` is the epic total, so a per-spec breakdown (keyed by spec name) is what lets the trace correlate a spec's finding load to its execution outcome. Include it if you have per-spec counts from the review; omit it if you only tracked epic totals.
 
 **Emit trace events:** After writing the summary, append per-reviewer spec-quality events to the run trace so the benchmark/retrospective pipeline can join pre-execution spec quality to downstream outcomes:
 

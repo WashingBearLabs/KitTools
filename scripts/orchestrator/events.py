@@ -22,14 +22,17 @@ EVENT_SCHEMA_VERSION = "1"
 
 # Monotonic per-process counter so event_ids are unique even when two events
 # land in the same microsecond. event_id sorts lexically (ISO prefix), giving a
-# stable total order within a run for the reducer.
+# stable total order within a run for the reducer. The per-process suffix keeps
+# ids from colliding across processes / a module reload that resets the counter
+# (the suffix is constant within a process, so it doesn't disturb sort order).
 _EVENT_SEQ = 0
+_PROC_SUFFIX = uuid.uuid4().hex[:6]
 
 
 def _next_event_id() -> str:
     global _EVENT_SEQ
     _EVENT_SEQ += 1
-    return f"{now_iso()}#{_EVENT_SEQ:06d}"
+    return f"{now_iso()}#{_EVENT_SEQ:06d}-{_PROC_SUFFIX}"
 
 
 def new_run_id() -> str:
@@ -95,7 +98,9 @@ def write_notification(
         }
         with open(path, "a") as f:
             f.write(json.dumps(entry) + "\n")
-    except OSError:
+    except Exception:
+        # Best-effort (guardrail 1): never raise into the run. Covers OSError
+        # and a non-serializable payload (json.dumps TypeError).
         pass
 
     # Send desktop notification for important events
@@ -169,7 +174,10 @@ def log_event(
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "a") as f:
             f.write(json.dumps(entry) + "\n")
-    except OSError:
+    except Exception:
+        # Best-effort (guardrail 1): a trace write must never raise into the
+        # execution path. Broad on purpose — covers OSError on write AND
+        # json.dumps TypeError if a payload value is ever non-serializable.
         pass
 
 
