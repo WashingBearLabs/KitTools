@@ -5,6 +5,16 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.2] - 2026-06-24
+
+### Added
+
+- **Keep-awake option for unattended runs** — `/kit-tools:execute-epic` Step 2a now offers to keep the machine awake for autonomous/guarded runs (default off), stored as `keep_awake` in the execution config. The orchestrator holds an OS-appropriate sleep assertion for the duration of the run — macOS `caffeinate -i -s`, Linux `systemd-inhibit` — preventing idle/system sleep while letting the display sleep, and releases it automatically on any exit (including crashes). Best-effort: an unsupported OS or missing binary logs a no-op and the run is unaffected. Replaces doing this by hand before an overnight run.
+
+### Changed
+
+- **Supervisor stops deterministically instead of polling indefinitely** — the cron-based supervisor (`monitor: true`) kept firing `/kit-tools:execution-status` every 30 minutes even after a run finished or got blocked waiting on you, relying on the skill to notice and clean up its own cron. Now the orchestrator drops a `.supervisor_stop` marker the moment it exits or hits a block only a human can resolve (terminal states; epic blocked-on-dependencies; a critical-validation review pause), and `execution-status` checks that marker first and `CronDelete`s itself — so the supervisor reliably stands down rather than polling while you're away. **Guarded retry-pauses deliberately do not write the marker**: the orchestrator stays alive and the supervisor keeps running so it can still heal them (skip/split). A desktop notification already fires on the blocking transition, so you learn it needs you without waiting for the next check. A resumed run clears any stale marker, so its fresh supervisor isn't killed by the previous run's.
+
 ## [2.8.1] - 2026-06-23
 
 ### Fixed

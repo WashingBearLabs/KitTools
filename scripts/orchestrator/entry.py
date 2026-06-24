@@ -52,7 +52,13 @@ from .state import (
     load_or_create_state,
     save_state,
 )
-from .supervisor import pause_file_exists, wait_for_pause_removal
+from .keep_awake import start_keep_awake, stop_keep_awake
+from .supervisor import (
+    clear_supervisor_stop,
+    pause_file_exists,
+    signal_supervisor_stop,
+    wait_for_pause_removal,
+)
 from .trace_reduce import finalize_run_trace
 from .utils import GitCommandError, kill_tmux_session, log, now_iso, run_git
 
@@ -190,6 +196,9 @@ def run_single_spec(config: dict) -> None:
         max_retries=config.get("max_retries"), is_rerun=is_rerun, epic=False,
         config_snapshot=_config_snapshot(config),
     )
+    # Clear any stale stop marker from a prior run so this run's supervisor isn't
+    # killed by it (a resumed run gets a fresh supervisor).
+    clear_supervisor_stop(config)
 
     project_dir = config["project_dir"]
     spec_path = config["spec_path"]
@@ -295,6 +304,9 @@ def run_single_spec(config: dict) -> None:
                 f"Critical validation findings for {feature_label}. Review AUDIT_FINDINGS.md.",
                 severity="warning",
             )
+            # Human-only review (the supervisor can't resolve critical findings)
+            # — stop the supervisor cron while we wait, unlike a guarded pause.
+            signal_supervisor_stop(config, "needs-review")
             wait_for_pause_removal(project_dir, config=config)
             log("Resuming after pause. Proceeding to completion.")
 
@@ -325,6 +337,7 @@ def run_epic(config: dict) -> None:
         epic=True, spec_count=len(epic_specs),
         config_snapshot=_config_snapshot(config),
     )
+    clear_supervisor_stop(config)
 
     log(f"Starting epic: {epic_name} ({len(epic_specs)} feature specs)")
     log(f"Branch: {config['branch_name']}")
@@ -574,6 +587,11 @@ def main():
 
     register_crash_handler(config)
 
+    # Hold a sleep assertion for the run if the user opted in. Released on any
+    # exit via atexit (which the signal handlers also trigger through sys.exit).
+    _keep_awake_proc = start_keep_awake(config)
+    atexit.register(lambda: stop_keep_awake(_keep_awake_proc))
+
     try:
         if config.get("epic_specs"):
             run_epic(config)
@@ -618,6 +636,11 @@ def main():
         # completion path already finalized with live state before cleanup).
         # Reads the state file if still present; no-op once cleaned up.
         finalize_run_trace(config)
+        # The orchestrator process is exiting → nothing left to supervise, so
+        # tell the supervisor cron to stop. (Guarded/critical pauses BLOCK the
+        # process and never reach here, so they don't trip this — only a real
+        # exit does.)
+        signal_supervisor_stop(config, "orchestrator-exited")
 
     log("Orchestrator finished.")
 

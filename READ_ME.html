@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KitTools v2.8.1 — AI-Assisted Development Framework</title>
+  <title>KitTools v2.8.2 — AI-Assisted Development Framework</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap" rel="stylesheet">
@@ -1084,7 +1084,7 @@
       <div class="phase-body">
         <div class="step">
           <div class="step-cmd"><span class="step-cmd-text">/kit-tools:execute-epic</span></div>
-          <div class="step-desc">Select epic, choose mode, launch. Autonomous &amp; guarded runs execute in an isolated <strong>git worktree</strong> (under <code>~/.kit/worktrees/</code>) so the background orchestrator never touches your live checkout — work in your repo undisturbed while an epic runs. Optional supervisor monitoring checks health every 30 min and can split stories, restart, or pause. Adaptive timeouts, pre-flight checks, structured retry context, and cross-story regression detection.</div>
+          <div class="step-desc">Select epic, choose mode, launch. Autonomous &amp; guarded runs execute in an isolated <strong>git worktree</strong> (under <code>~/.kit/worktrees/</code>) so the background orchestrator never touches your live checkout — work in your repo undisturbed while an epic runs. Optional supervisor monitoring checks health every 30 min and can split stories, restart, or pause — and now stands down on its own when the run finishes or needs your input (no polling while you're away). Optionally keep the machine awake for unattended runs. Adaptive timeouts, pre-flight checks, structured retry context, and cross-story regression detection.</div>
           <div class="modes-row" style="margin-top: 6px;">
             <span class="mode-badge supervised">Supervised</span>
             <span class="mode-badge autonomous">Autonomous</span>

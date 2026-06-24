@@ -25,6 +25,24 @@ python3 "$CLAUDE_PLUGIN_ROOT/scripts/orchestrator/registry.py" census
 
 ---
 
+## Step 0b: Supervisor stop signal (deterministic)
+
+Before anything else, check for the orchestrator's stop marker:
+
+```bash
+cat "<EXEC_DIR>/kit_tools/.supervisor_stop" 2>/dev/null
+```
+
+If the file **exists**, the orchestrator has told the supervisor to stand down — either the run has exited (`reason`: `completed` / `failed` / `crashed` / `orchestrator-exited`) or it's blocked on something only you can resolve (`reason`: `needs-review` — critical validation findings to review in `AUDIT_FINDINGS.md`; or `blocked-deps`). When the marker is present:
+
+1. **Clean up the supervisor cron** (see Supervisor Cron Cleanup below) — there's nothing left to poll, so stop firing.
+2. Report the `reason` to the user plus a one-line final status (e.g. "Execution completed." / "Paused for your review of critical findings — resolve them and re-run `/kit-tools:execute-epic` to resume.").
+3. **Stop here.** Do not run the rest of this skill.
+
+This is what makes the supervisor stop reliably on terminal/blocked states instead of polling indefinitely. **Guarded retry-pauses deliberately do *not* write this marker** — the orchestrator stays alive and the supervisor keeps running so it can heal them (skip/split); see Step 3b.
+
+---
+
 ## Step 1: Check for Active Execution
 
 Read `"$EXEC_DIR/kit_tools/specs/.execution-state.json"`:
