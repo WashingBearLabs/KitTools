@@ -200,7 +200,7 @@ def accumulate_token_usage(
         return
     tu["input"] += input_tokens or 0
     tu["output"] += output_tokens or 0
-    if cost_usd:
+    if cost_usd is not None:  # a legitimate 0.0 is still a measured cost
         tu["cost_usd"] = round(tu["cost_usd"] + cost_usd, 6)
     tu["measured_calls"] += 1
 

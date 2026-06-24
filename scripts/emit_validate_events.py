@@ -24,16 +24,25 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 
 # Reuse the orchestrator's event primitive so the envelope (schema_version,
 # event_id, at, run, actor, payload) stays identical to executor-emitted events.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
-    from orchestrator.events import log_event, new_run_id
+    from orchestrator.events import log_event
 except Exception as e:  # pragma: no cover - import-environment guard
     print(f"emit_validate_events: could not import orchestrator.events ({e}); skipping")
     sys.exit(0)
+
+
+def _validate_run_id(epic_name: str) -> str:
+    """Stable run_id per epic (NOT per invocation), so re-validating the same
+    epic after fixes upserts ONE record (latest pass wins via event order)
+    instead of accumulating an unbounded record per re-run (T2-J)."""
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", epic_name).strip("-").lower() or "epic"
+    return f"validate-{slug}"
 
 
 def main() -> int:
@@ -57,16 +66,19 @@ def main() -> int:
     epic_name = summary.get("epic_name") or "validate-epic"
     verdicts = summary.get("reviewer_verdicts", {}) or {}
     scores = summary.get("reviewer_scores", {}) or {}
-    # finding_counts in the summary is epic-level (one block), not per-spec —
-    # attach it to each event as context rather than inventing per-spec splits.
+    # `finding_counts` is epic-level (one block) — carried as epic context for
+    # the overall verdict. `per_spec_finding_counts` (optional, keyed by spec) is
+    # the accurate per-spec breakdown; emitted as `spec_finding_counts` so a
+    # per-spec analysis isn't fed the epic total (T3-P).
     finding_counts = summary.get("finding_counts", {})
+    per_spec_findings = summary.get("per_spec_finding_counts", {}) or {}
 
-    # Each validation pass is its own run; a fresh id lets the reducer treat a
-    # re-validation after fixes as a distinct, idempotent record.
+    # Stable per-epic run_id (see _validate_run_id): re-validations upsert one
+    # record for the epic, latest pass winning, rather than piling up.
     config = {
         "project_dir": project_dir,
         "feature_name": epic_name,
-        "run_id": new_run_id(),
+        "run_id": _validate_run_id(epic_name),
     }
 
     emitted = 0
@@ -80,7 +92,8 @@ def main() -> int:
                 reviewer=reviewer,
                 canonical_verdict=verdict,
                 readiness_score=spec_scores.get(reviewer),
-                finding_counts=finding_counts,
+                finding_counts=finding_counts,                       # epic-level
+                spec_finding_counts=per_spec_findings.get(spec_name),  # per-spec or None
             )
             emitted += 1
 

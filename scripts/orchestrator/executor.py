@@ -287,7 +287,7 @@ def execute_spec_stories(
             log_event(
                 config, "story.implement.started", spec=spec_key, story=story["id"],
                 actor={"kind": "agent", "id": "story-implementer", "model": impl_model},
-                attempt=attempt,
+                attempt=attempt, spec_size=spec_size,
             )
             impl_session = run_claude_session(
                 prompt, project_dir, timeout=impl_timeout, model=impl_model
@@ -526,6 +526,10 @@ def execute_spec_stories(
                             f"`git merge --abort` did not clean up after merge conflict — repo stuck in {stuck} state. "
                             f"Cannot safely retry. Manual intervention required: cd {project_dir} && git status"
                         )
+                    log_event(
+                        config, "recovery.succeeded", spec=spec_key, story=story["id"],
+                        attempt=attempt, recovered_from="merge_conflict",
+                    )
                     learnings.append("Merge conflict on attempt branch — retry with fresh approach")
                     log_story_failure(story, attempt, config, "Merge conflict", learnings)
                     update_state_story(

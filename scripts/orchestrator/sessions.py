@@ -48,6 +48,12 @@ def _parse_session_json(stdout: str) -> tuple[str, dict | None, float | None]:
     usage = data.get("usage") if isinstance(data.get("usage"), dict) else None
     cost = data.get("total_cost_usd")
     cost = float(cost) if isinstance(cost, (int, float)) else None
+    # An agent-level failure can return is_error=true at exit 0 (e.g. context
+    # overflow, an unrecoverable tool error mid-session). Surface it as a session
+    # error so callers retry/classify instead of treating the failure text as a
+    # successful result. Usage/cost are still real — keep them.
+    if data.get("is_error"):
+        text = f"SESSION_ERROR: agent-level error (is_error): {text[:500]}"
     return text, usage, cost
 
 

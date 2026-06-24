@@ -5,6 +5,22 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Terminal run outcomes are now captured (trace capture)** — a post-release audit found that execute-epic runs recorded `running`/`paused` telemetry but almost never the terminal `completed`/`failed` outcome: a run's final status is set in Python after the last `claude -p` child session stops, so the Stop hook that drives reduction never fired with it (epic mode especially). The reducer core moved to a shared `scripts/orchestrator/trace_reduce.py`, and the orchestrator now calls `finalize_run_trace(config, state)` itself at end-of-run — with the live in-memory state, before artifact cleanup — guaranteeing a terminal record with the real outcome and token totals even though the state file is about to be deleted. `harvest_signals` is now a thin wrapper over the same reducer. This was the benchmark's single most important field and it was the one most reliably missing.
+- **Trace writes can no longer raise into a run** — `log_event`/`write_notification` caught only `OSError`, but `json.dumps` raises `TypeError` on a non-serializable payload, which would have propagated into the execution path (guardrail violation). Both now use a broad best-effort catch.
+- **Agent-level session failures are no longer treated as success** — a `claude -p --output-format json` result with `is_error: true` at exit 0 (e.g. context overflow) is now surfaced as a `SESSION_ERROR` so the orchestrator retries/classifies it instead of proceeding on a failed session. Real usage/cost from the failed call are still recorded.
+- **Re-validating an epic no longer accumulates unbounded telemetry** — `validate-epic` now uses a stable per-epic `run_id` (`validate-<slug>`), so re-runs upsert one record (latest pass wins) instead of one record per re-run; `/retrospective` no longer multi-counts an epic's readiness.
+- **Reducer determinism, legacy-stream handling, and zero-cost calls** — the per-run record's reduction timestamp is renamed `last_reduced_at` (explicitly outside the deterministic reduction); a legacy run_id-less stream that mixes execute + validate events no longer lets validate events shadow the execute reduction; a legitimate `$0.00` measured call is now accumulated (was skipped by a falsy check); `event_id`s carry a per-process suffix so a module reload / second process can't collide.
+
+### Added
+
+- **Scaffold-config capture for ablations** — `run.started` now records a `config_snapshot` (models, completion strategy, worktree mode, pause settings) and `story.implement.started` carries `spec_size`. Without this, two runs that differ only by model were indistinguishable in the trace, making the "hold the model fixed, vary the scaffold" experiment unattributable.
+- **Reliability events the detectors were already counting** — `supervisor.action` (operator forced past a gate: pause/skip/split/abort — the Spec-Kitty force-override analog) and `recovery.succeeded` (run recovered from a git-stuck state) are now emitted; previously the reducer's counters for these were dead.
+- **Keystone-join fields + a provisional functional signal** — per-run records carry `epic` (top level) and `metrics.per_spec` (per-spec outcomes), and validate records carry per-spec scores, so spec quality can be joined to that spec's execution outcome via `(project, epic, spec)`. A `functional_pass_proxy` (from verifier verdicts) gives a usable dependent variable now, kept separate from the eval-layer `functional_pass` slot. Validate events also carry optional `spec_finding_counts` (per-spec) so per-spec analysis isn't fed the epic total.
+
 ## [2.8.0] - 2026-06-18
 
 ### Added
