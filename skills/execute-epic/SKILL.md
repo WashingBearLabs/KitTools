@@ -297,7 +297,7 @@ For each uncompleted story:
    Then run `/kit-tools:execution-status` immediately for the first check.
    
    Tell the user:
-   > Supervisor monitoring active. I'll check orchestrator health every 30 minutes and intervene if needed (restart crashes, split oversized stories, pause on repeated failures). You can close this session to stop monitoring — the orchestrator will continue running independently.
+   > Supervisor monitoring active. I'll check orchestrator health every 30 minutes and intervene if needed (restart crashes, split oversized stories, pause on repeated failures). The supervisor stops on its own when the run finishes or hits something only you can resolve (so it won't keep polling while you're away) — and you'll get a desktop notification when it needs you. You can close this session to stop monitoring — the orchestrator will continue running independently.
 
 ---
 

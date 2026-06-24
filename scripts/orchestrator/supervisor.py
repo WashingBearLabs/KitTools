@@ -20,6 +20,7 @@ PAUSE_MAX_WAIT = 86400  # 24 hours max pause
 PAUSE_LOG_INTERVAL = 60  # log reminder every minute
 HEALTH_FILE = os.path.join("kit_tools", "specs", ".execution-health.json")
 CONTROL_FILE = os.path.join("kit_tools", "specs", ".execution-control.json")
+STOP_FILE = os.path.join("kit_tools", ".supervisor_stop")
 MAX_ORCHESTRATOR_DURATION = 86400  # 24 hours — safety net
 
 
@@ -31,6 +32,37 @@ def get_health_path(config: dict) -> str:
 def get_control_path(config: dict) -> str:
     """Return absolute path to the supervisor control file."""
     return os.path.join(config["project_dir"], CONTROL_FILE)
+
+
+def get_stop_path(config: dict) -> str:
+    """Return absolute path to the supervisor-stop marker."""
+    return os.path.join(config["project_dir"], STOP_FILE)
+
+
+def signal_supervisor_stop(config: dict, reason: str) -> None:
+    """Drop a deterministic marker telling the supervisor cron to stop polling.
+
+    Written when the orchestrator EXITS (nothing left to supervise) or enters a
+    block only a human can clear (critical-validation review). Deliberately NOT
+    written for supervisor-healable pauses (guarded retry-exhaustion) — those
+    keep the supervisor alive so it can skip/split and resume. `execution-status`
+    checks this first and `CronDelete`s itself when present. Best-effort."""
+    try:
+        path = get_stop_path(config)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            json.dump({"reason": reason, "at": now_iso()}, f)
+    except OSError:
+        pass
+
+
+def clear_supervisor_stop(config: dict) -> None:
+    """Remove a stale stop marker so a fresh/resumed run's supervisor isn't
+    killed by a prior run's marker. Best-effort."""
+    try:
+        os.remove(get_stop_path(config))
+    except OSError:
+        pass
 
 
 def _get_memory_usage_mb() -> float:
