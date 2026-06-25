@@ -46,6 +46,8 @@ Epic: "OAuth Authentication System"
    - depends_on: [oauth-api]
 ```
 
+> The spec and story counts above are **illustrative of this one example, not targets**. A spec has as many stories as its concern genuinely needs, and an epic has as many specs as the work spans — size each unit by precision and single-concern scope, never to hit a number.
+
 ### Epic Frontmatter Example
 
 ```yaml
