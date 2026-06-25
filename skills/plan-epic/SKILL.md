@@ -72,13 +72,13 @@ If yes, see Step 5b for invocation details — run it now with what's known, or 
 
 ## Step 3: Scope Assessment & Decomposition
 
-Assess how many feature specs this work requires. Ask: how many architectural layers are involved? Can this be done in 1 spec or does it span multiple concerns?
+Decompose the work into **one feature spec per coherent, independently-meaningful concern** — an architectural layer, a bounded capability, a distinct surface. There is **no target and no upper bound on spec count**: an epic has exactly as many specs as the intent genuinely spans. Let the decomposition fall out of the work's real seams, never out of a number — a sprawling multi-layer system is a many-spec epic and that's correct; trivial work is one spec and that's correct too (still wrapped in an `epic-*.md`).
 
-- **Simple work** → 1 spec (still creates an `epic-*.md` wrapper)
-- **Moderate work** (2-3 layers or distinct concerns) → 2-3 specs
-- **Complex work** → 3-5+ specs decomposed by layer/concern
+The decision is **scope, not size**:
+- A spec covering two unrelated concerns → **split** (for precision, not to hit a count).
+- A fragment that can't stand as a coherent unit on its own → **fold** into the spec it belongs to.
 
-Present the proposed decomposition to the user and confirm before proceeding. Always create an `epic-*.md` regardless of spec count.
+Aim for a decomposition where every spec is single-concern and precise. Present the proposed decomposition to the user and confirm before proceeding. Always create an `epic-*.md` regardless of spec count.
 
 See REFERENCE.md for decomposition guidelines and examples.
 

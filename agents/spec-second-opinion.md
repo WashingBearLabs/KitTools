@@ -82,6 +82,8 @@ Flag anywhere the spec is doing more than needed:
 - **Unnecessary infrastructure**: Does the spec introduce new infrastructure (queues, caches, separate services) when a simpler approach would work at current scale?
 - **Over-specified implementation**: Are acceptance criteria prescribing implementation details (specific algorithms, data structures, patterns) instead of describing outcomes?
 
+**Volume is not over-engineering.** A large epic — many specs, many stories, many criteria — is correct when each unit is justified and well-scoped to the intent. Flag unnecessary *complexity, abstraction, or polish*, never breadth or count that genuinely matches what the work requires. Splitting work into more precise units is good decomposition, not gold plating.
+
 **For every over-engineering finding, clearly state the trade-offs of simplifying.** What risk do you accept by doing less? What do you lose? The spec author may have had good reasons — acknowledge that possibility and explain why the simpler path is still better for now.
 
 ### 5. Risk & Blind Spots

@@ -5,6 +5,12 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.3] - 2026-06-25
+
+### Changed
+
+- **Permissive decomposition — no arbitrary spec/story count caps in planning** — `/kit-tools:plan-epic` Step 3 no longer tiers spec count by "complexity" (Simple→1 / Moderate→2–3 / Complex→3–5+). An epic now has **as many feature specs as the work's distinct concerns require — no target, no upper bound** — with decomposition framed as scope, not size (split a spec covering two unrelated concerns; fold a fragment that can't stand alone). Example counts in `REFERENCE.md` are marked illustrative, not targets. The per-unit precision gates stay (a single story with >10 criteria must still split; single-concern focus; one-session sizing) — they're what keep "as many as needed" producing precise, well-scoped units rather than sprawl. `validate-epic` was confirmed to have no count gate (its `≤3 stories` is quick-tier *eligibility*, suggest-only), and `spec-second-opinion`'s over-engineering check is hardened so a reviewer can't misread legitimate breadth as gold-plating ("volume is not over-engineering").
+
 ## [2.8.2] - 2026-06-24
 
 ### Added
