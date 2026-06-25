@@ -5,6 +5,12 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Implementer fixes mechanical lint/format before handing off (shift-left)** — the `story-implementer` agent gained a mandatory definition-of-done step: before committing, run the project's configured auto-formatter + lint auto-fixer (in safe mode) on **only the changed files** and re-run the related tests. This kills the recurring waste where a functionally-complete story was sent back for a *full re-implementation* (git reset → redo from scratch) over mechanically-fixable lint like import ordering or quote style. Strictly language-agnostic — the implementer detects whatever the project uses (Python/JS/Go/etc.); nothing is tool-specific. The verifier stays a read-only judge, and lint a fixer *can't* resolve (genuine line-too-long, naming violations) remains real work that's gated normally.
+
 ## [2.8.3] - 2026-06-25
 
 ### Changed

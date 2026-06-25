@@ -100,7 +100,17 @@ Write the code changes using Edit and Write tools:
 - Use existing patterns from the codebase rather than inventing new ones
 - If you run tests to check your work, only run tests related to the files you changed — do NOT run the full test suite. Use quiet flags (e.g., `-q` for pytest) but let failure tracebacks flow in full. Pipe through `| head -200` as a safety net for runaway output.
 
-### 4. Commit
+### 4. Format and lint your changes (definition of done)
+
+Mechanically-fixable formatting and lint issues should never reach the verifier — a functionally-complete story getting sent back for a full re-implementation over import ordering or quote style is pure waste. Clean them up here, on **only the files you changed** (`git diff --name-only`), using each tool's **safe/default fix mode**:
+
+1. **Detect and run the project's configured auto-formatter and lint auto-fixer** — whatever this project already uses; read its config to find out. This is language-agnostic: it might be a Python project's formatter + lint `--fix`, a JS/TS project's formatter + lint `--fix`, a Go project's `fmt`, or anything else. If the project has no configured formatter or linter, skip this step.
+2. **Re-run the tests related to your changed files** (per step 3) to confirm the fix pass didn't break anything.
+3. Stage the result together with your implementation in the commit below.
+
+Stay strictly mechanical: never reformat files you didn't change, and never run a fixer in an unsafe/aggressive mode that rewrites logic. Lint that a fixer **can't** resolve — a line genuinely too long because of real logic, a naming-convention violation — is real work; fix it properly as part of the implementation, never suppress it.
+
+### 5. Commit
 
 Stage and commit your changes:
 
@@ -115,7 +125,7 @@ Co-Authored-By: KitTools + Claude"
 - Use the commit message format shown above
 - Always include the KitTools co-author trailer
 
-### 5. Write Result File
+### 6. Write Result File
 
 Write your structured result as a JSON file. **This is machine-read by the orchestrator — use the exact schema.**
 
