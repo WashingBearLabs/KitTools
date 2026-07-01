@@ -45,19 +45,16 @@ For each critical ID finding, include a suggested renaming that resolves conflic
 
 ### 2. Story Size
 
-Right-sized stories have 5–7 acceptance criteria and focus on a single architectural layer. Each story should be completable in a single 15-minute AI implementation session by an agent that has never seen the codebase. More stories with fewer criteria is always better than fewer stories with many criteria — don't compress scope by dropping criteria, expand it by adding stories.
+A right-sized story covers a **single coherent concern** — one focused piece of work that can be implemented and verified as a unit. There is **no target or ceiling on acceptance-criteria count**: a single-concern story carries as many verifiable criteria as it genuinely needs, and a precise story with many criteria is good, not "too big." More precise stories are always better than fewer vague ones. Never suggest dropping criteria to shrink a story — the fix for a story doing too much is always to **split by concern**, never to trim detail. Judge size by scope and cohesion, never by counting criteria or layers.
 
-#### Hard ceilings (critical — blocks execution)
+#### Critical (blocks execution)
 
-These are standalone triggers. Any ONE of these makes the story **critical / not-ready**:
-- **More than 10 acceptance criteria** — must be split regardless of how related they are
-- **Spans 3+ architectural layers** in a single story (e.g., database schema + API endpoint + UI component). Two layers is acceptable; three is not.
+Flag a story **critical / not-ready** when it clearly covers **more than one distinct concern** — it bundles unrelated changes (e.g., across different architectural layers or separate feature areas) that couldn't be verified together as a single coherent unit.
 
 #### Soft signals (warning — needs-work)
 
-A story is flagged as **warning** if it exhibits **two or more** of:
-- More than 7 acceptance criteria covering distinct concerns
-- Spans 2 architectural layers (acceptable alone, but compounds with other signals)
+Flag a story **warning** when it shows signs of quietly spanning concerns (two or more of):
+- Its acceptance criteria pull toward two or more distinct concerns (even if each criterion is well-written)
 - Uses scope keywords: "entire", "full", "complete", "all", "end-to-end"
 - Connects distinct feature areas with "and also" / "as well as" / "including"
 - Assumes it can be completed without any external dependencies when it clearly requires prior work

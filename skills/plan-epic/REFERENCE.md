@@ -8,10 +8,12 @@ Detailed examples, heuristics, and edge cases for the plan-epic workflow.
 
 | Scope | Specs | Example |
 |-------|-------|---------|
-| Single layer, simple concern | 1 | Add a settings page, implement a single API endpoint |
-| Two layers or two distinct concerns | 2 | Backend endpoint + frontend UI |
-| Multi-layer feature | 3-4 | Schema + backend + API + UI |
-| System-spanning work | 4-6 | Full auth system, entire data pipeline |
+| A single concern | 1 spec | Add a settings page, one API endpoint |
+| Two distinct concerns | 2 specs | Backend endpoint + frontend UI |
+| Several distinct concerns / layers | one spec each | Schema + backend + API + UI |
+| System-spanning work | one spec per concern — as many as it takes | Full auth system, entire data pipeline |
+
+**Spec count = the number of distinct concerns the work spans — there is no target or ceiling.** A large system is a many-spec epic and that's correct; the goal is that each spec is one concise, well-scoped concern, never that the epic hits some number.
 
 **Note:** Even single-spec work gets an `epic-*.md` wrapper. The wrapper provides epic-level context and is the entry point for `validate-epic` and `execute-epic`.
 
@@ -27,26 +29,22 @@ Epic: "OAuth Authentication System"
 
 1. feature-oauth-schema.md
    - Database tables, migrations, types
-   - 3-4 stories
    - No dependencies
 
 2. feature-oauth-provider.md
    - OAuth provider config, token handling
-   - 4-5 stories
    - depends_on: [oauth-schema]
 
 3. feature-oauth-api.md
    - Login/logout endpoints, session validation
-   - 4-5 stories
    - depends_on: [oauth-schema, oauth-provider]
 
 4. feature-oauth-ui.md
    - Login button, callback handling, error states
-   - 4-5 stories
    - depends_on: [oauth-api]
 ```
 
-> The spec and story counts above are **illustrative of this one example, not targets**. A spec has as many stories as its concern genuinely needs, and an epic has as many specs as the work spans — size each unit by precision and single-concern scope, never to hit a number.
+> The decomposition above is **illustrative of this one example** — each spec is a single concern with its dependencies. A spec has as many stories as its concern genuinely needs, and an epic as many specs as the work spans; size each unit by precision and single-concern scope, never to hit a number.
 
 ### Epic Frontmatter Example
 
@@ -148,7 +146,7 @@ Priorities pay off at execution time: the orchestrator runs in `epic_seq`/story 
 - "Add authentication" -> Split into schema, provider, API, UI specs
 - "Create the settings page" -> Split by settings category
 
-**Rule of thumb:** If you can't describe the change in 2-3 sentences, it's too big. If a story needs more than 7 criteria, split it into two stories — never drop criteria to hit a size target.
+**Rule of thumb:** If you can't describe the story as *one* coherent thing, it's spanning concerns — split it into stories that each cover a single concern. Never drop or trim criteria to hit a size; a single concern gets exactly the criteria it needs.
 
 ---
 
@@ -161,9 +159,9 @@ Each criterion must be **verifiable**, not vague:
 | "Login form shows error message for invalid credentials" | "Works correctly" |
 | "API returns 401 for unauthenticated requests" | "Handles auth properly" |
 
-**Target: 5-7 criteria per story.** More than 7 covering distinct concerns suggests the story should be split. More than 10 must be split — this is a hard gate during validation.
+**There is no target criteria count.** A story has as many verifiable criteria as its single concern requires — a precise story with many criteria is good, not "too big." What matters is that every criterion is specific and belongs to the *same* concern.
 
-**Never drop criteria to fit the target.** If a story genuinely needs 9 criteria, split it into two stories that each get the criteria they need. More well-defined stories is always better than fewer under-specified ones.
+**Never drop criteria to make a story smaller.** If the criteria are pulling toward two different concerns, that's the signal to **split by concern** — into stories that each get the criteria they need. Precise verbosity always beats vague brevity.
 
 ---
 
@@ -186,9 +184,8 @@ If `kit_tools/testing/TESTING_GUIDE.md` exists, reference the specific test comm
 
 | Check | Question | Red Flag |
 |-------|----------|----------|
-| **Single Responsibility** | Is this story trying to do multiple things? | "and", "also", multiple verbs |
-| **Session Fit** | Can this complete in one context window? | Touches >3 files, crosses subsystems |
-| **Criteria Count** | Does this story have >7 distinct criteria? | Split the story — never drop criteria |
+| **Single Concern** | Does this story cover exactly one coherent concern? | "and", "also", multiple verbs, criteria pulling toward different concerns |
+| **Session Fit** | Is the scope implementable and verifiable as one unit? | Crosses subsystems / bundles distinct concerns |
 | **Research Needs** | Are there unknowns that eat context? | Vague tech, unexplored patterns |
 | **Scope Clarity** | Are criteria specific and verifiable? | "works correctly", "handles properly" |
 | **Exploration Load** | How much discovery needed? | "figure out", "determine how" |

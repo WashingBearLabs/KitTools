@@ -176,7 +176,7 @@ After drafting stories, sweep for edge cases the stories must handle: **empty/ze
 
 ### Session-fit focus
 
-Focus on right-sized stories completable in one Claude session. More stories with 5–7 well-defined criteria is always better than fewer stories with many criteria. Never compress scope by dropping criteria to make a story smaller — split the story instead.
+Size each story to a **single coherent concern** — one focused piece of work that can be implemented and verified as a unit. A single-concern story carries **as many acceptance criteria as it genuinely needs** to be unambiguous — there is no target count. More precise stories are always better than fewer vague ones; never drop or compress criteria to make a story look smaller, and never pad to fill one out. Split a story only when it spans more than one concern.
 
 ### Auto-injected test criteria
 
@@ -210,15 +210,15 @@ Document unresolved decisions as checkboxes — and **classify each one**:
 
 ## Step 9: Final scope check
 
-Verify: 5-7 criteria per story, single layer focus, dependencies clear, stories well-defined. If any story has more than 7 criteria, split it — don't drop criteria.
+Verify each story is a **single coherent concern** with clear dependencies and criteria that are each specific and independently verifiable. Split a story only when it covers more than one concern — never because of a criteria count, and never by dropping criteria.
 
 ### Set `size:` frontmatter
 
-Based on the spec's overall complexity, set the `size:` field in frontmatter:
-- **S** — All stories have ≤ 5 criteria, single layer, no integrations
-- **M** — Default. Stories have 5-7 criteria, straightforward domain (omit field to default)
-- **L** — Complex stories: integration-heavy, verbose domain context, or stories near the 7-criteria ceiling
-- **XL** — Reserved for specs with necessarily large context (porting complex logic, cross-cutting concerns)
+Set the `size:` field from the spec's overall implementation weight. This is a **scope judgment that tunes the orchestrator's execution timeouts** — it is *not* a criteria count:
+- **S** — small and self-contained: single concern, no integrations, little surrounding context to hold
+- **M** — Default: a straightforward domain with modest context (omit the field to default)
+- **L** — integration-heavy, verbose domain context, or a lot of surrounding code to reason about
+- **XL** — necessarily large context (porting complex logic, cross-cutting concerns)
 
 ---
 
@@ -248,7 +248,7 @@ For each user story:
 1. **Present** the story with current acceptance criteria
 2. **Evaluate** against refinement heuristics (see REFERENCE.md)
 3. **If issues found:** Split, narrow, research, or clarify
-4. **Generate Implementation Hints** (3-5 bullet points per story):
+4. **Generate Implementation Hints** — as many as the story needs to be unambiguous (precise verbosity beats a vague hint; don't cap them at a number or pad to reach one):
    - Key file paths the implementer will need
    - Existing patterns or functions to follow/reuse
    - Specific modules or imports needed
