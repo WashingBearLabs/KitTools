@@ -106,7 +106,7 @@ For each template, read the template-validator agent and interpolate:
 - `{{TEMPLATE_REQUIREMENTS}}` — Extracted requirements from frontmatter
 - `{{RESULT_FILE_PATH}}` — `kit_tools/.validate_seeding_<template-basename>.json` (per-template so parallel runs don't overwrite each other)
 
-Then run the validator via Task tool with the interpolated prompt.
+Then **spawn a validator for every template in a single message** (via the Task tool) so they all run in parallel — the per-template result files above mean they never collide. Don't validate templates one at a time; fan them out and collect the results together.
 
 ### Step 5: Collect Results
 

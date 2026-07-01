@@ -73,6 +73,8 @@ If the full diff exceeds ~60KB, summarize before interpolating into agent prompt
 
 ---
 
+> **Run the three reviews in parallel.** Steps 3, 4, and 5 spawn independent, read-only reviewer agents that write to separate result files — **spawn all three via the Task tool in a single message** so they run concurrently, then collect all three result files. Do not run them one after another. (Step 4b, test execution, is deterministic and runs alongside them.)
+
 ## Step 3: Code Quality Review
 
 Interpolate `code-quality-validator.md` with diff, file list, and project context (include `{{RESULT_FILE_PATH}} = kit_tools/.validate_impl_quality.json`).
@@ -112,7 +114,7 @@ Reviews:
 - **5b: Scope creep** — Changes outside feature spec scope? (warning)
 - **5c: Intent alignment** — Do changes match feature spec goals?
 
-**Steps 3, 4, and 5 can all run in parallel.**
+**Steps 3, 4, and 5 are spawned together in one message (see the note above Step 3) — collect all three result files before moving on.**
 
 ---
 

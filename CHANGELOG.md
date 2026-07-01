@@ -5,6 +5,22 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.5] - 2026-07-01
+
+### Changed
+
+- **validate-* skills fan out in parallel instead of reviewing serially** — the validation skills now maximize parallel agent execution:
+  - **`validate-epic`** previously reviewed **one spec at a time** (6 reviewers parallel *within* a spec, but specs sequential) because the six result files were named per-reviewer and reused across specs. Result files are now scoped **per (spec, reviewer)** (`.validate_epic_<slug>_<n>.json`), so the skill spawns **every reviewer for every spec in a single message** — an N-spec epic fans out N×6 reviews at once — and presents **one consolidated cross-epic findings view** (an epic-level readiness matrix + findings grouped by spec) instead of a spec-by-spec wade. The fix loop re-runs only the affected (spec, reviewer) pairs, still in parallel. A crashed reviewer is marked `error` for that spec and no longer blocks the rest.
+  - **`validate-implementation`** — the three reviewers (code-quality, security, feature-compliance) are now explicitly spawned **together in one message** (they were already independent; the skill now makes parallel the default, not just "allowed").
+  - **`validate-seeding`** — all per-template validators are spawned in a single message (result files were already per-template/parallel-safe).
+  - The only genuinely dependent steps stay serial (a fix→re-check loop can't precede the fix). External artifacts are unchanged: the `.validate_epic_summary.json` shape, `emit_validate_events`, and `harvest_signals` all consume the same summary as before.
+
+- **Removed arbitrary count limits from planning (deeper permissive-decomposition pass)** — 2.8.3 dropped the per-epic spec-count tiers; this removes the numeric anchors one layer down, in `plan-epic` (SKILL + REFERENCE) and the `story-quality-reviewer`: the "5–7 criteria per story" target, the ">7 / >10 criteria → split" gates (including the "must split regardless of how related they are" hard ceiling), the criteria-count-based S/M/L/XL sizing, the "3–5 implementation hints" cap, the ">3 files" session-fit flag, and the example story counts. **A spec/story/criterion now has exactly the scope and detail the work requires — no target, no ceiling.** The splitting *principle* stays but is re-keyed from count to **concern**: split only when a unit spans more than one coherent, independently-verifiable concern; a single concern carries as many criteria as it needs (precise verbosity over vague brevity). `size:` still tunes execution timeouts but is now a scope judgment, not a criteria count. This also unblocks meaningful spec-quality *measurement* later — quality can be scored on precision and completeness instead of conformance to a shape.
+
+### Fixed
+
+- **Regression gate no longer breaks on mixed-language repos** — `run_regression_check` was hardcoded to `python3 -m pytest` and fed it *every* mapped test file, so in a mixed Python+JS/TS repo a `.tsx`/`.ts` test resolved from `test_mapping` was handed to pytest → "file not found" → misread as a **regression** → the orchestrator reverted a good merge and exited. Test files are now **routed to the runner that owns them by extension** (pytest for `.py`; vitest/jest for JS/TS, each run from its nearest `package.json` dir), using the same runner vocabulary the orchestrator already knows. Anything else — an unrecognised extension, a missing runner binary, or a group that times out — is **skipped, never reverted**. The guard also relaxed from "pytest-only" to "any detected test command," so pure-JS repos now get regression coverage they didn't have before. Same routing applied to the implementer's targeted test-hint builder.
+
 ## [2.8.4] - 2026-06-25
 
 ### Changed
