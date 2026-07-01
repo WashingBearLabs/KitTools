@@ -5,6 +5,12 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Regression gate no longer breaks on mixed-language repos** — `run_regression_check` was hardcoded to `python3 -m pytest` and fed it *every* mapped test file, so in a mixed Python+JS/TS repo a `.tsx`/`.ts` test resolved from `test_mapping` was handed to pytest → "file not found" → misread as a **regression** → the orchestrator reverted a good merge and exited. Test files are now **routed to the runner that owns them by extension** (pytest for `.py`; vitest/jest for JS/TS, each run from its nearest `package.json` dir), using the same runner vocabulary the orchestrator already knows. Anything else — an unrecognised extension, a missing runner binary, or a group that times out — is **skipped, never reverted**. The guard also relaxed from "pytest-only" to "any detected test command," so pure-JS repos now get regression coverage they didn't have before. Same routing applied to the implementer's targeted test-hint builder.
+
 ## [2.8.4] - 2026-06-25
 
 ### Changed

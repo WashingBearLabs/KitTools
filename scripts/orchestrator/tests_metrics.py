@@ -215,18 +215,169 @@ def _resolve_test_files(patterns: set[str], project_dir: str) -> list[str]:
     return existing
 
 
-def _build_test_command(test_files: list[str], test_command: str) -> str | None:
-    """Build a targeted test command for the given test files and runner."""
+def _build_test_command(
+    test_files: list[str], test_command: str, project_dir: str | None = None
+) -> str | None:
+    """Build a targeted test command for the given test files.
+
+    With `project_dir`, routes files to the correct runner by extension — so a
+    mixed Python+JS repo gets a per-runner command (joined with `&&`, each run
+    from its owning package dir) instead of everything being fed to one runner.
+    Without it, falls back to the legacy single-runner behaviour keyed off
+    `test_command` (kept for back-compat).
+    """
     if not test_files:
         return None
-    test_files_str = " ".join(sorted(test_files))
-    if "pytest" in test_command:
-        return f"python3 -m pytest {test_files_str} -x"
-    elif test_command == "npm test" or "jest" in test_command:
-        return f"npx jest {test_files_str} --bail"
-    elif "vitest" in test_command:
-        return f"npx vitest run {test_files_str} --bail 1"
+    if project_dir is None:
+        test_files_str = " ".join(sorted(test_files))
+        if "pytest" in test_command:
+            return f"python3 -m pytest {test_files_str} -x"
+        if test_command == "npm test" or "jest" in test_command:
+            return f"npx jest {test_files_str} --bail"
+        if "vitest" in test_command:
+            return f"npx vitest run {test_files_str} --bail 1"
+        return None
+    parts: list[str] = []
+    for (runner, cwd), rel in _partition_test_files(sorted(test_files), project_dir).items():
+        cmd = _regression_cmd(runner, rel)
+        if not cmd:
+            continue
+        joined = " ".join(cmd)
+        rel_cwd = os.path.relpath(cwd, project_dir)
+        parts.append(joined if rel_cwd in (".", "") else f"(cd {rel_cwd} && {joined})")
+    return " && ".join(parts) if parts else None
+
+
+# --- Per-extension test routing ----------------------------------------------
+# The regression gate and the implementer's test hint both need to send a
+# resolved test file to the runner that actually owns it: a .tsx handed to
+# pytest just errors ("file not found"), which the gate would misread as a
+# regression and revert a good merge. Routing is by extension, using the same
+# pytest/jest/vitest vocabulary the rest of the orchestrator already knows;
+# anything else (or a missing runner) is skipped, never crashed.
+
+_JS_TEST_EXTS = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
+
+
+def _js_runner_for_pkg(pkg_dir: str) -> str:
+    """Decide vitest vs jest for a JS/TS package dir. Defaults to vitest."""
+    for cfg in ("vitest.config.ts", "vitest.config.js", "vitest.config.mts",
+                "vitest.config.mjs", "vite.config.ts", "vite.config.js"):
+        if os.path.exists(os.path.join(pkg_dir, cfg)):
+            return "vitest"
+    try:
+        with open(os.path.join(pkg_dir, "package.json")) as f:
+            pkg = json.load(f)
+        deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
+        if "vitest" in deps:
+            return "vitest"
+        if "jest" in deps:
+            return "jest"
+        script = pkg.get("scripts", {}).get("test", "")
+        if "vitest" in script:
+            return "vitest"
+        if "jest" in script:
+            return "jest"
+    except (OSError, json.JSONDecodeError):
+        pass
+    return "vitest"
+
+
+def _nearest_package_dir(abs_path: str, project_dir: str) -> str:
+    """Walk up from a file to the nearest `package.json` dir (bounded by
+    `project_dir`) — the JS package root whose vitest/jest config the runner
+    needs. Falls back to `project_dir`."""
+    d = os.path.dirname(abs_path)
+    while d:
+        try:
+            within = os.path.commonpath([d, project_dir]) == project_dir
+        except ValueError:
+            within = False  # different drives (Windows) — stop walking
+        if not within:
+            break
+        if os.path.exists(os.path.join(d, "package.json")):
+            return d
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    return project_dir
+
+
+def _runner_for_test_file(test_file: str, project_dir: str) -> tuple[str, str, str] | None:
+    """Map a repo-relative test file to (runner, cwd, path_relative_to_cwd).
+
+    `.py` -> ("pytest", project_dir, test_file); JS/TS exts -> (js_runner,
+    nearest package.json dir, path relative to it); unknown ext -> None (skip).
+    """
+    ext = os.path.splitext(test_file)[1]
+    if ext == ".py":
+        return ("pytest", project_dir, test_file)
+    if ext in _JS_TEST_EXTS:
+        abs_path = os.path.join(project_dir, test_file)
+        pkg_dir = _nearest_package_dir(abs_path, project_dir)
+        return (_js_runner_for_pkg(pkg_dir), pkg_dir, os.path.relpath(abs_path, pkg_dir))
     return None
+
+
+def _partition_test_files(
+    test_files: list[str], project_dir: str
+) -> dict[tuple[str, str], list[str]]:
+    """Group resolved test files by (runner, cwd), preserving order. Files with
+    an unrecognised extension are dropped — no runner owns them."""
+    groups: dict[tuple[str, str], list[str]] = {}
+    for tf in test_files:
+        info = _runner_for_test_file(tf, project_dir)
+        if info is None:
+            continue
+        runner, cwd, rel = info
+        groups.setdefault((runner, cwd), []).append(rel)
+    return groups
+
+
+def _regression_cmd(runner: str, rel_files: list[str]) -> list[str] | None:
+    """Argv for a fail-fast targeted run of the given files under `runner`."""
+    if runner == "pytest":
+        return ["python3", "-m", "pytest", *rel_files, "-x", "-q", "--tb=short"]
+    if runner == "vitest":
+        return ["npx", "vitest", "run", *rel_files, "--bail", "1"]
+    if runner == "jest":
+        return ["npx", "jest", *rel_files, "--bail"]
+    return None
+
+
+def _run_regression_group(cmd: list[str], cwd: str) -> tuple[bool, str]:
+    """Run one regression subprocess group. Returns (passed, combined_output).
+
+    A missing runner binary (e.g. `npx` absent) or a timeout is treated as a
+    SKIP (passed=True) — a merge must never be reverted because tooling isn't
+    installed or a group is slow. Matches the best-effort discipline of the
+    single-runner path this replaces.
+    """
+    try:
+        proc = subprocess.Popen(
+            cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, start_new_session=True,
+        )
+    except OSError as e:  # FileNotFoundError (missing runner) is an OSError
+        log(f"  WARNING: regression runner unavailable ({cmd[0]}: {e}) — skipping group")
+        return True, ""
+    try:
+        stdout, stderr_out = proc.communicate(timeout=REGRESSION_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        _kill_process_group(proc.pid)
+        try:
+            proc.kill()
+        except OSError:
+            pass
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            log(f"  WARNING: regression subprocess {proc.pid} did not exit after SIGKILL — continuing with process leaked")
+        log(f"  WARNING: regression group timed out after {REGRESSION_TIMEOUT}s — skipping")
+        return True, ""
+    _kill_process_group(proc.pid)
+    return proc.returncode == 0, (stdout + stderr_out)
 
 
 def detect_related_tests(
@@ -344,8 +495,8 @@ def detect_related_tests(
     t0_existing = _resolve_test_files(t0_tests, project_dir)
     t1_existing = _resolve_test_files(t1_tests, project_dir)
 
-    result["t0"] = _build_test_command(t0_existing, test_command)
-    result["t1"] = _build_test_command(t1_existing, test_command)
+    result["t0"] = _build_test_command(t0_existing, test_command, project_dir)
+    result["t1"] = _build_test_command(t1_existing, test_command, project_dir)
 
     return result
 
@@ -455,8 +606,8 @@ def run_regression_check(
     Uses direct subprocess — not a Claude session.
     Records results in test-metrics.json for observability.
     """
-    if not test_command or "pytest" not in test_command:
-        return True, "Skipped — no pytest command detected"
+    if not test_command:
+        return True, "Skipped — no test command detected"
 
     # Gather files_changed from prior completed stories
     if spec_key is not None:
@@ -506,48 +657,33 @@ def run_regression_check(
         existing = sorted(existing)[:REGRESSION_TEST_FILE_CAP]
         log(f"  Regression: capped at {REGRESSION_TEST_FILE_CAP} test files")
 
-    test_files = sorted(existing)
-    cmd = ["python3", "-m", "pytest"] + test_files + ["-x", "-q", "--tb=short"]
-    log(f"  Regression check: {len(existing)} test files from {story_count} prior stories")
+    all_files = sorted(existing)
+    log(f"  Regression check: {len(all_files)} test files from {story_count} prior stories")
 
-    try:
-        proc = subprocess.Popen(
-            cmd, cwd=project_dir,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, start_new_session=True,
-        )
-        try:
-            stdout, stderr_out = proc.communicate(timeout=REGRESSION_TIMEOUT)
-        except subprocess.TimeoutExpired:
-            _kill_process_group(proc.pid)
-            try:
-                proc.kill()
-            except OSError:
-                pass
-            # Bound the final wait (see run_claude_session for rationale).
-            try:
-                proc.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                log(f"  WARNING: regression subprocess {proc.pid} did not exit after SIGKILL — continuing with process leaked")
-            log(f"  WARNING: Regression check timed out after {REGRESSION_TIMEOUT}s — skipping")
-            update_test_metrics_from_regression(project_dir, test_files, False, current_story_id)
-            return True, f"Timed out after {REGRESSION_TIMEOUT}s — skipped (best-effort)"
+    # Route each resolved test file to the runner that owns it (by extension),
+    # running each group from its owning package dir. Fail-fast within a group
+    # (-x/--bail) and across groups (return on the first failing group), matching
+    # the single-runner behaviour this replaces.
+    groups = _partition_test_files(all_files, project_dir)
+    if not groups:
+        return True, "Skipped — no runnable test files after partition"
 
-        # Always clean up the process group (pytest may leave child processes)
-        _kill_process_group(proc.pid)
+    for (runner, cwd), rel_files in groups.items():
+        cmd = _regression_cmd(runner, rel_files)
+        if cmd is None:
+            log(f"  Regression: unknown runner '{runner}', skipping {len(rel_files)} file(s)")
+            continue
+        rel_cwd = os.path.relpath(cwd, project_dir) or "."
+        log(f"  Regression check: {len(rel_files)} {runner} file(s) (cwd={rel_cwd})")
+        passed, output = _run_regression_group(cmd, cwd)
+        # Record metrics with repo-relative paths so keys are consistent across runners.
+        repo_rel = [os.path.relpath(os.path.join(cwd, f), project_dir) for f in rel_files]
+        update_test_metrics_from_regression(project_dir, repo_rel, passed, current_story_id)
+        if not passed:
+            partial = "\n".join(output.strip().split("\n")[:50])
+            return False, f"REGRESSION: tests failed ({runner})\n{partial}"
 
-        passed = proc.returncode == 0
-        update_test_metrics_from_regression(project_dir, test_files, passed, current_story_id)
-
-        if passed:
-            return True, f"Passed ({len(existing)} test files)"
-        # Tests failed — regression detected
-        output_lines = (stdout + stderr_out).strip().split("\n")
-        partial = "\n".join(output_lines[:50])
-        return False, f"REGRESSION: tests failed\n{partial}"
-    except OSError as e:
-        log(f"  WARNING: Regression check error: {e}")
-        return True, f"Error: {e} — skipped"
+    return True, f"Passed ({len(all_files)} test files across {len(groups)} runner(s))"
 
 
 def detect_test_command(project_dir: str) -> str | None:
