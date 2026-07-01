@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **validate-* skills fan out in parallel instead of reviewing serially** — the validation skills now maximize parallel agent execution:
+  - **`validate-epic`** previously reviewed **one spec at a time** (6 reviewers parallel *within* a spec, but specs sequential) because the six result files were named per-reviewer and reused across specs. Result files are now scoped **per (spec, reviewer)** (`.validate_epic_<slug>_<n>.json`), so the skill spawns **every reviewer for every spec in a single message** — an N-spec epic fans out N×6 reviews at once — and presents **one consolidated cross-epic findings view** (an epic-level readiness matrix + findings grouped by spec) instead of a spec-by-spec wade. The fix loop re-runs only the affected (spec, reviewer) pairs, still in parallel. A crashed reviewer is marked `error` for that spec and no longer blocks the rest.
+  - **`validate-implementation`** — the three reviewers (code-quality, security, feature-compliance) are now explicitly spawned **together in one message** (they were already independent; the skill now makes parallel the default, not just "allowed").
+  - **`validate-seeding`** — all per-template validators are spawned in a single message (result files were already per-template/parallel-safe).
+  - The only genuinely dependent steps stay serial (a fix→re-check loop can't precede the fix). External artifacts are unchanged: the `.validate_epic_summary.json` shape, `emit_validate_events`, and `harvest_signals` all consume the same summary as before.
+
 ### Fixed
 
 - **Regression gate no longer breaks on mixed-language repos** — `run_regression_check` was hardcoded to `python3 -m pytest` and fed it *every* mapped test file, so in a mixed Python+JS/TS repo a `.tsx`/`.ts` test resolved from `test_mapping` was handed to pytest → "file not found" → misread as a **regression** → the orchestrator reverted a good merge and exited. Test files are now **routed to the runner that owns them by extension** (pytest for `.py`; vitest/jest for JS/TS, each run from its nearest `package.json` dir), using the same runner vocabulary the orchestrator already knows. Anything else — an unrecognised extension, a missing runner binary, or a group that times out — is **skipped, never reverted**. The guard also relaxed from "pytest-only" to "any detected test command," so pure-JS repos now get regression coverage they didn't have before. Same routing applied to the implementer's targeted test-hint builder.
