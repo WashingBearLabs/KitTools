@@ -5,6 +5,19 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0] - 2026-07-15
+
+### Added
+
+- **Research substrate for the `~/.kit/feedback/` trace: experiment identity, git provenance, and a config-driven escalation policy.** KitTools already reduces every autonomous run into a per-run record; a separate companion research app now reads that directory across many repos to test whether pre-execution spec quality predicts downstream output quality. This adds the minimum KitTools-side surface that app needs, without adding any evaluation/aggregation logic here (that stays in the app):
+  - **Experiment identity** — optional `experiment_id`/`arm` (free-form, set externally by a research harness; `null` on a normal run) flow from config through `run.started` onto the per-run record. A deterministic **knob-set fingerprint** (`config_fingerprint`, sha256 of the canonicalized `config_snapshot` minus one-off observability fields like `session_ready_gate`) lets a consumer group runs with an identical scaffold even without `experiment_id` set. `config_snapshot` — previously emitted on every `run.started` but never actually read by the reducer — now reaches the record, expanded to also cover `mode`, `max_retries`, and a new `session_ready_gate` observability field (records whether a spec's readiness gate was satisfied and whether a human proceeded past a `false`; the gate itself is unchanged — still a soft warn-and-ask). A pinned reference baseline knob-set ships at `docs/experiments/baseline.config.json`.
+  - **Confound fields** — `kit_tools_version` (the plugin version that produced the run — behavior changes release to release even with no config change) and `started_at`/`completed_at` (the latter genuinely new; `state["updated_at"]` was stale by completion time) on every record.
+  - **Git provenance** — `origin` (normalised remote URL, same normalisation `derive_project_id` uses) on every record, and per-spec `result_commit` (`metrics.per_spec[<spec>].result_commit`) captured from the per-story feature-branch merge — the provenance a consumer needs to check out and evaluate the code a spec actually produced.
+  - **validate-epic panel composition recorded** — which reviewer tier ran (`full` vs `quick`) and the actual reviewer list, previously invisible in the trace (only inferable from a shorter `reviewer_verdicts`).
+  - **Escalation trigger is now config, not a hardcoded `if`** — `model_config.escalation` is a policy dict (`{to, on_attempt, sizes}`) instead of a flat model name, so the retry-escalation threshold is itself an ablatable knob. The legacy flat-string form still works, normalised to today's exact behavior (`attempt > 1` on `L`/`XL` specs) — no behavior change for existing projects.
+  - **`docs/trace-schema.md`** gained a "Public data contract for consumers" section formalizing the directory + record schema as a stable cross-repo interface, plus documentation of both `run_id` conventions and the known limitation that a session's resolved model build isn't recoverable from the CLI's JSON output (only the alias is).
+  - All additions are best-effort (never raise into the execution path) and purely additive — no `SIGNAL_SCHEMA_VERSION` bump.
+
 ## [2.8.5] - 2026-07-01
 
 ### Changed

@@ -132,12 +132,22 @@ config = {
     # (implementer=sonnet, verifier=opus, validator=opus). Values are model
     # aliases ("sonnet", "opus") or full IDs ("claude-sonnet-4-6") —
     # anything the local `claude` CLI's --model flag accepts. Partial
-    # overrides are supported; missing keys keep their defaults.
+    # overrides are supported; missing keys keep their defaults. "escalation"
+    # accepts either a flat model name (legacy) or a policy dict
+    # {"to": "opus", "on_attempt": 2, "sizes": ["L", "XL"]}.
     # "model_config": {
     #     "implementer": "sonnet",
     #     "verifier": "opus",
     #     "validator": "opus",    # session running /kit-tools:validate-implementation
     # },
+    # Required (Step 1's pre-flight check, above): records whether the spec's
+    # session_ready gate was satisfied, and whether the user proceeded anyway.
+    "session_ready_gate": {"spec_ready": True, "proceeded_despite_false": False},
+    # Optional: set only by an external research harness (e.g. the companion
+    # benchmarking app) driving a controlled ablation — never by this skill's
+    # own interactive flow. Free-form; null/absent for a normal run.
+    # "experiment_id": "ablation-2026-07",
+    # "arm": "treatment:escalation-threshold",
     # epic fields (omit for standalone):
     # "epic_name": "...",
     # "epic_pause_between_specs": False,  # True only for supervised mode
@@ -297,6 +307,12 @@ The orchestrator chains feature spec execution:
 Read the feature spec frontmatter. Check for `session_ready: true`.
 - If `session_ready: false`: Warn and ask to continue anyway.
 - If field missing: Proceed with a note.
+
+Remember the outcome — write it into `.execution-config.json` as `session_ready_gate` in
+Step 4 (see Config Creation Pattern below): `{"spec_ready": true|false|null, "proceeded_despite_false": true|false}`.
+This doesn't change the check above (still a soft warn-and-ask, never a hard block) — it just
+makes the outcome observable in the trace, so a later ablation can tell "gate satisfied" runs
+from "human overrode a not-ready spec" runs instead of only seeing the execution outcome.
 
 ### 2. Dependency check
 Read `depends_on` from feature spec frontmatter. For each dependency:

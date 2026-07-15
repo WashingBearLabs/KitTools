@@ -1,0 +1,20 @@
+{
+  "pinned_at_kit_tools_version": "2.8.5",
+  "execute_epic_config_snapshot": {
+    "models": {
+      "implementer": "sonnet",
+      "verifier": "opus",
+      "validator": "opus",
+      "escalation": {"to": "opus", "on_attempt": 2, "sizes": ["L", "XL"]}
+    },
+    "completion_strategy": "pr",
+    "worktree_mode": true,
+    "epic_pause_between_specs": false,
+    "mode": "autonomous",
+    "max_retries": 5
+  },
+  "validate_epic": {
+    "tier": "full",
+    "reviewers": ["completionist", "story-quality", "salty-engineer", "codebase-fit", "security", "second-opinion"]
+  }
+}

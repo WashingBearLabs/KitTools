@@ -118,8 +118,10 @@ def log_event(
     """Append a structured trace event to `kit_tools/.execution-events.jsonl`.
 
     This is the single append-only event stream a run reduces into metrics
-    (`harvest_signals`) and a future retrospective loop reduces into "what
-    helped." Complement to the human-readable `log()` stdout stream: enables
+    (`harvest_signals`), consumed by `/retrospective` and, per-project, by an
+    external research/benchmarking layer over `~/.kit/feedback/` — see the
+    "Public data contract" section of docs/trace-schema.md. Complement to the
+    human-readable `log()` stdout stream: enables
     grep/jq post-mortems (e.g., `jq 'select(.severity=="error")' ...`).
     Best-effort — swallows OSError so a write failure never stops execution.
 

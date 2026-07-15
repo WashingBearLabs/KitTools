@@ -274,8 +274,13 @@ def execute_spec_stories(
             models = get_model_config(config)
             base_impl_model = models["implementer"]
             impl_model = base_impl_model
-            if attempt > 1 and spec_size in ("L", "XL"):
-                impl_model = models.get("escalation", impl_model)
+            # get_model_config() guarantees a fully-normalized {to, on_attempt,
+            # sizes} dict here (never a bare string, never missing keys) — index
+            # directly rather than re-defaulting, so this trusts one source of
+            # truth for the policy instead of silently disagreeing with it.
+            esc_policy = models["escalation"]
+            if attempt >= esc_policy["on_attempt"] and spec_size in esc_policy["sizes"]:
+                impl_model = esc_policy["to"]
                 if impl_model != base_impl_model:
                     log(f"  Escalating to {impl_model} for retry of size-{spec_size} story")
                     log_event(
@@ -542,9 +547,16 @@ def execute_spec_stories(
                     save_state(state, config)
                     clean_result_files(project_dir)
                     continue
+                # Best-effort: the result commit is research provenance (which
+                # code this spec produced), never allowed to break the merge.
+                try:
+                    merge_head = get_head_commit(project_dir)
+                except Exception:
+                    merge_head = None
                 log_event(
                     config, "merge.landed", spec=spec_key, story=story["id"],
                     attempt=attempt, target_branch=feature_branch, verified=True,
+                    commit=merge_head,
                 )
                 # Run cross-story regression check
                 reg_passed, reg_msg = run_regression_check(
@@ -554,7 +566,8 @@ def execute_spec_stories(
                     log(f"  REGRESSION detected after merging {story['id']}!")
                     log(f"  {reg_msg[:300]}")
                     # Revert the merge to keep feature branch clean
-                    merge_head = get_head_commit(project_dir)
+                    if not merge_head:
+                        merge_head = get_head_commit(project_dir)
                     # warn-only: the returncode is inspected manually below,
                     # escalating to GitRecoveryFailed with remediation steps.
                     revert_result = run_git(["revert", "--no-edit", merge_head], project_dir, warn=True)
@@ -599,6 +612,20 @@ def execute_spec_stories(
                     sys.exit(1)
                 elif "Skipped" not in reg_msg:
                     log(f"  Regression check: {reg_msg}")
+
+                # Persist result_commit only now that the merge has survived the
+                # regression gate — writing it right after merge.landed would
+                # leave a stale value (pointing at a since-reverted commit) on
+                # the regression/revert/sys.exit(1) path above. Best-effort:
+                # research provenance must never break the merge.
+                if merge_head:
+                    try:
+                        if spec_key is not None:
+                            state["specs"][spec_key]["result_commit"] = merge_head
+                        else:
+                            state["result_commit"] = merge_head
+                    except Exception:
+                        pass
 
                 # Update feature spec checkboxes on the feature branch
                 if update_spec_checkboxes(spec_path, story["id"]):

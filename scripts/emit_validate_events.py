@@ -72,6 +72,11 @@ def main() -> int:
     # per-spec analysis isn't fed the epic total (T3-P).
     finding_counts = summary.get("finding_counts", {})
     per_spec_findings = summary.get("per_spec_finding_counts", {}) or {}
+    # Panel composition (Phase 1.6): which tier ran and which reviewers —
+    # epic-wide context, carried on every event so the reducer can pick it up
+    # without a separate mechanism. None on a pre-2.9.0 summary.
+    panel_tier = summary.get("tier")
+    panel_reviewers = summary.get("reviewers")
 
     # Stable per-epic run_id (see _validate_run_id): re-validations upsert one
     # record for the epic, latest pass winning, rather than piling up.
@@ -94,6 +99,8 @@ def main() -> int:
                 readiness_score=spec_scores.get(reviewer),
                 finding_counts=finding_counts,                       # epic-level
                 spec_finding_counts=per_spec_findings.get(spec_name),  # per-spec or None
+                panel_tier=panel_tier,
+                panel_reviewers=panel_reviewers,
             )
             emitted += 1
 

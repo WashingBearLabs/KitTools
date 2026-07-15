@@ -305,11 +305,8 @@ def derive_project_id(main_repo: str) -> str:
     happen to share a directory basename (e.g. work and personal ``api``) from
     colliding under ``~/.kit/worktrees/``.
     """
-    remote = _run_git(["remote", "get-url", "origin"], main_repo)
-    if remote.returncode == 0 and remote.stdout.strip():
-        key = _normalise_remote(remote.stdout.strip())
-    else:
-        key = os.path.abspath(main_repo)
+    origin = get_normalised_origin(main_repo)
+    key = origin if origin is not None else os.path.abspath(main_repo)
     digest = hashlib.sha1(key.encode("utf-8")).hexdigest()[:8]
     basename = _safe_name(os.path.basename(os.path.abspath(main_repo)))
     return f"{basename}-{digest}"
@@ -329,6 +326,18 @@ def _normalise_remote(url: str) -> str:
     if u.endswith(".git"):
         u = u[: -len(".git")]
     return u
+
+
+def get_normalised_origin(project_dir: str) -> str | None:
+    """Return the project's normalised `origin` remote URL, or None if there
+    isn't one. Same normalisation `derive_project_id` uses (so the two stay
+    consistent) but returns None instead of falling back to a local path —
+    "no origin" is itself meaningful provenance for a trace record, not
+    something to paper over."""
+    remote = _run_git(["remote", "get-url", "origin"], project_dir)
+    if remote.returncode == 0 and remote.stdout.strip():
+        return _normalise_remote(remote.stdout.strip())
+    return None
 
 
 def default_worktree_base(project_id: str) -> str:

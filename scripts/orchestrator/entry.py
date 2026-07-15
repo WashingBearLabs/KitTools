@@ -4,6 +4,7 @@ __init__ for the full public API."""
 from __future__ import annotations
 import argparse
 import atexit
+import hashlib
 import json
 import os
 import signal
@@ -158,7 +159,13 @@ def _config_snapshot(config: dict) -> dict:
     (model set, completion strategy, isolation mode). Without it, two runs that
     differ only by implementer model are indistinguishable in the trace, and the
     experimental design's "hold the model fixed, vary the scaffold" premise is
-    unverifiable from the record (T1-C)."""
+    unverifiable from the record (T1-C).
+
+    `mode`/`max_retries` are duplicated here (also top-level `run.started`
+    kwargs, kept for back-compat) so the knob-set fingerprint — computed over
+    this dict — covers them too. `session_ready_gate` is None unless the
+    execute-epic skill wrote it (observability only; the gate itself is still
+    a soft interactive confirmation, see docs/trace-schema.md)."""
     try:
         models = get_model_config(config)
     except Exception:
@@ -168,6 +175,78 @@ def _config_snapshot(config: dict) -> dict:
         "completion_strategy": config.get("completion_strategy", "none"),
         "worktree_mode": bool(config.get("main_repo")),
         "epic_pause_between_specs": bool(config.get("epic_pause_between_specs")),
+        "mode": config.get("mode"),
+        "max_retries": config.get("max_retries"),
+        "session_ready_gate": config.get("session_ready_gate"),
+    }
+
+
+def _kit_tools_version() -> str | None:
+    """Best-effort plugin version. Runs across plugin versions aren't directly
+    comparable — behavior changes release to release (e.g. permissive
+    decomposition landed in 2.8.3) — so a consumer needs to be able to
+    separate them. Resolved from this module's own file location, not
+    `$CLAUDE_PLUGIN_ROOT` — that env var can go stale within a long-lived
+    session after `/plugin update` (see `scripts/doctor.py`'s
+    `check_install_freshness`, which documents and works around exactly this);
+    `__file__` always reflects the code actually executing. `None` if the
+    manifest is unreadable; never raises."""
+    try:
+        plugin_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        manifest_path = os.path.join(plugin_root, ".claude-plugin", "plugin.json")
+        with open(manifest_path, "r") as f:
+            manifest = json.load(f)
+        version = manifest.get("version")
+        return str(version) if version else None
+    except Exception:
+        return None
+
+
+# Snapshot keys that describe run-specific human/operator behavior rather than
+# a reusable scaffold knob. Excluded from the fingerprint (below) so two runs
+# with an otherwise-identical scaffold hash identically regardless of a
+# one-off decision like "did the operator override a not-ready gate."
+_FINGERPRINT_EXCLUDED_KEYS = {"session_ready_gate"}
+
+
+def _config_fingerprint(snapshot: dict) -> str | None:
+    """Deterministic hash of the scaffold knob-set so an ablation can group
+    "runs with identical config" even when no `experiment_id` was set.
+    Canonical JSON (sorted keys, compact separators) -> sha256, truncated to
+    64 bits of hex — plenty for grouping, not a security use. Computed over
+    `snapshot` minus `_FINGERPRINT_EXCLUDED_KEYS` (present on the record's
+    `config_snapshot` regardless — only excluded from the hash). A consumer
+    can recompute this the same way to verify it (see docs/trace-schema.md)."""
+    try:
+        knobs = {k: v for k, v in snapshot.items() if k not in _FINGERPRINT_EXCLUDED_KEYS}
+        canonical = json.dumps(knobs, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+    except Exception:
+        return None
+
+
+def _origin(config: dict) -> str | None:
+    """Best-effort normalised origin remote for this run, reusing the same
+    normalisation `registry.derive_project_id` uses so the two stay
+    consistent."""
+    try:
+        return registry.get_normalised_origin(config.get("project_dir", ""))
+    except Exception:
+        return None
+
+
+def _run_started_research_kwargs(config: dict) -> dict:
+    """The research-substrate fields on `run.started`, factored into one place
+    so `run_single_spec`/`run_epic` don't hand-duplicate the same five kwargs
+    at both call sites."""
+    snapshot = _config_snapshot(config)
+    return {
+        "config_snapshot": snapshot,
+        "config_fingerprint": _config_fingerprint(snapshot),
+        "experiment_id": config.get("experiment_id"),
+        "arm": config.get("arm"),
+        "kit_tools_version": _kit_tools_version(),
+        "origin": _origin(config),
     }
 
 
@@ -194,7 +273,7 @@ def run_single_spec(config: dict) -> None:
         config, "run.started",
         mode=config["mode"], branch=config["branch_name"],
         max_retries=config.get("max_retries"), is_rerun=is_rerun, epic=False,
-        config_snapshot=_config_snapshot(config),
+        **_run_started_research_kwargs(config),
     )
     # Clear any stale stop marker from a prior run so this run's supervisor isn't
     # killed by it (a resumed run gets a fresh supervisor).
@@ -313,6 +392,10 @@ def run_single_spec(config: dict) -> None:
     # Reduce the trace NOW, with live state + before complete_feature cleans up
     # the state file — the Stop hook never fires again after this, so this is the
     # only point the terminal `completed` outcome + token totals get recorded.
+    # `completed_at` is stamped here (not inside the reducer) so a mid-run
+    # Stop-hook reduction never sees a value — state genuinely doesn't have one
+    # until this, the true end-of-run point, mirroring `run_started_at` above.
+    state["completed_at"] = now_iso()
     finalize_run_trace(config, state)
     complete_feature(config, state, validation_clean)
     _update_registry_status(config, "completed")
@@ -335,7 +418,7 @@ def run_epic(config: dict) -> None:
         mode=config["mode"], branch=config["branch_name"],
         max_retries=config.get("max_retries"), is_rerun=is_rerun,
         epic=True, spec_count=len(epic_specs),
-        config_snapshot=_config_snapshot(config),
+        **_run_started_research_kwargs(config),
     )
     clear_supervisor_stop(config)
 
@@ -508,7 +591,9 @@ def run_epic(config: dict) -> None:
 
     # Complete the epic using the configured strategy
     validation_clean = is_validation_clean(project_dir)
-    # Terminal reduction before cleanup — see run_single_spec for why.
+    # Terminal reduction before cleanup — see run_single_spec for why, incl.
+    # why `completed_at` is stamped here rather than inside the reducer.
+    state["completed_at"] = now_iso()
     finalize_run_trace(config, state)
     complete_feature(config, state, validation_clean)
     _update_registry_status(config, "completed")

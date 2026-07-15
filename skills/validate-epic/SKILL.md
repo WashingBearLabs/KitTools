@@ -201,6 +201,8 @@ If the user picks **A**: after they update the spec(s), re-run **only the affect
   "epic_name": "[epic-name]",
   "specs_reviewed": 3,
   "overall_readiness": "ready|needs-work|not-ready",
+  "tier": "full",
+  "reviewers": ["completionist", "story-quality", "salty-engineer", "codebase-fit", "security", "second-opinion"],
   "reviewer_verdicts": {
     "feature-foo-schema.md": {
       "completionist": "ready",
@@ -231,6 +233,8 @@ If the user picks **A**: after they update the spec(s), re-run **only the affect
 `reviewer_scores` mirrors `reviewer_verdicts`' shape (per spec, per reviewer) and is added **alongside** it, not merged into it — existing consumers that read `reviewer_verdicts` keep working unchanged. Record the raw per-reviewer scores; do **not** write an averaged or rolled-up score anywhere. Omit a reviewer's entry if it produced no score (a pre-2.7.0 result).
 
 `per_spec_finding_counts` is optional but recommended: the top-level `finding_counts` is the epic total, so a per-spec breakdown (keyed by spec name) is what lets the trace correlate a spec's finding load to its execution outcome. Include it if you have per-spec counts from the review; omit it if you only tracked epic totals.
+
+`tier` (`"full"` or `"quick"`) and `reviewers` (the actual reviewer-id list run, e.g. `["completionist", "salty-engineer", "security"]` for the quick tier) record which panel composition this run used — required, not optional, so a later ablation can tell a quick-tier validation from a full one instead of having to infer it from a shorter `reviewer_verdicts` list.
 
 **Emit trace events:** After writing the summary, append per-reviewer spec-quality events to the run trace so the benchmark/retrospective pipeline can join pre-execution spec quality to downstream outcomes:
 

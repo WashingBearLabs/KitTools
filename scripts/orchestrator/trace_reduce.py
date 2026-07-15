@@ -22,7 +22,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .registry import derive_project_id
+from .registry import derive_project_id, get_normalised_origin
 
 FEEDBACK_HOME = Path("~/.kit/feedback").expanduser()
 
@@ -192,7 +192,8 @@ def extract_execute_metrics(state: dict) -> dict:
                     rt += attempts - 1
             per_spec[spec_name] = {"status": spec_data.get("status", "unknown"),
                                    "stories_completed": sc, "stories_failed": sf,
-                                   "retries": rt}
+                                   "retries": rt,
+                                   "result_commit": spec_data.get("result_commit")}
             stories_completed += sc
             stories_failed += sf
             total_retries += rt
@@ -207,7 +208,8 @@ def extract_execute_metrics(state: dict) -> dict:
         spec_name = state.get("spec", "spec")
         per_spec[spec_name] = {"status": state.get("status", "unknown"),
                                "stories_completed": stories_completed,
-                               "stories_failed": stories_failed, "retries": total_retries}
+                               "stories_failed": stories_failed, "retries": total_retries,
+                               "result_commit": state.get("result_commit")}
 
     return {
         "is_epic": is_epic,
@@ -243,6 +245,16 @@ def _functional_pass_proxy(outcome: str, metrics: dict) -> bool | None:
     if outcome in ("failed", "crashed"):
         return False
     return None
+
+
+def _run_started_payload(events: list[dict]) -> dict:
+    """The `run.started` event's payload carries the scaffold config (Phase
+    1's `config_snapshot`/`experiment_id`/`arm`/etc) — nothing else in the
+    reducer reads `run.started` at all, so this is the one place that does."""
+    for e in events:
+        if e.get("event_type") == "run.started":
+            return e.get("payload") or {}
+    return {}
 
 
 def _epic_name(state: dict | None, events: list[dict]) -> str | None:
@@ -285,6 +297,13 @@ def reduce_execute_run(
             "total_retries": detectors["retries"],
         }
 
+    # Scaffold config lives on `run.started`'s payload — copied here verbatim
+    # (guardrail 4: no recomputation at reduce time). `started_at`/
+    # `completed_at` come from state, not events: `completed_at` is only ever
+    # present once entry.py stamps it at true end-of-run (see entry.py), so a
+    # mid-run Stop-hook reduction correctly sees `null` here.
+    started_payload = _run_started_payload(events)
+
     return {
         "schema_version": SIGNAL_SCHEMA_VERSION,
         "run_id": None if run_id.startswith("_norun") else run_id,
@@ -297,6 +316,14 @@ def reduce_execute_run(
         "tokens": _tokens_block(st),
         "functional_pass_proxy": _functional_pass_proxy(outcome, metrics),
         "eval": _empty_eval_slots(),
+        "experiment_id": started_payload.get("experiment_id"),
+        "arm": started_payload.get("arm"),
+        "config_snapshot": started_payload.get("config_snapshot"),
+        "config_fingerprint": started_payload.get("config_fingerprint"),
+        "kit_tools_version": started_payload.get("kit_tools_version"),
+        "origin": started_payload.get("origin"),
+        "started_at": (st or {}).get("started_at"),
+        "completed_at": (st or {}).get("completed_at"),
     }
 
 
@@ -309,6 +336,8 @@ def reduce_validate_run(run_id: str, events: list[dict], project_name: str) -> d
     finding_counts: dict = {}
     per_spec_findings: dict[str, dict] = {}
     epic = None
+    panel_tier = None
+    panel_reviewers = None
     for e in events:
         if e.get("event_type") != "spec.validate.scored":
             continue
@@ -325,6 +354,18 @@ def reduce_validate_run(run_id: str, events: list[dict], project_name: str) -> d
             per_spec_findings[spec] = p["spec_finding_counts"]
         if p.get("finding_counts"):
             finding_counts = p["finding_counts"]
+        # Panel composition is epic-wide context, carried on every event.
+        # Last-wins, matching verdicts/scores/finding_counts above: a
+        # re-validation appends a second batch of events to the same
+        # stable per-epic run_id, and "re-validating upserts one record
+        # (latest pass wins)" must hold for every field, not just some of
+        # them — a stale first-pass tier next to a fresh verdict set would
+        # be an internally inconsistent record. Missing on pre-2.9.0 events
+        # (None; a later None-payload event won't downgrade an earlier hit).
+        if p.get("panel_tier"):
+            panel_tier = p["panel_tier"]
+        if p.get("panel_reviewers"):
+            panel_reviewers = p["panel_reviewers"]
 
     all_scores = [v for spec_scores in scores.values() for v in spec_scores.values()]
     worst = min(all_scores) if all_scores else None
@@ -349,6 +390,8 @@ def reduce_validate_run(run_id: str, events: list[dict], project_name: str) -> d
             "per_spec_finding_counts": per_spec_findings or None,
         },
         "eval": {**_empty_eval_slots(), "spec_quality": scores or None},
+        "panel_tier": panel_tier,
+        "panel_reviewers": panel_reviewers,
     }
 
 
@@ -371,6 +414,8 @@ def reduce_legacy_execute(state: dict, project_name: str) -> dict:
         "tokens": _tokens_block(state),
         "functional_pass_proxy": _functional_pass_proxy(outcome, metrics),
         "eval": _empty_eval_slots(),
+        "started_at": state.get("started_at"),
+        "completed_at": state.get("completed_at"),
     }
 
 
@@ -479,6 +524,14 @@ def upsert_records(project_dir: str, records: list[dict]) -> None:
                 continue  # drop the prior version of this run
             existing.append(line)
 
+    # execute-epic records already carry `origin` copied verbatim from their
+    # `run.started` event (deterministic, captured at run-start — see
+    # reduce_execute_run). validate-epic/legacy records have no such event, so
+    # they still need a live lookup here; computed at most once per call
+    # (lazily, only if actually needed) rather than once per record.
+    live_origin = None
+    live_origin_computed = False
+
     for record in records:
         # last_reduced_at is the reduction wall-clock — explicitly NOT part of
         # the deterministic reduction (guardrail 6: same stream+state → same
@@ -486,6 +539,14 @@ def upsert_records(project_dir: str, records: list[dict]) -> None:
         # run timestamp.
         record["last_reduced_at"] = now
         record["project_dir"] = project_dir
+        if not record.get("origin"):
+            if not live_origin_computed:
+                try:
+                    live_origin = get_normalised_origin(project_dir)
+                except Exception:
+                    live_origin = None
+                live_origin_computed = True
+            record["origin"] = live_origin
         existing.append(json.dumps(record, separators=(",", ":")))
         if record.get("run_id"):
             safe = re.sub(r"[^A-Za-z0-9._-]+", "-", record["run_id"])
