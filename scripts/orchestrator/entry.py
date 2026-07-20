@@ -46,8 +46,10 @@ from .sessions import (
 from .specs import archive_spec, check_dependencies_archived, tag_checkpoint
 from .state import (
     StateCorrupt,
+    OrchestratorAlreadyRunning,
     _atomic_json_write,
     accumulate_token_usage,
+    acquire_orchestrator_lock,
     get_state_path,
     load_or_create_epic_state,
     load_or_create_state,
@@ -91,38 +93,87 @@ def _update_registry_status(config: dict, status: str) -> None:
         pass
 
 
+def _process_owns_state(state_path: str) -> bool:
+    """True if this process owns ``state_path`` (or ownership is unrecorded,
+    unreadable, or the file doesn't exist yet) — fails open so a genuine crash
+    before any pid is ever stamped is still handled, same as pre-fix behavior.
+
+    Ownership is the pid last stamped by `save_state()` (called ~20+ times per
+    story attempt). A second process pointed at the same project_dir — e.g.
+    the no-tmux manual fallback command pasted twice, or a premature "resume"
+    while the original orchestrator was still alive — must not act on state a
+    still-live sibling process keeps writing "running" to.
+    """
+    if not os.path.exists(state_path):
+        return True
+    try:
+        with open(state_path, "r") as f:
+            state = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return True
+    owner_pid = state.get("pid")
+    return owner_pid is None or owner_pid == os.getpid()
+
+
+def _maybe_mark_crashed(config: dict, state_path: str) -> None:
+    """Mark ``state_path`` crashed if it's still mid-run.
+
+    Caller must already have verified ownership via `_process_owns_state` —
+    this function does not re-check, so it must never be called unguarded.
+    """
+    if not os.path.exists(state_path):
+        return
+    with open(state_path, "r") as f:
+        state = json.load(f)
+    if state.get("status") != "running":
+        return
+    state["status"] = "crashed"
+    state["updated_at"] = now_iso()
+    _atomic_json_write(state_path, state)
+    _update_registry_status(config, "crashed")
+    feature = config.get("feature_name") or config.get("epic_name", "unknown")
+    write_notification(
+        config, "execution_crashed",
+        "Execution crashed",
+        f"Orchestrator exited unexpectedly for {feature}",
+        severity="critical",
+    )
+    log_event(
+        config, "orchestrator_crashed", severity="critical",
+        feature=feature,
+    )
+
+
 def register_crash_handler(config: dict) -> None:
     """Register atexit + SIGTERM handlers to detect orchestrator crashes."""
     state_path = get_state_path(config)
 
+    # Establish ownership immediately (not just on the run loop's first
+    # save_state() call): if state already exists (e.g. a resume) and this
+    # process crashes before its own first save, a stale pid from a previous
+    # dead process would otherwise cause _process_owns_state to wrongly deny
+    # ownership and strand the file at "running" forever. Safe because the
+    # lock (acquired before this runs — see main()) already guarantees
+    # exclusivity on platforms where fcntl exists. Best-effort — never fatal.
+    try:
+        if os.path.exists(state_path):
+            with open(state_path, "r") as f:
+                state = json.load(f)
+            state["pid"] = os.getpid()
+            _atomic_json_write(state_path, state)
+    except Exception:
+        pass
+
     def _on_exit():
         try:
+            if not _process_owns_state(state_path):
+                return  # a different, presumably-live process owns this run
             # Reap any live child `claude` session FIRST so a stopped orchestrator
             # can't leave an orphan that keeps writing partial work and re-dirties
             # the worktree after teardown. No-op on a clean exit (no live child).
             kill_active_child_sessions()
             kill_tmux_session(config)
-            if not os.path.exists(state_path):
-                return
-            with open(state_path, "r") as f:
-                state = json.load(f)
-            if state.get("status") != "running":
-                return
-            state["status"] = "crashed"
-            state["updated_at"] = now_iso()
-            _atomic_json_write(state_path, state)
-            _update_registry_status(config, "crashed")
-            feature = config.get("feature_name") or config.get("epic_name", "unknown")
-            write_notification(
-                config, "execution_crashed",
-                "Execution crashed",
-                f"Orchestrator exited unexpectedly for {feature}",
-                severity="critical",
-            )
-            log_event(
-                config, "orchestrator_crashed", severity="critical",
-                feature=feature,
-            )
+            _maybe_mark_crashed(config, state_path)
         except Exception:
             pass
 
@@ -632,6 +683,24 @@ def main():
                 f.write(json.dumps(entry) + "\n")
         except OSError:
             pass
+        sys.exit(1)
+
+    # Acquire the mutual-exclusion lock before any other check — a second
+    # process launched against the same project_dir (the no-tmux manual
+    # fallback command pasted twice, or a premature "resume" while the
+    # original is still alive) must be rejected immediately, before its own
+    # git/worktree checks race against the live orchestrator's mutations.
+    try:
+        _lock_fd = acquire_orchestrator_lock(config)  # noqa: F841 — kept alive for the process's lifetime
+    except OrchestratorAlreadyRunning as e:
+        log(f"FATAL: {e}")
+        write_notification(
+            config, "execution_blocked",
+            "Orchestrator already running",
+            str(e),
+            severity="critical",
+        )
+        log_event(config, "abort_already_running", severity="critical", message=str(e))
         sys.exit(1)
 
     # Verify we're in a git repo at all before the worktree check below —

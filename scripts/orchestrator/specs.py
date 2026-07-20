@@ -10,6 +10,22 @@ import yaml
 
 from .utils import atomic_write_text, log, run_git
 
+
+def _split_leading_comments(content: str) -> tuple[str, str]:
+    """Split a leading run of HTML comments (+ surrounding whitespace) off
+    ``content``. The 2.x templates emit a ``<!-- Template Version: X -->``
+    comment (and EPIC.md an additional multi-line ``<!-- Seeding: ... -->``
+    block) before the frontmatter delimiter — a match anchored at byte 0 must
+    skip this prefix first, or it silently fails on every template-generated
+    file (this class of bug hit ``archive_spec`` once already, independently
+    of the fix here). Returns ``(prefix, rest)`` such that
+    ``prefix + rest == content``.
+    """
+    m = re.match(r"\A(?:\s*<!--.*?-->)*\s*", content, flags=re.DOTALL)
+    prefix_len = m.end() if m else 0
+    return content[:prefix_len], content[prefix_len:]
+
+
 def parse_spec_frontmatter(spec_path: str) -> dict:
     """Parse YAML frontmatter from a feature spec markdown file using PyYAML.
 
@@ -22,9 +38,7 @@ def parse_spec_frontmatter(spec_path: str) -> dict:
     """
     with open(spec_path, "r") as f:
         content = f.read()
-    # Strip a leading run of HTML comments (incl. multi-line) + surrounding
-    # whitespace, so the frontmatter is found even when it isn't on line 1.
-    body = re.sub(r"\A(?:\s*<!--.*?-->)*\s*", "", content, count=1, flags=re.DOTALL)
+    _, body = _split_leading_comments(content)
     match = re.match(r'^---[ \t]*\r?\n(.*?)\r?\n---', body, re.DOTALL)
     if not match:
         return {}
@@ -210,7 +224,8 @@ def archive_spec(project_dir: str, spec_path: str, feature_name: str) -> None:
 
     # Update frontmatter in memory (use regex on frontmatter block only)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    fm_match = re.match(r'^(---\s*\n)(.*?)(---)', content, re.DOTALL)
+    prefix, body = _split_leading_comments(content)
+    fm_match = re.match(r'(---[ \t]*\r?\n)(.*?)(---)', body, re.DOTALL)
     if fm_match:
         fm_text = fm_match.group(2)
         fm_text = fm_text.replace("status: active", "status: completed")
@@ -221,7 +236,8 @@ def archive_spec(project_dir: str, spec_path: str, feature_name: str) -> None:
                 rf"\1\ncompleted: {today}",
                 fm_text
             )
-        content = fm_match.group(1) + fm_text + fm_match.group(3) + content[fm_match.end():]
+        new_fm = fm_match.group(1) + fm_text + fm_match.group(3)
+        content = prefix + new_fm + body[fm_match.end():]
 
     # Write updated content directly to archive destination
     archive_dir = os.path.join(os.path.dirname(spec_path), "archive")

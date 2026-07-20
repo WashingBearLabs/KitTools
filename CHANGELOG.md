@@ -5,6 +5,14 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.1] - 2026-07-18
+
+### Fixed
+
+- **`archive_spec()` never updated a feature spec's frontmatter** — its regex was anchored at byte 0 (`re.match`), but every spec generated from this plugin's own template starts with a `<!-- Template Version -->` HTML comment before the `---` delimiter, so the match silently failed and every archived spec kept `status: active` forever (confirmed on 16 archived specs across 4 real epics run against a live project, zero exceptions). This is the same bug class already fixed once before, for `parse_spec_frontmatter()` — the two functions carried separate regexes that could (and did) silently diverge. Both now share a `_split_leading_comments()` helper so that can't happen again; `archive_spec`'s match also picked up the same CRLF-tolerant delimiter handling `parse_spec_frontmatter` already had.
+
+- **A guarded-mode orchestrator could stamp a healthy run's state as `"crashed"`** — `.execution-state.json` carried no process-ownership marker, and nothing prevented two orchestrator processes from ever running against the same project (e.g. pasting the no-tmux manual-launch command twice, or resuming while the original process was actually still alive — both are flows the skills support today with no guard). A second process's own exit handler would re-read the *shared* state file, see `status: "running"` (written by the still-live real orchestrator), and stamp `"crashed"` — a false, self-correcting flicker that nonetheless misled `/kit-tools:execution-status`'s "If Crashed" branch. Worse: the same ungated exit handler also killed the tmux session **by name** unconditionally, so a rogue second process could kill the legitimately-running orchestrator's session outright, not just corrupt a status field. Fixed in three layers: `save_state()` now stamps `pid` on every save; a new non-blocking `flock`-based mutex (`acquire_orchestrator_lock()`) rejects a second launch against the same project before it can touch anything, checked as the very first gate in `main()`; and the exit handler's ownership check now gates its *entire* routine (not just the status write), so a process that doesn't own a run leaves that run's tmux session and state file alone.
+
 ## [2.9.0] - 2026-07-15
 
 ### Added

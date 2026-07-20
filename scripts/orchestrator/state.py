@@ -124,10 +124,14 @@ def save_state(state: dict, config: dict) -> None:
     Called on the order of 20+ times per story attempt; atomic writes prevent
     mid-write crashes from corrupting the state file and losing story
     completion records. Also stamps the current schema version on every save
-    so legacy state gets upgraded transparently.
+    so legacy state gets upgraded transparently. The `pid` stamp records which
+    process is actually alive and progressing the run — the crash handler
+    (`entry.py::_process_owns_state`) uses it to tell a live sibling process
+    apart from the one that legitimately owns this state file.
     """
     state["updated_at"] = now_iso()
     state["schema_version"] = STATE_SCHEMA_VERSION
+    state["pid"] = os.getpid()
     state_path = get_state_path(config)
     _atomic_json_write(state_path, state)
 
@@ -135,6 +139,56 @@ def save_state(state: dict, config: dict) -> None:
 def get_state_path(config: dict) -> str:
     """Return path to .execution-state.json in the project."""
     return os.path.join(config["project_dir"], "kit_tools", "specs", ".execution-state.json")
+
+
+LOCK_FILE = os.path.join("kit_tools", "specs", ".orchestrator.lock")
+
+
+class OrchestratorAlreadyRunning(Exception):
+    """Raised when another live process already holds this project's orchestrator lock."""
+
+
+def get_lock_path(config: dict) -> str:
+    """Return path to the mutual-exclusion lock file guarding this project's orchestrator run."""
+    return os.path.join(config["project_dir"], LOCK_FILE)
+
+
+def acquire_orchestrator_lock(config: dict):
+    """Exclusive, non-blocking lock so only one orchestrator process can run
+    against a project at a time. Returns an open file object — keep it alive
+    for the process's lifetime; the OS releases the lock when the fd closes,
+    including on crash/SIGKILL, so there is nothing to unlock explicitly.
+    Returns None on platforms without fcntl (Windows) — degrades to no mutex,
+    same fallback this package already uses elsewhere (prompts.py).
+
+    Raises OrchestratorAlreadyRunning if the lock is already held, or on any
+    other I/O failure acquiring it, so callers get one clean abort path
+    instead of an unhandled traceback.
+    """
+    try:
+        import fcntl
+    except ImportError:
+        return None
+    lock_path = get_lock_path(config)
+    try:
+        os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+        fd = os.open(lock_path, os.O_CREAT | os.O_RDWR)
+        f = os.fdopen(fd, "r+")
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as e:
+        raise OrchestratorAlreadyRunning(
+            f"Could not acquire the orchestrator lock at {lock_path}: {e}. "
+            "Only one orchestrator may run against a project at a time — "
+            "check for a live process (tmux/ps) before starting another."
+        ) from e
+    # Truncate + write only AFTER the lock is confirmed ours — opening with
+    # O_CREAT|O_RDWR (no O_TRUNC) means a losing/contended attempt can't wipe
+    # the legitimate holder's pid before failing to acquire.
+    f.seek(0)
+    f.truncate()
+    f.write(str(os.getpid()))
+    f.flush()
+    return f
 
 
 def update_state_story(

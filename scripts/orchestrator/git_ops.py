@@ -9,6 +9,7 @@ import subprocess
 from . import registry
 from .events import log_event, write_notification
 from .specs import archive_spec
+from .state import LOCK_FILE
 from .supervisor import (
     CONTROL_FILE,
     HEALTH_FILE,
@@ -378,6 +379,7 @@ def _cleanup_execution_artifacts(project_dir: str) -> None:
         os.path.join("kit_tools", ".pause_execution"),
         HEALTH_FILE,
         CONTROL_FILE,
+        LOCK_FILE,
     ]:
         full = os.path.join(project_dir, rel_path)
         if os.path.exists(full):

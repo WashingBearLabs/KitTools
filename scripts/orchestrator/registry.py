@@ -60,6 +60,7 @@ GITIGNORE_LINES = [
     "kit_tools/specs/.execution-state.json",
     "kit_tools/specs/.execution-health.json",
     "kit_tools/specs/.execution-control.json",
+    "kit_tools/specs/.orchestrator.lock",
     "kit_tools/.pause_execution",
     "kit_tools/.execution-notifications",
     "kit_tools/.execution-events.jsonl",
