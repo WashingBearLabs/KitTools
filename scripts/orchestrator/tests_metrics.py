@@ -346,13 +346,14 @@ def _regression_cmd(runner: str, rel_files: list[str]) -> list[str] | None:
     return None
 
 
-def _run_regression_group(cmd: list[str], cwd: str) -> tuple[bool, str]:
-    """Run one regression subprocess group. Returns (passed, combined_output).
+def _run_regression_group_ex(cmd: list[str], cwd: str) -> tuple[bool, str, str]:
+    """Run one regression subprocess group. Returns (passed, output, status).
 
-    A missing runner binary (e.g. `npx` absent) or a timeout is treated as a
-    SKIP (passed=True) — a merge must never be reverted because tooling isn't
-    installed or a group is slow. Matches the best-effort discipline of the
-    single-runner path this replaces.
+    `status` is ``"ran"`` when the runner actually produced a verdict and
+    ``"skipped"`` when it could not (missing binary, timeout). Callers that must
+    not read a non-verdict as evidence — notably the confirm re-run below —
+    branch on it; :func:`_run_regression_group` keeps the original skip-as-pass
+    2-tuple contract for the primary run.
     """
     try:
         proc = subprocess.Popen(
@@ -361,7 +362,7 @@ def _run_regression_group(cmd: list[str], cwd: str) -> tuple[bool, str]:
         )
     except OSError as e:  # FileNotFoundError (missing runner) is an OSError
         log(f"  WARNING: regression runner unavailable ({cmd[0]}: {e}) — skipping group")
-        return True, ""
+        return True, "", "skipped"
     try:
         stdout, stderr_out = proc.communicate(timeout=REGRESSION_TIMEOUT)
     except subprocess.TimeoutExpired:
@@ -375,9 +376,102 @@ def _run_regression_group(cmd: list[str], cwd: str) -> tuple[bool, str]:
         except subprocess.TimeoutExpired:
             log(f"  WARNING: regression subprocess {proc.pid} did not exit after SIGKILL — continuing with process leaked")
         log(f"  WARNING: regression group timed out after {REGRESSION_TIMEOUT}s — skipping")
-        return True, ""
+        return True, "", "skipped"
     _kill_process_group(proc.pid)
-    return proc.returncode == 0, (stdout + stderr_out)
+    return proc.returncode == 0, (stdout + stderr_out), "ran"
+
+
+def _run_regression_group(cmd: list[str], cwd: str) -> tuple[bool, str]:
+    """Run one regression subprocess group. Returns (passed, combined_output).
+
+    A missing runner binary (e.g. `npx` absent) or a timeout is treated as a
+    SKIP (passed=True) — a merge must never be reverted because tooling isn't
+    installed or a group is slow. Matches the best-effort discipline of the
+    single-runner path this replaces.
+    """
+    passed, output, _status = _run_regression_group_ex(cmd, cwd)
+    return passed, output
+
+
+# --- Flake confirmation -------------------------------------------------------
+# A single failing run is not enough evidence to revert a merge that already
+# passed verification. The dominant cause of a pass/fail split on identical code
+# is parallel execution — pytest-xdist (`-n auto` in a project's `addopts`) or
+# jest's worker pool starving a subprocess/timing-sensitive integration test.
+# Those fail under load and pass in isolation, so the gate re-runs a failing
+# group once, serialised where the runner offers a stable flag for it, before
+# declaring a regression.
+
+_USAGE_ERROR_MARKERS = (
+    "unrecognized arguments",
+    "unrecognised arguments",
+    "unknown option",
+    "unknown argument",
+)
+
+
+def _is_usage_error(output: str) -> bool:
+    """True when a runner rejected the command line rather than running tests."""
+    low = (output or "").lower()
+    return any(marker in low for marker in _USAGE_ERROR_MARKERS)
+
+
+def _serial_variant(runner: str, cmd: list[str]) -> list[str] | None:
+    """Return `cmd` adjusted to run serially, or None if no safe flag exists.
+
+    - pytest: ``-n 0`` is xdist's own "no distribution" value, and overrides an
+      `-n auto` inherited from the project's `addopts`. When xdist is not
+      installed it is an unrecognised argument, which the caller detects and
+      falls back from.
+    - jest: ``--runInBand`` — stable across majors.
+    - vitest: None. Its serial flag has been renamed repeatedly across majors
+      (``--threads=false`` -> ``--no-threads`` -> ``--no-file-parallelism``);
+      guessing wrong would turn every confirm run into a usage error. A plain
+      re-run still catches order- and state-dependent flakes.
+    """
+    if runner == "pytest":
+        return [*cmd, "-n", "0"]
+    if runner == "jest":
+        return [*cmd, "--runInBand"]
+    return None
+
+
+def _confirm_regression(
+    cmd: list[str], cwd: str, runner: str, first_output: str
+) -> tuple[bool, str]:
+    """Re-run a failing regression group to separate a flake from a regression.
+
+    Returns the confirmed ``(passed, output)``. Conservative by construction —
+    only a re-run that actually *ran and passed* clears the original failure:
+
+    - A re-run that was SKIPPED (missing runner, timeout) leaves the failure
+      standing. A slow or unavailable confirm must never launder a real
+      regression into a pass.
+    - A serial flag the runner rejects falls back to a plain re-run rather than
+      counting the usage error as either verdict.
+    """
+    attempts: list[tuple[str, list[str]]] = []
+    serial = _serial_variant(runner, cmd)
+    if serial:
+        attempts.append(("serial", serial))
+    attempts.append(("plain", cmd))
+
+    for label, candidate in attempts:
+        log(f"  Regression confirm: re-running the failing {runner} group ({label})")
+        passed, output, status = _run_regression_group_ex(candidate, cwd)
+        if status == "skipped":
+            log("  Regression confirm: re-run could not complete — keeping the original failure")
+            return False, first_output
+        if label == "serial" and _is_usage_error(output):
+            log(f"  Regression confirm: {runner} rejected the serial flag — retrying unserialised")
+            continue
+        if passed:
+            log(f"  Regression NOT reproduced on {label} re-run — treating as a flaky test, "
+                f"not a regression")
+            return True, output
+        log(f"  Regression reproduced on {label} re-run — confirmed")
+        return False, output
+    return False, first_output
 
 
 def detect_related_tests(
@@ -676,7 +770,14 @@ def run_regression_check(
         rel_cwd = os.path.relpath(cwd, project_dir) or "."
         log(f"  Regression check: {len(rel_files)} {runner} file(s) (cwd={rel_cwd})")
         passed, output = _run_regression_group(cmd, cwd)
-        # Record metrics with repo-relative paths so keys are consistent across runners.
+        if not passed:
+            # Confirm before reporting a regression — a failure here reverts a
+            # merge that already passed verification, so one flaky run must not
+            # be enough. See _confirm_regression.
+            passed, output = _confirm_regression(cmd, cwd, runner, output)
+        # Record metrics with repo-relative paths so keys are consistent across
+        # runners. Recorded post-confirmation so a flake that the re-run cleared
+        # is not filed as a test failure.
         repo_rel = [os.path.relpath(os.path.join(cwd, f), project_dir) for f in rel_files]
         update_test_metrics_from_regression(project_dir, repo_rel, passed, current_story_id)
         if not passed:

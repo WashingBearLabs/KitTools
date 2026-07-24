@@ -509,6 +509,8 @@ def check_project(project_dir: str) -> None:
         if not bad:
             add("info", "project", "project hook scripts compile")
 
+    _check_model_preferences(kit)
+
     settings = _read(os.path.join(project_dir, ".claude", "settings.local.json"))
     if settings is not None:
         try:
@@ -516,6 +518,63 @@ def check_project(project_dir: str) -> None:
             add("info", "project", ".claude/settings.local.json parses")
         except json.JSONDecodeError as e:
             add("warning", "project", f".claude/settings.local.json does not parse: {e}")
+
+
+_KNOWN_MODEL_ROLES = {
+    "implementer", "verifier", "validator", "reviewer",
+    "second_opinion", "escalation",
+}
+
+
+def _check_model_preferences(kit: str) -> None:
+    """Advisory validation of kit_tools/model_preferences.json (optional file).
+
+    Absence is fine — every role falls back to the built-in default. When
+    present, catch the ways it silently misbehaves: unparseable JSON, a
+    non-object `models` block, unrecognized role names, and non-string values.
+    Model aliases like `sonnet`/`opus`/`haiku` (and full `claude-*` ids) are
+    all valid values the `claude --model` CLI accepts, so values are not
+    otherwise constrained here.
+    """
+    path = os.path.join(kit, "model_preferences.json")
+    raw = _read(path)
+    if raw is None:
+        return  # optional file; all roles fall back to their built-in defaults
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        add("warning", "project",
+            f"model_preferences.json does not parse: {e}",
+            remediation="Fix the JSON or re-run the configure-models skill")
+        return
+    if not isinstance(data, dict) or not isinstance(data.get("models"), dict):
+        add("warning", "project",
+            "model_preferences.json has no `models` object — the file is ignored",
+            remediation="Re-run the configure-models skill to regenerate it")
+        return
+    models = data["models"]
+    problems = 0
+    for role, value in models.items():
+        if role not in _KNOWN_MODEL_ROLES:
+            problems += 1
+            add("warning", "project",
+                f"model_preferences.json: unrecognized role '{role}' "
+                f"(known roles: {sorted(_KNOWN_MODEL_ROLES)})")
+            continue
+        if role == "escalation":
+            if not isinstance(value, (str, dict)):
+                problems += 1
+                add("warning", "project",
+                    "model_preferences.json: `escalation` must be a policy object "
+                    "or a model-id string")
+            continue
+        if not isinstance(value, str):
+            problems += 1
+            add("warning", "project",
+                f"model_preferences.json: role '{role}' must be a model alias/id "
+                f"string (got {type(value).__name__})")
+    if not problems:
+        add("info", "project", "model_preferences.json parses and roles look valid")
 
 
 # --- Reporting ---------------------------------------------------------------

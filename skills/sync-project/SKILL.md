@@ -51,6 +51,12 @@ Check `$ARGUMENTS` for flags to determine mode.
 
 ---
 
+## Model selection (read once)
+
+This skill's agents (`generic-explorer`, `drift-detector`, `template-validator`) run on the `reviewer` role from `kit_tools/model_preferences.json`. At the first agent dispatch, resolve `reviewer` and pass it as each Task call's `model` parameter (omit `model` when the role is unset, so the agent runs on the session model). If the preferences file doesn't exist, present the canonical Selection menu **once**, write the file, then proceed silently on later runs. See `$CLAUDE_PLUGIN_ROOT/skills/configure-models/REFERENCE.md` → "Lazy first-run contract". Users change choices via `/kit-tools:configure-models`.
+
+---
+
 ## Quick Mode (--quick)
 
 A lightweight documentation audit to catch drift. Run monthly or when you suspect docs are stale.

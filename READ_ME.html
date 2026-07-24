@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KitTools v2.9.1 — AI-Assisted Development Framework</title>
+  <title>KitTools v2.10.0 — AI-Assisted Development Framework</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap" rel="stylesheet">
@@ -1217,6 +1217,11 @@
     <div class="skill-card">
       <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-setup)"></span>/kit-tools:doctor</span>
       <span class="skill-desc">Plugin self-integrity and environment health check — broken references, agent token drift, stale installs, missing tools. Also runs during init-project.</span>
+    </div>
+
+    <div class="skill-card">
+      <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-setup)"></span>/kit-tools:configure-models</span>
+      <span class="skill-desc">View or change which Claude model each role uses — implementer, verifier, validator, reviewer, second opinion. Saves to a committed kit_tools/model_preferences.json that every model-dispatching skill reads.</span>
     </div>
 
     <div class="skill-card">

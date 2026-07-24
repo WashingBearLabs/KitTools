@@ -120,10 +120,13 @@ Give each reviewer a **per-spec result file** so parallel specs never collide: `
 
 Quick tier (if the user chose it): spawn reviewers **1, 3, 5 only** for every spec — same per-spec file names.
 
-**Second Opinion model choice:** This review deliberately uses a **different model** than the other five. The value comes from different training surfacing different blind spots.
-- If the session is running on Opus, use `model: "sonnet"` for this agent.
-- If the session is running on Sonnet, use `model: "opus"`.
-- If the user has specified a model via `model_config.reviewer_second_opinion`, honor that.
+**Model selection (read once).** Before spawning, resolve model preferences from `kit_tools/model_preferences.json` (see `$CLAUDE_PLUGIN_ROOT/skills/configure-models/REFERENCE.md` → "Lazy first-run contract"):
+- **If the file exists:** apply the `reviewer` role to reviewers 1–5 (pass it as each Task call's `model`; omit `model` when the role is unset, so the agent runs on the session model) and the `second_opinion` role to reviewer 6. Run silently — do not prompt.
+- **If the file does not exist:** present the canonical Selection menu from that REFERENCE **once**, write the file, then proceed. Don't prompt again on later runs. The user can change choices anytime via `/kit-tools:configure-models`.
+
+**Second Opinion model choice (reviewer 6):** this review deliberately uses a **different model** than the other five — different training surfaces different blind spots. Resolve the `second_opinion` role:
+- If it is a concrete model, use it.
+- If it is unset, pick the *other* model from the reviewers: if the session/reviewers run on Opus, use `model: "sonnet"`; if on Sonnet, use `model: "opus"`.
 
 **How to detect the session model:** you know your own model from your system prompt (the environment section names it). If it names Opus or Sonnet, apply the rules above. If it names anything else (Haiku, a newer family, unknown), default to `model: "opus"` for this agent — the goal is simply a *different* training than the one reviewing everything else.
 

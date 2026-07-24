@@ -75,6 +75,8 @@ If the full diff exceeds ~60KB, summarize before interpolating into agent prompt
 
 > **Run the three reviews in parallel.** Steps 3, 4, and 5 spawn independent, read-only reviewer agents that write to separate result files — **spawn all three via the Task tool in a single message** so they run concurrently, then collect all three result files. Do not run them one after another. (Step 4b, test execution, is deterministic and runs alongside them.)
 
+> **Model selection (read once).** Resolve the `reviewer` role from `kit_tools/model_preferences.json` and apply it to all three reviewer Task calls below — pass it as each call's `model` parameter, or omit `model` when the role is unset (the agent runs on the session model). If the file doesn't exist, present the canonical Selection menu **once**, write the file, then proceed; don't prompt on later runs. See `$CLAUDE_PLUGIN_ROOT/skills/configure-models/REFERENCE.md` → "Lazy first-run contract". Users change choices via `/kit-tools:configure-models`.
+
 ## Step 3: Code Quality Review
 
 Interpolate `code-quality-validator.md` with diff, file list, and project context (include `{{RESULT_FILE_PATH}} = kit_tools/.validate_impl_quality.json`).

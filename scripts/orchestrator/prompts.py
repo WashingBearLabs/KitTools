@@ -442,6 +442,17 @@ def build_verification_prompt(
         "Use quiet flags to suppress PASSED lines, but let failure tracebacks flow in full. "
         "Pipe through `| head -200` as a safety net for runaway output."
     )
+    # Stated the same way in every branch, and deliberately WITHOUT quoting the
+    # full-suite command anywhere in the prompt. Printing it — even next to "do
+    # not run this" — is an attractive nuisance: it hands the verifier a
+    # ready-to-paste suite-wide invocation. A suite-wide run is also how
+    # unrelated flaky tests enter a story's verdict, which is the failure this
+    # scoping exists to prevent.
+    no_full_suite = (
+        "**Do NOT run the full test suite** — every test command you run must name explicit "
+        "test file paths. A suite-wide run pulls in unrelated tests whose flakes have nothing "
+        "to do with this story, and can exhaust or hang the session in a large codebase."
+    )
     if t0_cmd and t1_cmd:
         test_section = (
             f"**T0 — Targeted tests** (explicitly mapped):\n"
@@ -449,20 +460,20 @@ def build_verification_prompt(
             f"**T1 — Broader matches** (heuristic, run if T0 passes and session time permits):\n"
             f"Run second: `{t1_cmd}`\n\n"
             f"**Important:** Run T0 first. Only run T1 if T0 passes and you have time remaining. "
-            f"Do NOT run the full test suite. {quiet_note}"
+            f"{no_full_suite} {quiet_note}"
         )
     elif t0_cmd:
         test_section = (
             f"**T0 — Targeted tests** (explicitly mapped):\n"
             f"Run: `{t0_cmd}`\n\n"
-            f"**Important:** Only run the targeted command above. Do NOT run the full test suite. {quiet_note}"
+            f"**Important:** Only run the targeted command above. {no_full_suite} {quiet_note}"
         )
     elif t1_cmd:
         test_section = (
             f"**T1 — Heuristic matches** (no explicit test_mapping available):\n"
             f"Run: `{t1_cmd}`\n\n"
             f"**Note:** No explicit test_mapping entries found — these are heuristic matches only.\n"
-            f"**Important:** Do NOT run the full test suite. {quiet_note}"
+            f"**Important:** {no_full_suite} {quiet_note}"
         )
     elif test_command:
         test_section = (
@@ -471,8 +482,7 @@ def build_verification_prompt(
             f"**Your task:** Based on the diff and acceptance criteria, identify the specific test "
             f"files relevant to the changed code and run only those. Look at the test directory "
             f"structure, imports, and class/function names to find the right tests.\n\n"
-            f"**Do NOT run the full test suite** (`{test_command}`). "
-            f"Running the full suite in a large codebase will waste time and may hang.\n\n"
+            f"{no_full_suite}\n\n"
             f"If you truly cannot identify any relevant tests, note that in your verdict and move on. "
             f"The regression check and end-of-epic validation will catch broader failures.\n\n"
             f"{quiet_note}"
@@ -482,8 +492,8 @@ def build_verification_prompt(
 
     if test_command and (t0_cmd or t1_cmd):
         test_section += (
-            f"\n\nT2 — Full suite (for feature validation only, do NOT run during story verification): "
-            f"`{test_command}`"
+            "\n\nT2 — Full suite: reserved for end-of-epic feature validation. "
+            "Do NOT run it during story verification."
         )
 
     prompt = template

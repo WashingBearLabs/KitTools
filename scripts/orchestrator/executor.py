@@ -588,35 +588,66 @@ def execute_spec_stories(
                             f"Manual review required."
                         )
                     log(f"  Reverted merge commit {merge_head[:8]}")
+                    # A regression is a RETRYABLE failure, like every other gate
+                    # in this loop — not a terminal one. Through 2.9.x this path
+                    # called sys.exit(1) instead, which burned the entire guarded
+                    # retry budget on the first failure and tripped the
+                    # `orchestrator-exited` supervisor stop in entry.py's finally
+                    # block. One flaky cross-story test therefore ended the whole
+                    # run rather than costing a single attempt. Falling through to
+                    # `continue` hands control back to the retry-limit check at the
+                    # top of the loop, which already does the right thing once
+                    # retries are genuinely exhausted: pause for review in guarded
+                    # mode, fail terminally in autonomous.
+                    #
+                    # Deliberately NOT setting state["status"] = "failed" here —
+                    # the story is still in flight, and a "failed" run status mid
+                    # retry misreports the run to /kit-tools:execution-status.
+                    learnings.append(f"Regression after merge: {reg_msg[:200]}")
+                    log_story_failure(
+                        story, attempt, config, f"Regression: {reg_msg[:500]}", learnings
+                    )
                     update_state_story(
-                        state, story["id"], "failed", attempt,
-                        [f"Regression: {reg_msg[:200]}"],
+                        state, story["id"], "retrying", attempt,
+                        learnings,
                         f"Regression detected: {reg_msg[:500]}",
                         spec_key=spec_key, failure_type="REGRESSION"
                     )
-                    state["status"] = "failed"
                     save_state(state, config)
                     log_event(
-                        config, "regression.detected", severity="critical",
+                        config, "regression.detected", severity="warning",
                         spec=spec_key, story=story["id"], attempt=attempt,
-                        reason=reg_msg[:200],
+                        reason=reg_msg[:200], retrying=True,
                     )
                     write_notification(
                         config, "regression_detected",
                         f"Regression detected after {story['id']}",
-                        f"{story['id']}: {reg_msg[:200]}",
-                        severity="critical",
+                        f"{story['id']}: {reg_msg[:200]} — merge reverted, "
+                        f"retrying (attempt {attempt}).",
+                        severity="warning",
                     )
-                    commit_tracking_files(project_dir, feature_name)
+                    # The same cleanup every other retryable failure performs:
+                    # capture the attempt diff as retry context, then delete the
+                    # attempt branch. The old terminal path did neither, so
+                    # omitting them now would leak one branch per regression and
+                    # deprive the next attempt of the diff it learns from.
+                    attempt_diff = delete_attempt_branch(
+                        project_dir, feature_branch, attempt_branch
+                    )
+                    _store_attempt_diff(state, story["id"], attempt_diff, spec_key)
+                    save_state(state, config)
                     clean_result_files(project_dir)
-                    sys.exit(1)
+                    write_health_snapshot(
+                        config, state, story["id"], attempt, event="attempt_failed"
+                    )
+                    continue
                 elif "Skipped" not in reg_msg:
                     log(f"  Regression check: {reg_msg}")
 
                 # Persist result_commit only now that the merge has survived the
                 # regression gate — writing it right after merge.landed would
                 # leave a stale value (pointing at a since-reverted commit) on
-                # the regression/revert/sys.exit(1) path above. Best-effort:
+                # the regression/revert/retry path above. Best-effort:
                 # research provenance must never break the merge.
                 if merge_head:
                     try:

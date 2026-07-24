@@ -107,17 +107,14 @@ The orchestrator can use different models for each role. Defaults:
 - **implementer** — Sonnet (cost-optimized for bulk code generation)
 - **verifier** — Opus (quality-critical independent review)
 - **validator** — Opus (the session that runs `/kit-tools:validate-implementation` after all stories pass; it makes judgment calls about finding severity and fix prioritization)
+- **escalation** — Opus (the model to retry large (L/XL) stories with on a later attempt)
 
-Offer the user a chance to override:
+**Project defaults come from `kit_tools/model_preferences.json`** (the shared, committed preferences the whole plugin reads — see `$CLAUDE_PLUGIN_ROOT/skills/configure-models/REFERENCE.md`). The orchestrator loads this file itself and layers it beneath any per-run override, so you don't need to re-ask when it's already set:
 
-> **Model configuration for this run?**
->
-> - **A. Defaults** — Sonnet for implementation, Opus for verification and validation (recommended)
-> - **B. All Opus** — Every role on Opus (highest cost, highest quality)
-> - **C. All Sonnet** — Every role on Sonnet (lowest cost, suitable for low-risk features)
-> - **D. Custom** — Specify each role individually
+- **If `kit_tools/model_preferences.json` exists:** those role values are the defaults for this run. Briefly show them and ask only whether the user wants a **one-off override for this run** (most say no). Don't run the full menu.
+- **If it does not exist:** present the canonical Selection menu **once** (A. Defaults / B. All Opus / C. All Sonnet / D. Custom — see `configure-models/REFERENCE.md`), write the choice to `kit_tools/model_preferences.json`, and continue. This becomes the project default; you won't be asked again on later runs. The user can change it anytime via `/kit-tools:configure-models`.
 
-If the user picks an option, store as `model_config` in `.execution-config.json`:
+**Per-run override (optional).** If the user wants different models for *this run only* (without changing the committed default), store them as `model_config` in `.execution-config.json`:
 
 ```json
 {
@@ -129,9 +126,9 @@ If the user picks an option, store as `model_config` in `.execution-config.json`
 }
 ```
 
-If `model_config` is omitted, the orchestrator falls back to its `DEFAULT_MODEL_CONFIG` (same as option A). Partial overrides are supported — missing keys keep their defaults. Values must be aliases the local `claude` CLI accepts (e.g., `sonnet`, `opus`, or full model IDs like `claude-sonnet-4-6`).
+Resolution order (lowest to highest): built-in `DEFAULT_MODEL_CONFIG` (the Sonnet/Opus split) → committed `model_preferences.json` → this per-run `model_config`. Partial overrides are supported — missing keys fall through to the layer below. Values must be aliases the local `claude` CLI accepts (e.g., `sonnet`, `opus`, or full model IDs like `claude-sonnet-4-6`).
 
-Skip this step if the user just wants defaults — the orchestrator behaves the same as before.
+Skip the per-run override entirely if the user just wants the project defaults.
 
 ---
 

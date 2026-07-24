@@ -79,7 +79,14 @@ git clone https://github.com/WashingBearLabs/KitTools.git
 | `/kit-tools:sync-project` | Full sync between code and docs (`--quick` for audit) |
 | `/kit-tools:validate-implementation` | Validate a feature branch against its feature spec (quality, security, compliance) |
 | `/kit-tools:execution-status` | Check execution progress and health; acts as supervisor when monitoring is enabled |
+| `/kit-tools:configure-models` | View or change which Claude model each role uses (implementer, verifier, validator, reviewer, second opinion); persists to `kit_tools/model_preferences.json` |
 | `/kit-tools:doctor` | Plugin self-integrity and environment health check — broken references, agent token drift, stale installs, missing tools |
+
+## Model preferences
+
+Several skills run work through different Claude **roles** — implementing stories, verifying diffs, running review panels, and giving a deliberately contrasting second opinion. Each role has a built-in default (Sonnet for implementation, Opus for the quality-critical roles), but you can pin any role to a specific model.
+
+Run `/kit-tools:configure-models` to set them. Your choices are saved to a committed `kit_tools/model_preferences.json`, and **every model-dispatching skill reads the same file** — `/kit-tools:validate-epic`, `/kit-tools:validate-implementation`, `/kit-tools:sync-project`, and the `/kit-tools:execute-epic` orchestrator. The review skills also prompt **once** on first use if no preferences exist, then run silently. Change them anytime with `/kit-tools:configure-models` or by editing the JSON. See the [`configure-models` reference](skills/configure-models/REFERENCE.md) for the schema and role map.
 
 ## Hooks
 

@@ -38,8 +38,8 @@ Desktop.ini
 /tmp/
 
 # Execution state files (transient, not project documentation)
-kit_tools/prd/.execution-state.json
-kit_tools/prd/.execution-config.json
+kit_tools/specs/.execution-state.json
+kit_tools/specs/.execution-config.json
 kit_tools/.pause_execution
 
 # Internal planning (not part of plugin distribution)

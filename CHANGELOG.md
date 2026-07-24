@@ -5,6 +5,34 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.0] - 2026-07-24
+
+Interactive, user-selectable model preferences, plus a fix for the orchestrator
+turning a flaky test into a dead run.
+
+### Fixed
+
+- **A post-merge regression no longer ends the run.** When the cross-story regression gate failed, the orchestrator reverted the merge and then called `sys.exit(1)` unconditionally — ignoring both the execution mode and any remaining retry budget. Every other gate in the attempt loop (session error, verify error, invalid result, merge conflict, verify rejection) retries, so this one path turned a single flaky test into a hard stop on attempt 1, and `entry.py`'s exit handler then wrote a terminal `.supervisor_stop` (`orchestrator-exited`) that stopped the supervisor too. A regression is now a retryable failure like the rest: the merge is still reverted, the story is marked `retrying`, and control returns to the retry-limit check that already pauses for review in guarded mode and fails terminally in autonomous **once retries are genuinely exhausted**. The regression path also now performs the cleanup every other retryable failure does — capturing the attempt diff as retry context and deleting the attempt branch — which the terminal path skipped.
+- **The regression gate confirms a failure before reverting.** A failing group is re-run once, serialized where the runner has a stable flag for it (`-n 0` for pytest, `--runInBand` for jest), and only reported as a regression if the failure reproduces. Parallel runners are the dominant cause of a pass/fail split on identical code: a project with `-n auto` in its pytest `addopts` starves subprocess- and timing-sensitive integration tests, which then fail under load and pass in isolation. Conservative by construction — a re-run that could not complete (missing runner, timeout) leaves the original failure standing rather than laundering a real regression, and a serial flag the runner rejects falls back to a plain re-run. Test metrics are recorded after confirmation, so a cleared flake is not filed as a failure.
+- **Stale `.gitignore` path.** The repo ignored `kit_tools/prd/.execution-*.json`, but the orchestrator has written `kit_tools/specs/.execution-*.json` since the `prd/` → `specs/` rename, so transient execution state was untracked-but-visible when kit-tools ran against this repo itself.
+
+### Added
+
+- **`configure-models` skill + shared `kit_tools/model_preferences.json`.** Model choice is now user-selectable rather than silently defaulted. A single committed preferences file (schema: `version` + a `models` block of role → model alias/id) is the one source of truth for every model-dispatching surface. Roles: `implementer`, `verifier`, `validator`, `escalation` (orchestrator), `reviewer` (the validate-epic / validate-implementation / sync-project review panels), and `second_opinion` (the deliberately contrasting reviewer). The canonical schema, role→skill map, and selection menu live in `skills/configure-models/REFERENCE.md`.
+- **Prompt-once interaction.** `validate-epic`, `validate-implementation`, and `sync-project` present the model-selection menu the first time they dispatch review agents without a preferences file, persist the choice, then run silently afterward. Users change it anytime via `/kit-tools:configure-models` or by editing the JSON.
+- **`doctor` validation.** A new advisory project check validates `model_preferences.json` when present — unparseable JSON, a non-object `models` block, unrecognized roles, and non-string values.
+
+### Changed
+
+- **The story verifier is told to scope its test run more firmly.** The full-suite command is no longer quoted anywhere in the verification prompt — printing it beside "do not run this" handed the verifier a ready-to-paste suite-wide invocation. Every branch now carries the same instruction to name explicit test file paths, and states the reason: a suite-wide run pulls in unrelated tests whose flakes have nothing to do with the story under verification. The T0/T1 targeted-command tiers are unchanged.
+- **`get_model_config()` now layers a committed-preferences source** beneath the per-run override. Resolution order is `DEFAULT_MODEL_CONFIG` (the Sonnet/Opus split) → `kit_tools/model_preferences.json` → `.execution-config.json` `model_config`, so a project's shared defaults are honored while a single run can still deviate. `execute-epic` Step 2c reads the file for defaults and only runs the full menu when it's absent.
+- **`validate-epic`'s second-opinion model** now resolves from the `second_opinion` role (a concrete model, or unset = "use the other model from the reviewers"), replacing the dangling `model_config.reviewer_second_opinion` hook that nothing ever wrote.
+
+### Delta from the Copilot build
+
+- Schema and role names are identical to the GitHub Copilot CLI build so the feature stays in lockstep; only the example model values differ (Claude aliases here, versioned Copilot ids there).
+- The orchestrator fixes above are host-agnostic and ported verbatim, with the port's one documented delta preserved (process-group launch flags via `new_group_kwargs()` rather than `start_new_session=True`).
+
 ## [2.9.1] - 2026-07-18
 
 ### Fixed
