@@ -155,11 +155,12 @@ Read `"$EXEC_DIR/kit_tools/specs/.execution-health.json"`. If missing, note "No 
 
 Assess these conditions in order:
 
-1. **Heartbeat staleness** — If `heartbeat` is more than 20 minutes old, the orchestrator may be hung.
+1. **Heartbeat staleness** — If `heartbeat` is more than 20 minutes old, the orchestrator may be hung. The orchestrator refreshes `heartbeat` every ~60 seconds for the whole run (independent of how long the current implementation session takes), so on a current orchestrator a stale heartbeat is a real anomaly, not a long story.
    - Read the execution log tail for clues (stuck on tests? waiting on API?)
    - Check if tmux session is responsive: `tmux has-session -t {session_name}`
    - If tmux is dead: report crash, suggest resume
-   - If tmux is alive but heartbeat stale: likely hung on a long-running session. Log a warning but do not intervene yet — the session timeout will eventually fire.
+   - If tmux is alive but heartbeat stale: the orchestrator process is likely wedged. Log a prominent warning; if `.execution-state.json`'s `updated_at` is also stale past the current story's session timeout (L/XL stories run up to 1500-1800s), escalate to the user rather than waiting indefinitely.
+   - **Runs started by an older orchestrator (pre-2.10.1)** stamp the heartbeat only between attempts, so a healthy 25-35 minute story legitimately exceeds 20 minutes there — for those, compare staleness against the story-size session timeout before alarming.
 
 2. **Memory usage** — If `memory_mb` exceeds 2000 MB (2 GB), warn about high memory usage. This is informational — the process cleanup fixes in 2.2.3 should prevent runaway memory, but flag it for awareness.
 

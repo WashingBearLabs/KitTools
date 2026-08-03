@@ -50,6 +50,14 @@ Every `kit_tools/...` path and git command below runs relative to `EXEC_DIR`. Re
 Determine feature spec from argument, `$EXEC_DIR/kit_tools/specs/.execution-state.json`, or by listing active feature specs.
 Read full feature spec: overview, stories, criteria, out of scope, tech considerations.
 
+### Epic-wide validation
+
+If the invocation names an **epic** rather than a single feature spec ("for epic \<name\>" — the orchestrator's final pass after all specs complete, or a manual whole-epic audit), the subject is the **entire assembled branch against ALL of the epic's feature specs together**:
+
+- Gather every feature spec belonging to the epic. After an epic run they live in `$EXEC_DIR/kit_tools/specs/archive/` (the orchestrator archives each as it completes; its prompt lists the exact paths). For a manual audit, match active + archived specs by their `epic:` frontmatter field.
+- Read **all** of them. Every later step that interpolates "the feature spec" gets the **full spec list** — most importantly Step 5: a compliance review fed only one spec audits that spec's criteria and silently ignores the rest of the epic.
+- Tell the compliance reviewer this is a cross-spec pass: acceptance criteria from one spec may have production call sites introduced by a different spec, and criteria checked off spec-by-spec can still be unmet on the assembled branch (e.g. a protection verified against a helper in isolation but never applied at the call site a later story wired). That integration seam is exactly what the per-spec validations could not see.
+
 ---
 
 ## Step 2: Get Branch Diff
@@ -110,6 +118,8 @@ Spawn via Task tool. Read the result file, parse `findings[]` using the unified 
 
 Interpolate `feature-compliance-reviewer.md` with feature spec path, diff, file list, and architecture context (include `{{RESULT_FILE_PATH}} = kit_tools/.validate_impl_compliance.json`).
 Spawn via Task tool. Read the result file, parse `findings[]` using the unified Finding Schema.
+
+**Epic-wide validation:** interpolate `{{SPEC_PATH}}` with the full list of the epic's spec paths (newline-separated) and instruct the reviewer to check every spec's acceptance criteria against the assembled branch, flagging cross-spec integration gaps explicitly (see Step 1).
 
 Reviews:
 - **5a: Acceptance criteria** — Is each criterion addressed?

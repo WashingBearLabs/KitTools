@@ -1,4 +1,4 @@
-# Template Version: 1.1.0
+# Template Version: 1.2.0
 #
 # KitTools worktree & environment contract.
 #
@@ -30,6 +30,20 @@ root:
 #   - uv sync --extra dev
 #   - pnpm install
 env_bootstrap: []
+
+# Command wrapper for running project commands inside the environment that
+# env_bootstrap creates. The orchestrator is a DETACHED process — it inherits
+# whatever PATH launched it, never an activated project shell — so for an
+# isolated project (uv / poetry / nix / hatch) its test and regression commands
+# would otherwise miss the worktree's .venv and crash at collection, which the
+# regression gate would misread as a real failure. Set this to your project's
+# runner wrapper and the orchestrator prepends it to every test/regression
+# command it constructs (commands you wrote yourself, e.g. the TESTING_GUIDE
+# Quick Start, are used verbatim and NOT prefixed).
+# Examples (uncomment / adapt to your stack):
+# run_prefix: uv run
+# run_prefix: poetry run
+run_prefix:
 
 # Gitignored config/secret files to make available inside the worktree.
 # Each path is relative to the repo root. KitTools SYMLINKS these (no secret is

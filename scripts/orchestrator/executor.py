@@ -37,6 +37,7 @@ from .sessions import (
     usage_tokens,
 )
 from .specs import (
+    execution_order_note,
     find_next_uncompleted_story,
     parse_spec_frontmatter,
     update_spec_checkboxes,
@@ -96,6 +97,13 @@ def execute_spec_stories(
         spec_size = str(parse_spec_frontmatter(spec_path).get("size", "M")).upper()
     if impl_timeout != IMPL_SESSION_TIMEOUT or verify_timeout != VERIFY_SESSION_TIMEOUT:
         log(f"  Story size: {spec_size}, impl timeout: {impl_timeout}s, verify timeout: {verify_timeout}s")
+
+    # Surface a declared story execution order once per spec — the author needs
+    # to SEE it was read (a supervisor split can change it mid-run; the walk
+    # re-derives order from the spec file each iteration either way).
+    order_note = execution_order_note(spec_path)
+    if order_note:
+        log(f"  {order_note}")
 
     # Determine which stories_state dict to use for find_next_uncompleted_story
     if spec_key is not None:

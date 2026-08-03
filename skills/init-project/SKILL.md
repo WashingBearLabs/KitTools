@@ -552,7 +552,7 @@ Report to the user:
 - Whether patterns were included
 - Hooks installed (list the 4 automation hooks)
 - Whether CLAUDE.md was created/updated
-- That `kit_tools/worktree.yaml` was created (note it's committed; mention they can set `env_bootstrap`/`env_link` if execute-epic worktrees need deps or secrets)
+- That `kit_tools/worktree.yaml` was created (note it's committed; mention they can set `env_bootstrap`/`env_link` if execute-epic worktrees need deps or secrets, and `run_prefix` — e.g. `uv run`, `poetry run` — if the project's test runner lives in an isolated environment)
 - Git status: whether a repo was initialized (and on `main`) or already existed, and the detected integration branch if not `main`
 - That `.gitignore` was updated with the KitTools transient-state block
 - Validation status (pass/issues found), including the doctor result (healthy / warnings / errors)

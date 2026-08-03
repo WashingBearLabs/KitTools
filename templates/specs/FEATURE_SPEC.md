@@ -1,4 +1,4 @@
-<!-- Template Version: 2.3.0 -->
+<!-- Template Version: 2.4.0 -->
 ---
 feature: {{FEATURE_NAME}}
 status: active
@@ -27,6 +27,9 @@ Quick summary:
 - type: feature | epic-child
 - epic / epic_seq / epic_final: only populated for epic-child specs
 - created / updated: YYYY-MM-DD
+- execution_order: [US-004, US-001, ...] — optional; overrides document order for the
+  story walk when dependencies diverge from ID numbering (unlisted stories follow in
+  document order). An "Execution order:" line in the body works too.
 -->
 
 # Feature Spec: {{FEATURE_TITLE}}

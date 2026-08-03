@@ -29,6 +29,16 @@ def _split_leading_comments(content: str) -> tuple[str, str]:
 def parse_spec_frontmatter(spec_path: str) -> dict:
     """Parse YAML frontmatter from a feature spec markdown file using PyYAML.
 
+    See :func:`_frontmatter_from_content` for the leading-comment caveat.
+    """
+    with open(spec_path, "r") as f:
+        content = f.read()
+    return _frontmatter_from_content(content)
+
+
+def _frontmatter_from_content(content: str) -> dict:
+    """Frontmatter parsing over already-read content.
+
     The frontmatter block is NOT always on line 1: the 2.x templates emit a
     ``<!-- Template Version: X -->`` comment first (and EPIC.md an additional
     multi-line ``<!-- Seeding: ... -->`` block). Anchoring the match at byte 0
@@ -36,8 +46,6 @@ def parse_spec_frontmatter(spec_path: str) -> dict:
     ``size:`` hint was ignored and every story ran at the M-size timeout. Skip
     any leading run of HTML comments and blank lines before matching.
     """
-    with open(spec_path, "r") as f:
-        content = f.read()
     _, body = _split_leading_comments(content)
     match = re.match(r'^---[ \t]*\r?\n(.*?)\r?\n---', body, re.DOTALL)
     if not match:
@@ -62,10 +70,95 @@ def parse_spec_frontmatter(spec_path: str) -> dict:
     return result
 
 
+# --- Story execution order ------------------------------------------------
+# Through 2.10.x stories executed strictly in document order, so an
+# "Execution order: US-004 → US-001 → ..." line an author wrote into a spec —
+# the natural thing to write once validation reveals a dependency the ID
+# numbering doesn't reflect — was a silent no-op. Now the orchestrator honors
+# it: an `execution_order` frontmatter list (authoritative) or an
+# "Execution order:" line in the body reorders the story walk; stories not
+# listed follow in document order. Physically reordering sections still works.
+
+_US_ID_RE = re.compile(r"\bUS-\d+\b", re.IGNORECASE)
+_EXEC_ORDER_LINE_RE = re.compile(
+    r"^[ \t]*(?:>[ \t]*)?(?:\*\*)?Execution[ \t]+order(?::\*\*|\*\*:?|:)(?P<rest>.*)$",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+
+def _execution_order_ids(content: str) -> list[str]:
+    """Declared story execution order for a spec, as a deduped list of IDs.
+
+    Frontmatter ``execution_order`` (list or string) wins; otherwise the first
+    "Execution order:" line in the body is used. IDs are extracted permissively
+    (any ``US-NNN`` token, in order) so arrow/comma/space separators all work.
+    Empty list when nothing is declared — document order applies.
+    """
+    ids: list[str] = []
+    fm = _frontmatter_from_content(content)
+    raw = fm.get("execution_order")
+    if isinstance(raw, list):
+        ids = [i for v in raw for i in _US_ID_RE.findall(str(v))]
+    elif isinstance(raw, str):
+        ids = _US_ID_RE.findall(raw)
+    if not ids:
+        m = _EXEC_ORDER_LINE_RE.search(content)
+        if m:
+            ids = _US_ID_RE.findall(m.group("rest"))
+    seen: set[str] = set()
+    out: list[str] = []
+    for i in ids:
+        i = i.upper()
+        if i not in seen:
+            seen.add(i)
+            out.append(i)
+    return out
+
+
+def _apply_execution_order(stories: list[dict], order: list[str]) -> list[dict]:
+    """Reorder ``stories``: listed IDs first (in listed order), the rest in
+    document order. IDs that match no story are ignored here — the executor
+    surfaces them once via :func:`execution_order_note`."""
+    by_id = {s["id"].upper(): s for s in stories}
+    ordered = [by_id[i] for i in order if i in by_id]
+    listed = {s["id"].upper() for s in ordered}
+    ordered.extend(s for s in stories if s["id"].upper() not in listed)
+    return ordered
+
+
+def execution_order_note(spec_path: str) -> str | None:
+    """One-line human-readable note about a spec's declared execution order.
+
+    Returns None when the spec declares nothing (document order applies).
+    Used by the executor to log the effective order once per spec, so the
+    author can see the declaration was read — the failure mode this feature
+    replaces was precisely that the line looked authoritative and did nothing.
+    """
+    try:
+        with open(spec_path, "r") as f:
+            content = f.read()
+    except OSError:
+        return None
+    order = _execution_order_ids(content)
+    if not order:
+        return None
+    doc_ids = [m.group(1).upper() for m in re.finditer(r"^### (US-\d+):", content, re.MULTILINE)]
+    known = [i for i in order if i in set(doc_ids)]
+    unknown = [i for i in order if i not in set(doc_ids)]
+    unlisted = [i for i in doc_ids if i not in set(known)]
+    note = "Story execution order (from spec): " + " -> ".join(known + unlisted)
+    if unknown:
+        note += f" [WARNING: declared IDs not found in spec, ignored: {', '.join(unknown)}]"
+    return note
+
+
 def parse_stories_from_spec(spec_path: str) -> list[dict]:
     """Parse user stories from a feature spec markdown file.
 
-    Returns a list of dicts with keys: id, title, description, criteria, criteria_text
+    Returns a list of dicts with keys: id, title, description, criteria,
+    criteria_text — in execution order: the spec's declared ``execution_order``
+    (frontmatter or "Execution order:" line) when present, document order
+    otherwise.
     """
     with open(spec_path, "r") as f:
         content = f.read()
@@ -128,6 +221,9 @@ def parse_stories_from_spec(spec_path: str) -> list[dict]:
             "completed": len(unchecked) == 0 and len(checked) > 0,
         })
 
+    order = _execution_order_ids(content)
+    if order:
+        stories = _apply_execution_order(stories, order)
     return stories
 
 

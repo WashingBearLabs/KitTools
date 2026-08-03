@@ -117,6 +117,12 @@ Check whether stories are ordered correctly by dependency:
 
 This check is advisory — false positives are acceptable. The heuristic is imperfect because criteria text doesn't always name the exact artifacts being created.
 
+**Declared execution order.** The orchestrator (KitTools ≥2.10.1) honors an explicit story order declared as an `execution_order` frontmatter list or an `Execution order: US-004 → US-001 → ...` line in the body — listed stories run in that order, unlisted ones follow in document order. When a spec declares one:
+
+- Verify every listed ID matches an existing `### US-NNN:` story in this spec; flag unknown or duplicate IDs as **warning** with category `"ordering-issue"` (the orchestrator ignores unknown IDs, so a typo silently falls back toward document order)
+- If stories the declaration *omits* have dependencies on listed ones (or vice versa), flag the gap
+- Suggesting a reordering fix may therefore be either "physically reorder the sections" or "declare/correct `execution_order`" — both work; the declaration keeps cross-spec story-ID references intact
+
 ### 8. Priority & Independent Test
 
 Each story should carry a `**Priority:**` (P1/P2/P3) and an `**Independent Test:**` line (specs created before 2.7.0 won't have them — flag as **info**, not warning, for those):

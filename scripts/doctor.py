@@ -465,7 +465,7 @@ def check_project(project_dir: str) -> None:
                 add("warning", "project", "worktree.yaml does not parse to a mapping")
             else:
                 known = {"root", "env_bootstrap", "env_link", "path_links",
-                         "cleanup_policy"}
+                         "run_prefix", "cleanup_policy"}
                 unknown = set(loaded) - known
                 if unknown:
                     add("warning", "project",

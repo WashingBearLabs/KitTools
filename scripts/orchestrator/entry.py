@@ -60,6 +60,7 @@ from .supervisor import (
     clear_supervisor_stop,
     pause_file_exists,
     signal_supervisor_stop,
+    start_heartbeat_thread,
     wait_for_pause_removal,
 )
 from .trace_reduce import finalize_run_trace
@@ -640,8 +641,84 @@ def run_epic(config: dict) -> None:
         specs_total=len(epic_specs),
     )
 
+    # --- Epic-wide validation over the assembled branch ---
+    # The per-spec validations above are each scoped to one spec, so a defect
+    # whose acceptance criterion lives in spec N but whose production call site
+    # was wired by spec M is structurally invisible to every one of them. Run
+    # one more validation, told explicitly that its subject is the ENTIRE
+    # branch diff against ALL the epic's specs. The specs were archived as
+    # their loops completed, so the prompt points at the archive paths.
+    validator_model = get_model_config(config)["validator"]
+    archived_specs = [
+        os.path.join("kit_tools", "specs", "archive", os.path.basename(s["spec_path"]))
+        for s in epic_specs
+    ]
+    log(f"Running epic-wide validation of the assembled branch (model={validator_model})...")
+    epic_validate_prompt = (
+        f"Run /kit-tools:validate-implementation for epic {epic_name}. "
+        f"Mode: autonomous. Branch: {config['branch_name']}. "
+        f"This is the EPIC-WIDE final validation: validate the ENTIRE branch diff "
+        f"(main...HEAD) against ALL of the epic's feature specs together. The specs "
+        f"are archived at: {', '.join(archived_specs)}. "
+        f"Pay particular attention to cross-spec integration — acceptance criteria "
+        f"from one spec whose production call sites were introduced by another. "
+        f"Do NOT invoke complete-implementation."
+    )
+    epic_validate_session = run_claude_session(
+        epic_validate_prompt, project_dir, model=validator_model
+    )
+    epic_validate_output = epic_validate_session.output
+    state["sessions"]["total"] += 1
+    state["sessions"]["validation"] += 1
+    _fv_in, _fv_out = usage_tokens(epic_validate_session.usage)
+    accumulate_token_usage(state, _fv_in, _fv_out, epic_validate_session.cost_usd)
+    _fv_est = state.setdefault("token_estimates", {"input": 0, "output": 0})
+    _fv_est["input"] += len(epic_validate_prompt) // 4
+    _fv_est["output"] += len(epic_validate_output) // 4
+    save_state(state, config)
+    log_event(
+        config, "session.metrics", phase="validate_epic", model=validator_model,
+        tokens_input=_fv_in, tokens_output=_fv_out,
+        cost_usd=epic_validate_session.cost_usd,
+        token_estimate_input=len(epic_validate_prompt) // 4,
+        token_estimate_output=len(epic_validate_output) // 4,
+    )
+    if is_session_error(epic_validate_output):
+        log(f"Epic-wide validation error: {epic_validate_output[:200]}")
+    else:
+        log("Epic-wide validation complete.")
+
+    # Commit anything the validation session fixed directly (autonomous mode
+    # spawns fixer agents) — complete_feature must not push a dirty tree.
+    commit_feature_work(project_dir, epic_name, config)
+
+    # Handle critical findings from the epic-wide pass, mirroring
+    # run_single_spec: merge strategy lets complete_feature apply its
+    # blocked-merge fallback; otherwise this needs a human, so stop the
+    # supervisor cron and wait.
+    strategy = config.get("completion_strategy", "none")
+    if pause_file_exists(project_dir):
+        if strategy == "merge":
+            log("Critical epic-wide findings detected — merge will be blocked.")
+            try:
+                os.remove(os.path.join(project_dir, "kit_tools", ".pause_execution"))
+            except OSError:
+                pass
+        else:
+            write_notification(
+                config, "execution_paused",
+                "Epic validation paused",
+                f"Critical epic-wide validation findings for {epic_name}. Review AUDIT_FINDINGS.md.",
+                severity="warning",
+            )
+            signal_supervisor_stop(config, "needs-review")
+            wait_for_pause_removal(project_dir, config=config)
+            log("Resuming after pause. Proceeding to completion.")
+
     # Complete the epic using the configured strategy
-    validation_clean = is_validation_clean(project_dir)
+    validation_clean = (
+        not is_session_error(epic_validate_output) and is_validation_clean(project_dir)
+    )
     # Terminal reduction before cleanup — see run_single_spec for why, incl.
     # why `completed_at` is stamped here rather than inside the reducer.
     state["completed_at"] = now_iso()
@@ -745,6 +822,15 @@ def main():
     # exit via atexit (which the signal handlers also trigger through sys.exit).
     _keep_awake_proc = start_keep_awake(config)
     atexit.register(lambda: stop_keep_awake(_keep_awake_proc))
+
+    # Background heartbeat: full health snapshots are only written at attempt
+    # boundaries, so without this a healthy 25-minute session read as "hung" to
+    # the status skill's 20-minute staleness check. The thread refreshes only
+    # an *existing* snapshot (never creates the file), so it can't re-dirty a
+    # cleaned-up worktree after completion; the atexit stop is belt-and-braces
+    # on top of the daemon flag.
+    _heartbeat_stop = start_heartbeat_thread(config)
+    atexit.register(_heartbeat_stop.set)
 
     try:
         if config.get("epic_specs"):

@@ -8,6 +8,7 @@ import platform
 import re
 import resource
 import subprocess
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -22,6 +23,12 @@ HEALTH_FILE = os.path.join("kit_tools", "specs", ".execution-health.json")
 CONTROL_FILE = os.path.join("kit_tools", "specs", ".execution-control.json")
 STOP_FILE = os.path.join("kit_tools", ".supervisor_stop")
 MAX_ORCHESTRATOR_DURATION = 86400  # 24 hours — safety net
+HEARTBEAT_INTERVAL = 60  # seconds between background heartbeat refreshes
+
+# Serializes writes to the health file between the main thread (full snapshots
+# at attempt boundaries) and the heartbeat thread (heartbeat-only refreshes),
+# so a refresh can never clobber a snapshot written concurrently.
+_HEALTH_LOCK = threading.Lock()
 
 
 def get_health_path(config: dict) -> str:
@@ -103,6 +110,16 @@ def write_health_snapshot(
     The supervisor (OG Claude session) reads this file to assess orchestrator health.
     """
     path = get_health_path(config)
+    with _HEALTH_LOCK:
+        _write_health_snapshot_locked(path, state, current_story_id,
+                                      current_attempt, event)
+
+
+def _write_health_snapshot_locked(
+    path: str, state: dict,
+    current_story_id: str | None, current_attempt: int, event: str,
+) -> None:
+    """Body of `write_health_snapshot`; caller holds `_HEALTH_LOCK`."""
     try:
         # Load existing to preserve history fields
         existing = {}
@@ -151,6 +168,52 @@ def write_health_snapshot(
         log(f"  WARNING: Failed to write health snapshot: {e}")
 
 
+def _touch_heartbeat(config: dict) -> None:
+    """Refresh ONLY the ``heartbeat`` field of an existing health snapshot.
+
+    Deliberately never *creates* the file: before the first snapshot there is
+    nothing to keep alive (the status skill already handles "no health data
+    yet"), and after end-of-run cleanup re-creating it would re-dirty the
+    worktree. Best-effort — a failed refresh must never affect execution.
+    """
+    path = get_health_path(config)
+    with _HEALTH_LOCK:
+        if not os.path.exists(path):
+            return
+        try:
+            with open(path, "r") as f:
+                health = json.load(f)
+            health["heartbeat"] = now_iso()
+            _atomic_json_write(path, health)
+        except (json.JSONDecodeError, OSError):
+            pass
+
+
+def start_heartbeat_thread(config: dict) -> threading.Event:
+    """Start a daemon thread stamping ``heartbeat`` every HEARTBEAT_INTERVAL s.
+
+    Full snapshots are only written at attempt boundaries, but an
+    implementation session legitimately runs 25-35 minutes for an L/XL story —
+    so a boundary-only heartbeat routinely exceeded the 20-minute staleness
+    threshold `/kit-tools:execution-status` documents, and the field cried wolf
+    on every healthy long story. A timer refresh makes the name accurate:
+    heartbeat now means "the orchestrator *process* is alive", independent of
+    how long the current session runs — which finally makes a genuinely wedged
+    orchestrator inside a long attempt detectable.
+
+    Returns a stop Event (set it to end the loop). The thread is a daemon, so
+    a crash/exit that never sets it cannot keep the process alive.
+    """
+    stop = threading.Event()
+
+    def _beat() -> None:
+        while not stop.wait(HEARTBEAT_INTERVAL):
+            _touch_heartbeat(config)
+
+    threading.Thread(target=_beat, name="kit-heartbeat", daemon=True).start()
+    return stop
+
+
 def _count_completed_stories(state: dict | None) -> int:
     """Count completed stories across single or epic mode state."""
     if not state:
@@ -197,17 +260,19 @@ def read_control_file(config: dict) -> dict | None:
         os.remove(path)
         log(f"  Supervisor control action received: {control.get('action', 'unknown')}")
 
-        # Record in health snapshot
+        # Record in health snapshot (lock: the heartbeat thread also
+        # read-modify-writes this file)
         health_path = get_health_path(config)
-        if os.path.exists(health_path):
-            try:
-                with open(health_path, "r") as f:
-                    health = json.load(f)
-                health["last_control_action"] = control.get("action")
-                health["last_control_at"] = now_iso()
-                _atomic_json_write(health_path, health)
-            except (json.JSONDecodeError, OSError):
-                pass
+        with _HEALTH_LOCK:
+            if os.path.exists(health_path):
+                try:
+                    with open(health_path, "r") as f:
+                        health = json.load(f)
+                    health["last_control_action"] = control.get("action")
+                    health["last_control_at"] = now_iso()
+                    _atomic_json_write(health_path, health)
+                except (json.JSONDecodeError, OSError):
+                    pass
 
         return control
     except (json.JSONDecodeError, OSError) as e:

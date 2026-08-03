@@ -36,6 +36,7 @@ _DEFAULT_CONTRACT = {
     "env_bootstrap": [],
     "env_link": [],
     "path_links": [],
+    "run_prefix": None,
     "cleanup_policy": "remove-on-success",
 }
 
@@ -69,6 +70,15 @@ def load_contract(main_repo: str) -> dict:
     root = loaded.get("root")
     if isinstance(root, str) and root.strip():
         contract["root"] = root.strip()
+
+    # run_prefix: a command wrapper (e.g. "uv run", "poetry run") the
+    # orchestrator prepends to every test/regression command it constructs, so
+    # a detached process — which inherits the ambient PATH, never an activated
+    # project shell — runs project commands inside the environment
+    # env_bootstrap created. See tests_metrics._contract_run_prefix.
+    run_prefix = loaded.get("run_prefix")
+    if isinstance(run_prefix, str) and run_prefix.strip():
+        contract["run_prefix"] = run_prefix.strip()
 
     for list_key in ("env_bootstrap", "env_link", "path_links"):
         value = loaded.get(list_key)

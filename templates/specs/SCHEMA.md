@@ -42,6 +42,7 @@ updated: 2026-04-16             # required
 | `epic_final` | bool | optional | `true` only on last epic child | Triggers epic-completion handling in `execute-epic`. Empty/false on all other children. Exactly one child must set `true`. |
 | `created` | date | yes | `YYYY-MM-DD` | Authored date. Never updated. |
 | `updated` | date | yes | `YYYY-MM-DD` | Bumped on every edit (hooks handle this automatically). |
+| `execution_order` | list[string] | optional | Story IDs, e.g. `[US-004, US-001, US-005]` | Overrides document order for the orchestrator's story walk (KitTools ≥2.10.1). Stories not listed run after the listed ones, in document order. An `Execution order: US-004 → US-001 → ...` line in the spec body works too (frontmatter wins). Useful when validation reveals a dependency the ID numbering doesn't reflect — reordering by ID list keeps cross-spec ID references intact, unlike renumbering. |
 
 ## Epic Fields (`epic-*.md`)
 

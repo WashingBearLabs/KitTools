@@ -5,12 +5,15 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
+import shutil
 import subprocess
 
 import yaml
 
 from .sessions import _kill_process_group
 from .state import update_state_story
+from .worktree import load_contract
 
 from .utils import _atomic_json_write, log, now_iso
 
@@ -238,8 +241,9 @@ def _build_test_command(
             return f"npx vitest run {test_files_str} --bail 1"
         return None
     parts: list[str] = []
+    run_prefix = _contract_run_prefix(project_dir)
     for (runner, cwd), rel in _partition_test_files(sorted(test_files), project_dir).items():
-        cmd = _regression_cmd(runner, rel)
+        cmd = _regression_cmd(runner, rel, cwd, run_prefix)
         if not cmd:
             continue
         joined = " ".join(cmd)
@@ -335,25 +339,85 @@ def _partition_test_files(
     return groups
 
 
-def _regression_cmd(runner: str, rel_files: list[str]) -> list[str] | None:
-    """Argv for a fail-fast targeted run of the given files under `runner`."""
+def _contract_run_prefix(project_dir: str) -> list[str]:
+    """The ``run_prefix`` from ``kit_tools/worktree.yaml``, as an argv prefix.
+
+    The contract is committed, so the worktree carries its own copy — a detached
+    orchestrator can read it from its own ``project_dir`` without reaching back
+    to the main checkout. Empty list when unset/unparseable (never raises): the
+    feature degrades to the auto-detection this module already does.
+    """
+    try:
+        prefix = load_contract(project_dir).get("run_prefix")
+        return shlex.split(prefix) if prefix else []
+    except Exception:
+        return []
+
+
+def _project_pytest_prefix(cwd: str) -> list[str]:
+    """Argv prefix (``[python, "-m", "pytest"]``) that runs pytest under the
+    project's own interpreter rather than the orchestrator's inherited one.
+
+    A detached orchestrator inherits whatever ``python3`` launched the CLI, not
+    an activated project shell. For an isolated project (uv / poetry / venv) that
+    interpreter lacks the project's dependencies, so every regression run crashes
+    in ``conftest`` and a good merge is reverted as a false regression. Prefer:
+
+      1. a worktree virtualenv at ``<cwd>/.venv`` — covers uv-synced, poetry, and
+         plain ``python -m venv`` projects,
+      2. a uv-managed project (``uv.lock``) via ``uv run`` when ``uv`` is on PATH,
+      3. bare ``python3`` — unchanged behaviour for non-isolated repos.
+    """
+    for py in (
+        os.path.join(cwd, ".venv", "bin", "python"),
+        os.path.join(cwd, ".venv", "Scripts", "python.exe"),
+    ):
+        if os.path.isfile(py):
+            return [py, "-m", "pytest"]
+    if os.path.isfile(os.path.join(cwd, "uv.lock")) and shutil.which("uv"):
+        return ["uv", "run", "python", "-m", "pytest"]
+    return ["python3", "-m", "pytest"]
+
+
+def _regression_cmd(
+    runner: str, rel_files: list[str], cwd: str | None = None,
+    run_prefix: list[str] | None = None,
+) -> list[str] | None:
+    """Argv for a fail-fast targeted run of the given files under `runner`.
+
+    ``run_prefix`` is the contract-declared environment wrapper (worktree.yaml
+    ``run_prefix``, e.g. ``["uv", "run"]`` / ``["poetry", "run"]``); when set it
+    takes precedence over auto-detection — the committed contract is the
+    project's explicit statement of how its commands run. Otherwise ``cwd``
+    (the runner's working dir) lets the pytest branch resolve the project's own
+    interpreter via :func:`_project_pytest_prefix`; without either the legacy
+    bare-``python3`` invocation is used.
+    """
     if runner == "pytest":
-        return ["python3", "-m", "pytest", *rel_files, "-x", "-q", "--tb=short"]
+        if run_prefix:
+            prefix = [*run_prefix, "python3", "-m", "pytest"]
+        elif cwd:
+            prefix = _project_pytest_prefix(cwd)
+        else:
+            prefix = ["python3", "-m", "pytest"]
+        return [*prefix, *rel_files, "-x", "-q", "--tb=short"]
     if runner == "vitest":
-        return ["npx", "vitest", "run", *rel_files, "--bail", "1"]
+        return [*(run_prefix or []), "npx", "vitest", "run", *rel_files, "--bail", "1"]
     if runner == "jest":
-        return ["npx", "jest", *rel_files, "--bail"]
+        return [*(run_prefix or []), "npx", "jest", *rel_files, "--bail"]
     return None
 
 
-def _run_regression_group_ex(cmd: list[str], cwd: str) -> tuple[bool, str, str]:
-    """Run one regression subprocess group. Returns (passed, output, status).
+def _run_regression_group_ex(cmd: list[str], cwd: str) -> tuple[bool, str, str, int]:
+    """Run one regression subprocess group. Returns (passed, output, status, rc).
 
     `status` is ``"ran"`` when the runner actually produced a verdict and
-    ``"skipped"`` when it could not (missing binary, timeout). Callers that must
-    not read a non-verdict as evidence — notably the confirm re-run below —
-    branch on it; :func:`_run_regression_group` keeps the original skip-as-pass
-    2-tuple contract for the primary run.
+    ``"skipped"`` when it could not (missing binary, timeout). Callers must not
+    read a non-verdict as evidence: the primary run reports a skipped group as
+    NOT RUN rather than passed, and the confirm re-run keeps the original
+    failure standing. ``rc`` is the runner's exit code (``-1`` when it never
+    ran) — the pytest paths use it to tell a real test failure (1) from a
+    collection/usage error that learned nothing about the code (2/3/4/5).
     """
     try:
         proc = subprocess.Popen(
@@ -362,7 +426,7 @@ def _run_regression_group_ex(cmd: list[str], cwd: str) -> tuple[bool, str, str]:
         )
     except OSError as e:  # FileNotFoundError (missing runner) is an OSError
         log(f"  WARNING: regression runner unavailable ({cmd[0]}: {e}) — skipping group")
-        return True, "", "skipped"
+        return True, "", "skipped", -1
     try:
         stdout, stderr_out = proc.communicate(timeout=REGRESSION_TIMEOUT)
     except subprocess.TimeoutExpired:
@@ -376,21 +440,23 @@ def _run_regression_group_ex(cmd: list[str], cwd: str) -> tuple[bool, str, str]:
         except subprocess.TimeoutExpired:
             log(f"  WARNING: regression subprocess {proc.pid} did not exit after SIGKILL — continuing with process leaked")
         log(f"  WARNING: regression group timed out after {REGRESSION_TIMEOUT}s — skipping")
-        return True, "", "skipped"
+        return True, "", "skipped", -1
     _kill_process_group(proc.pid)
-    return proc.returncode == 0, (stdout + stderr_out), "ran"
+    return proc.returncode == 0, (stdout + stderr_out), "ran", proc.returncode
 
 
-def _run_regression_group(cmd: list[str], cwd: str) -> tuple[bool, str]:
-    """Run one regression subprocess group. Returns (passed, combined_output).
+# pytest exit codes that mean "no verdict was produced": 2 interrupted (includes
+# errors during collection — e.g. a conftest import crash under the wrong
+# interpreter), 3 internal error, 4 usage error, 5 no tests collected. Only
+# exit 1 means tests actually ran and failed. A gate that could not even
+# collect the suite has learned nothing about the code, so reverting a
+# verified merge on it is strictly worse than skipping and warning.
+_PYTEST_NO_VERDICT_RCS = frozenset({2, 3, 4, 5})
 
-    A missing runner binary (e.g. `npx` absent) or a timeout is treated as a
-    SKIP (passed=True) — a merge must never be reverted because tooling isn't
-    installed or a group is slow. Matches the best-effort discipline of the
-    single-runner path this replaces.
-    """
-    passed, output, _status = _run_regression_group_ex(cmd, cwd)
-    return passed, output
+
+def _is_pytest_no_verdict(runner: str, rc: int) -> bool:
+    """True when a failing pytest exit code denotes a broken run, not failing tests."""
+    return runner == "pytest" and rc in _PYTEST_NO_VERDICT_RCS
 
 
 # --- Flake confirmation -------------------------------------------------------
@@ -458,13 +524,20 @@ def _confirm_regression(
 
     for label, candidate in attempts:
         log(f"  Regression confirm: re-running the failing {runner} group ({label})")
-        passed, output, status = _run_regression_group_ex(candidate, cwd)
+        passed, output, status, rc = _run_regression_group_ex(candidate, cwd)
         if status == "skipped":
             log("  Regression confirm: re-run could not complete — keeping the original failure")
             return False, first_output
         if label == "serial" and _is_usage_error(output):
             log(f"  Regression confirm: {runner} rejected the serial flag — retrying unserialised")
             continue
+        if not passed and _is_pytest_no_verdict(runner, rc):
+            # The re-run broke before producing a verdict (collection/usage
+            # error) — same discipline as a skipped re-run: it neither clears
+            # nor compounds the original failure.
+            log(f"  Regression confirm: re-run produced no verdict (pytest exit {rc}) "
+                f"— keeping the original failure")
+            return False, first_output
         if passed:
             log(f"  Regression NOT reproduced on {label} re-run — treating as a flaky test, "
                 f"not a regression")
@@ -762,14 +835,34 @@ def run_regression_check(
     if not groups:
         return True, "Skipped — no runnable test files after partition"
 
+    run_prefix = _contract_run_prefix(project_dir)
+    ran_files = 0
+    ran_groups = 0
+    not_run: list[str] = []  # human-readable per-group notes for the summary
     for (runner, cwd), rel_files in groups.items():
-        cmd = _regression_cmd(runner, rel_files)
+        cmd = _regression_cmd(runner, rel_files, cwd, run_prefix)
         if cmd is None:
             log(f"  Regression: unknown runner '{runner}', skipping {len(rel_files)} file(s)")
+            not_run.append(f"{len(rel_files)} {runner} file(s): unknown runner")
             continue
         rel_cwd = os.path.relpath(cwd, project_dir) or "."
         log(f"  Regression check: {len(rel_files)} {runner} file(s) (cwd={rel_cwd})")
-        passed, output = _run_regression_group(cmd, cwd)
+        passed, output, status, rc = _run_regression_group_ex(cmd, cwd)
+        if status == "skipped":
+            # Timed out or runner unavailable — the group never produced a
+            # verdict. Do NOT count it as passed and do NOT record metrics for
+            # tests that never ran; surface it in the summary instead.
+            not_run.append(f"{len(rel_files)} {runner} file(s): "
+                           f"runner unavailable or timed out after {REGRESSION_TIMEOUT}s")
+            continue
+        if not passed and _is_pytest_no_verdict(runner, rc):
+            partial = "\n".join(output.strip().split("\n")[:15])
+            log(f"  WARNING: regression group produced no verdict (pytest exit {rc} — "
+                f"collection/usage error, not a test failure). The gate learned "
+                f"nothing about this code; skipping instead of reverting.\n{partial}")
+            not_run.append(f"{len(rel_files)} pytest file(s): "
+                           f"broken run (exit {rc}, collection/usage error)")
+            continue
         if not passed:
             # Confirm before reporting a regression — a failure here reverts a
             # merge that already passed verification, so one flaky run must not
@@ -783,8 +876,18 @@ def run_regression_check(
         if not passed:
             partial = "\n".join(output.strip().split("\n")[:50])
             return False, f"REGRESSION: tests failed ({runner})\n{partial}"
+        ran_files += len(rel_files)
+        ran_groups += 1
 
-    return True, f"Passed ({len(all_files)} test files across {len(groups)} runner(s))"
+    # An honest summary: a group that never ran is *unknown*, not green. (The
+    # timeout path used to be laundered into the unconditional "Passed (N)"
+    # line — the skip status was computed and then discarded.)
+    if not ran_groups:
+        return True, "Skipped — no regression group produced a verdict (" + "; ".join(not_run) + ")"
+    summary = f"Passed ({ran_files} test files across {ran_groups} runner(s))"
+    if not_run:
+        summary += " · NOT RUN: " + "; ".join(not_run)
+    return True, summary
 
 
 def detect_test_command(project_dir: str) -> str | None:
@@ -798,7 +901,19 @@ def detect_test_command(project_dir: str) -> str | None:
     5. kit_tools/testing/TESTING_GUIDE.md Quick Start section
 
     Returns the test command string, or None if not detected.
+
+    A contract-declared ``run_prefix`` (worktree.yaml) is prepended to every
+    command this function *constructs* — the detached orchestrator inherits the
+    ambient PATH, not an activated project shell, so an isolated project's
+    runner is unreachable without its declared wrapper. Commands taken verbatim
+    from the user (the TESTING_GUIDE.md Quick Start fallback) are NOT prefixed:
+    they may already carry one, and double-prefixing would break them.
     """
+    run_prefix = " ".join(_contract_run_prefix(project_dir))
+
+    def _prefixed(cmd: str) -> str:
+        return f"{run_prefix} {cmd}" if run_prefix else cmd
+
     # 1. package.json
     pkg_json = os.path.join(project_dir, "package.json")
     if os.path.exists(pkg_json):
@@ -808,7 +923,7 @@ def detect_test_command(project_dir: str) -> str | None:
             test_script = pkg.get("scripts", {}).get("test", "")
             # Skip npm default placeholder
             if test_script and 'echo "Error: no test specified"' not in test_script:
-                return f"npm test"
+                return _prefixed("npm test")
         except (json.JSONDecodeError, OSError):
             pass
 
@@ -818,9 +933,19 @@ def detect_test_command(project_dir: str) -> str | None:
         try:
             with open(pyproject, "r") as f:
                 content = f.read()
+            # uv-managed projects need their isolated interpreter — a bare
+            # `python3 -m pytest` misses the project venv and its deps. An
+            # explicit run_prefix wins over this auto-detection (no "uv run
+            # uv run" double-wrapping).
+            uv_managed = (
+                "[tool.uv" in content
+                or os.path.exists(os.path.join(project_dir, "uv.lock"))
+            )
             # Check for pytest configuration
             if "[tool.pytest" in content:
-                return "python3 -m pytest"
+                if run_prefix:
+                    return _prefixed("python3 -m pytest")
+                return "uv run pytest" if uv_managed else "python3 -m pytest"
             # Check for poetry test script
             if "[tool.poetry.scripts]" in content and "test" in content:
                 return "poetry run pytest"
@@ -829,7 +954,7 @@ def detect_test_command(project_dir: str) -> str | None:
 
     # 3. pytest.ini
     if os.path.exists(os.path.join(project_dir, "pytest.ini")):
-        return "python3 -m pytest"
+        return _prefixed("python3 -m pytest")
 
     # 4. Makefile
     makefile = os.path.join(project_dir, "Makefile")
@@ -838,7 +963,7 @@ def detect_test_command(project_dir: str) -> str | None:
             with open(makefile, "r") as f:
                 content = f.read()
             if re.search(r"^test\s*:", content, re.MULTILINE):
-                return "make test"
+                return _prefixed("make test")
         except OSError:
             pass
 
