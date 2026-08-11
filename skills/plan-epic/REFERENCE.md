@@ -167,12 +167,17 @@ Each criterion must be **verifiable**, not vague:
 
 ## Auto-injected Test Criteria
 
-Every code story gets these automatically (between user criteria and typecheck):
+Every code story gets these automatically (after user criteria):
 ```
 - [ ] Tests written/updated for new functionality
 - [ ] Full test suite passes
-- [ ] Typecheck/lint passes
 ```
+
+Add a static-analysis criterion **only when the project has a real typecheck/lint command** (recorded in `CONVENTIONS.md` / `TESTING_GUIDE.md`, or evidenced by a linter config in the repo). Emit the concrete command so it is verifiable:
+```
+- [ ] `ruff check .` passes
+```
+If the project has no such command, **omit it** — a generic `Typecheck/lint passes` checkbox is unsatisfiable by construction and blocks every story.
 
 **Exempt:** Doc-only or config-only stories (all criteria reference only .md files, configs, or docs).
 
@@ -216,7 +221,7 @@ US-003: Add Google OAuth button to login page
 - [ ] Button triggers OAuth redirect to Google
 - [ ] Tests written/updated for new functionality
 - [ ] Full test suite passes
-- [ ] Typecheck/lint passes
+- [ ] `eslint src/` passes  <!-- concrete command; omit this line entirely if the project has no linter -->
 
 US-004: Handle OAuth callback and create session
 
@@ -230,7 +235,7 @@ US-004: Handle OAuth callback and create session
 - [ ] Invalid callback redirects to /login with error param
 - [ ] Tests written/updated for new functionality
 - [ ] Full test suite passes
-- [ ] Typecheck/lint passes
+- [ ] `eslint src/` passes  <!-- concrete command; omit this line entirely if the project has no linter -->
 ```
 
 ---

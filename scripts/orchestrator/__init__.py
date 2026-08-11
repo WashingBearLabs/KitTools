@@ -12,6 +12,7 @@ from .specs import *  # noqa: F401,F403
 from .prompts import *  # noqa: F401,F403
 from .sessions import *  # noqa: F401,F403
 from .tests_metrics import *  # noqa: F401,F403
+from .baseline import *  # noqa: F401,F403
 from .git_ops import *  # noqa: F401,F403
 # registry/worktree are namespaced (not star-imported) — their CRUD verbs
 # (get, register, list_all, ...) are generic and would pollute the package

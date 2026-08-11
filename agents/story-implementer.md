@@ -160,6 +160,6 @@ After writing the result file, output a brief human-readable summary of what you
 - Address ALL acceptance criteria — do not skip any
 - Do NOT refactor code outside the scope of this story
 - Do NOT add features not listed in the acceptance criteria
-- Do NOT modify the feature spec file — checkboxes are updated by the orchestrator after verification
+- Do NOT modify story definitions or acceptance-criteria checkboxes in the feature spec — checkboxes are updated by the orchestrator after verification. You MAY append to the spec's `## Implementation Notes` section (and only that section) to record learnings/gotchas when a criterion calls for it
 - If you encounter a blocking issue, report it in the `issues` field rather than silently working around it
 - You MUST write the result JSON file — the orchestrator depends on it

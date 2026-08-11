@@ -7,6 +7,7 @@ import os
 import re
 import signal
 import subprocess
+import threading
 import time
 from typing import NamedTuple
 
@@ -79,6 +80,16 @@ IMPL_SESSION_TIMEOUT = 900  # implementation sessions
 VERIFY_SESSION_TIMEOUT = 600  # verification sessions (smaller task)
 NETWORK_RETRY_WAIT = 30  # seconds between network retries
 NETWORK_MAX_RETRIES = 3
+# Independent wall-clock watchdog (issue #20). `proc.communicate(timeout=...)`
+# measures its deadline against a *monotonic* clock, which on most platforms
+# does not advance while the host is suspended (sleep/hibernate/battery death).
+# So a child whose network socket died with the host can outlive its timeout
+# indefinitely — the orchestrator stays blocked in communicate() with no crash
+# signal. The watchdog thread below is a belt-and-braces backstop that bounds
+# the child's life against WALL-clock time (which *does* include suspend), so a
+# stalled child is force-killed and the normal session-error/retry path fires.
+WATCHDOG_GRACE = 300  # seconds of slack over the session timeout before we kill
+WATCHDOG_POLL_INTERVAL = 30  # how often the watchdog re-checks wall-clock age
 PERMANENT_ERROR_KEYWORDS = ["context", "too long", "token limit", "input.*too.*large", "maximum.*context"]
 IMPL_RESULT_FILE = os.path.join("kit_tools", ".story-impl-result.json")
 VERIFY_RESULT_FILE = os.path.join("kit_tools", ".story-verify-result.json")
@@ -164,6 +175,47 @@ def _kill_process_group(pgid: int) -> None:
         pass  # Terminated during grace period
 
 
+def _start_session_watchdog(proc: "subprocess.Popen", timeout: int,
+                            stop_event: "threading.Event") -> threading.Thread:
+    """Bound a child session's lifetime against WALL-clock time (issue #20).
+
+    `proc.communicate(timeout=...)` can fail to fire when the host suspends,
+    because its deadline is measured against a monotonic clock that freezes
+    during sleep/hibernate. The child's network socket dies with the host, so
+    the session never completes and the orchestrator blocks in communicate()
+    forever with no crash signal.
+
+    This watchdog runs in a daemon thread and polls wall-clock elapsed time
+    every ``WATCHDOG_POLL_INTERVAL`` seconds. Wall time *does* include suspend,
+    so after resume the thread notices — within one poll interval of awake time
+    — that ``timeout + WATCHDOG_GRACE`` has been exceeded and force-terminates
+    the child's process tree. That unblocks communicate(), which then returns
+    via the normal timeout/error path and the session is retried like any other
+    stall. ``stop_event`` is set by the caller the moment communicate() returns
+    normally, so the watchdog never kills a healthy child.
+    """
+    deadline = time.time() + timeout + WATCHDOG_GRACE
+
+    def _watch() -> None:
+        while not stop_event.wait(WATCHDOG_POLL_INTERVAL):
+            if proc.poll() is not None:
+                return  # child already exited on its own
+            if time.time() >= deadline:
+                log(f"  WATCHDOG: child {proc.pid} exceeded wall-clock budget "
+                    f"({timeout}s timeout + {WATCHDOG_GRACE}s grace) — likely "
+                    f"stalled across a host suspend; terminating process tree")
+                _kill_process_group(proc.pid)
+                try:
+                    proc.kill()
+                except OSError:
+                    pass
+                return
+
+    t = threading.Thread(target=_watch, name="session-watchdog", daemon=True)
+    t.start()
+    return t
+
+
 def run_claude_session(
     prompt: str, project_dir: str, timeout: int = SESSION_TIMEOUT,
     model: str | None = None,
@@ -207,6 +259,10 @@ def run_claude_session(
             # exit handlers can reap it if the orchestrator is stopped mid-session.
             _ACTIVE_CHILD_PGIDS.add(proc.pid)
 
+            # Independent wall-clock backstop for host-suspend stalls (issue #20).
+            _watchdog_stop = threading.Event()
+            _start_session_watchdog(proc, timeout, _watchdog_stop)
+
             try:
                 try:
                     stdout, stderr_out = proc.communicate(timeout=timeout)
@@ -248,10 +304,24 @@ def run_claude_session(
                 prefix = "SESSION_ERROR_PERMANENT" if _is_permanent_error(stderr) else "SESSION_ERROR"
                 return SessionResult(f"{prefix}: Exit code {proc.returncode}\n{stderr}\n{stdout}")
             finally:
+                _watchdog_stop.set()
                 _ACTIVE_CHILD_PGIDS.discard(proc.pid)
 
         except FileNotFoundError:
-            return SessionResult("SESSION_ERROR_PERMANENT: 'claude' command not found. Ensure Claude CLI is installed and in PATH.")
+            # `claude` missing can be transient on some hosts (a PATH not yet
+            # refreshed, an antivirus/file lock, a slow network drive). Treating
+            # the first miss as permanent burned the story with zero retries and
+            # bypassed guarded mode's pause (issue #15). Retry like a network
+            # error; only escalate to permanent once retries are exhausted.
+            if attempt < NETWORK_MAX_RETRIES:
+                log(f"  'claude' not found (attempt {attempt}/{NETWORK_MAX_RETRIES}) — "
+                    f"retrying in {NETWORK_RETRY_WAIT}s (transient PATH/filesystem issue?)...")
+                time.sleep(NETWORK_RETRY_WAIT)
+                continue
+            return SessionResult(
+                "SESSION_ERROR_PERMANENT: 'claude' command not found after "
+                f"{NETWORK_MAX_RETRIES} attempts. Ensure Claude CLI is installed and in PATH."
+            )
 
     # Should not reach here, but safety net
     return SessionResult("SESSION_ERROR: All retries exhausted")

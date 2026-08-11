@@ -73,6 +73,24 @@ GITIGNORE_LINES = [
     "kit_tools/EXECUTION_LOG.md",
     "kit_tools/EXECUTION_LOG.md.1",
     "kit_tools/AUDIT_FINDINGS.md",
+    # Supervisor + per-session result artifacts, written by KitTools INSIDE the
+    # worktree. The orchestrator has a hard dirty-tree gate, so leaving these
+    # unignored makes an enabled `monitor` un-resumable (issue #3) and sweeps
+    # them into tracking commits (issue #23).
+    "kit_tools/specs/.supervisor.log",
+    # Regenerated on every verification by tests_metrics.py (subdir, non-dotfile
+    # — must be listed explicitly; the glob below only covers kit_tools/.*).
+    "kit_tools/testing/test-metrics.json",
+    # Catch-all for the many transient dotfile scratch artifacts written
+    # directly under kit_tools/ by the validate-* / sync / seed / vision /
+    # orchestrator flows (.validate_impl_*.json, .fm_*, .vi_*, .rx_diff.txt,
+    # .fix-result.json, .story-impl-result.json, .execution-learnings.jsonl,
+    # .landscape_research.json, .seed_cache, .supervisor_stop, ...). A glob
+    # eliminates the drift class entirely: every DURABLE artifact under
+    # kit_tools/ (AGENT_README.md, PRODUCT_VISION.md, specs/, arch/, docs/,
+    # worktree.yaml) is a non-dotfile, so `.*` can never hide one.
+    "kit_tools/.*",
+    "!kit_tools/.gitkeep",
 ]
 
 # Statuses an execution record may carry. Mirrors the orchestrator's own state

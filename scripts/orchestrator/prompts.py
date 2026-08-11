@@ -404,7 +404,7 @@ def build_implementation_prompt(
     prompt += f"\n\n## Additional Instructions (Autonomous Mode)\n"
     prompt += f"- The feature spec file is at: {spec}\n"
     prompt += f"- Read the feature spec directly for full story context\n"
-    prompt += f"- Do NOT modify the feature spec file — checkboxes are updated by the orchestrator after verification\n"
+    prompt += f"- Do NOT modify story definitions or acceptance-criteria checkboxes in the feature spec — checkboxes are updated by the orchestrator after verification. You MAY append to the spec's `## Implementation Notes` section (and only that section) to record learnings/gotchas when a criterion calls for it\n"
     prompt += f'- Commit with message: feat({feat_name}): {story["id"]} - {story["title"]}\n'
 
     _assert_prompt_fully_substituted(prompt, "build_implementation_prompt")

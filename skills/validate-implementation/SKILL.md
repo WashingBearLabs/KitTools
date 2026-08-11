@@ -111,6 +111,10 @@ Spawn via Task tool. Read the result file, parse `findings[]` using the unified 
    - Pass: info finding with test count
    - Fail: critical finding with failure summary including traceback details
    - No test command: info finding suggesting tests be added
+4. **Account for a pre-existing (baseline) failure set (issue #6).** A full-suite run cannot by itself tell an epic-introduced regression from a test that was *already red at the merge base*. Before treating any failure as blocking:
+   - **Autonomous runs** — the orchestrator injects a `BASELINE:` section into this validation's prompt listing the tests that already failed before the epic began. Treat any failure in that list as **pre-existing/informational**, never blocking. Only failures **not** in the baseline list may raise a critical finding. If the baseline says the suite was red but could not enumerate node ids (non-pytest runner), do not treat a red full-suite result as a regression without confirming the specific failures are new — focus the gate on the epic's diff and acceptance criteria.
+   - **Manual runs** — if no baseline was provided, and a failure looks unrelated to the diff (touches files/areas the change did not modify), run that same test against the merge base (`git stash` or a scratch checkout of `main`) to check whether it was already failing. Report confirmed pre-existing failures as informational docs/health findings, not blocking regressions.
+   - A gate that says "3 new failures, 7 pre-existing" is actionable; a bare `passed=false` on a red baseline is not.
 
 ---
 

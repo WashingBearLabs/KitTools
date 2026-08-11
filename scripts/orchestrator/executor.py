@@ -63,8 +63,15 @@ from .tests_metrics import (
     pre_flight_check,
     run_regression_check,
     update_test_metrics,
+    verdict_contradicts_test_evidence,
 )
 from .utils import log, run_git
+
+# A session that returns without writing its result file did not produce a
+# verdict for the story — it says nothing about the story's quality or size, so
+# it must not consume a real retry (issue #18). Bounded so a genuinely broken
+# environment still terminates.
+MAX_NOOP_RETRIES = 3
 
 def execute_spec_stories(
     spec_path: str, feature_name: str, config: dict, state: dict,
@@ -159,6 +166,7 @@ def execute_spec_stories(
         story_state_entry = stories_state.get("stories", {}).get(story["id"], {})
         attempt = story_state_entry.get("attempts", 0)
         feature_branch = config["branch_name"]
+        noop_retries = 0  # no-op sessions this story (issue #18); not real attempts
 
         while True:
             attempt += 1
@@ -334,6 +342,69 @@ def execute_spec_stories(
                 log(f"  Permanent session error [{f_type}]: {impl_output[:200]}")
                 learnings = [f"Permanent error: {impl_output[:200]}"]
                 log_story_failure(story, attempt, config, impl_output[:500], learnings)
+                delete_attempt_branch(project_dir, feature_branch, attempt_branch)
+                clean_result_files(project_dir)
+                # In guarded mode a "permanent" error (e.g. `claude` not found,
+                # a bad model id) is usually operator-fixable — install the CLI,
+                # correct config, then resume. Hard-exiting bypassed guarded
+                # mode's whole point (issue #15). Pause for review via the
+                # standard monitorable mechanism instead; autonomous mode still
+                # fails terminally.
+                if mode == "guarded":
+                    update_state_story(
+                        state, story["id"], "retrying", attempt, learnings, impl_output[:500],
+                        spec_key=spec_key, failure_type=f_type
+                    )
+                    log_event(
+                        config, "story.implement.failed", severity="critical",
+                        spec=spec_key, story=story["id"], attempt=attempt,
+                        failure_type=f_type, permanent=True, reason=impl_output[:200],
+                    )
+                    log("Guarded mode: pausing for review (permanent session error).")
+                    pause_path = os.path.join(project_dir, "kit_tools", ".pause_execution")
+                    try:
+                        with open(pause_path, "w") as f:
+                            f.write(
+                                f"Guarded mode: story {story['id']} hit a permanent "
+                                f"session error:\n{impl_output[:500]}\n\nFix the cause "
+                                f"(e.g. install/PATH the CLI, correct the model), then "
+                                f"remove this file to retry, or send a skip/split via "
+                                f"execution-status.\n"
+                            )
+                    except OSError:
+                        pass
+                    state["status"] = "paused"
+                    save_state(state, config)
+                    commit_tracking_files(project_dir, feature_name)
+                    write_notification(
+                        config, "execution_paused",
+                        f"Guarded pause: {story['id']} permanent error",
+                        f"{story['id']}: {impl_output[:200]} — remove .pause_execution to "
+                        f"retry after fixing, or send a skip/split control action.",
+                        severity="critical",
+                    )
+                    wait_for_pause_removal(project_dir, config=config)
+                    # On resume, honor any supervisor control action written
+                    # while paused (skip/split/abort).
+                    control = read_control_file(config)
+                    if control:
+                        result = handle_control_action(
+                            control, config, state, spec_path, feature_name, spec_key
+                        )
+                        if result == "abort":
+                            commit_tracking_files(project_dir, feature_name)
+                            clean_result_files(project_dir)
+                            sys.exit(1)
+                        if result == "stories_updated":
+                            if spec_key is not None:
+                                stories_state = state["specs"][spec_key]
+                            else:
+                                stories_state = state
+                            break
+                    state["status"] = "running"
+                    save_state(state, config)
+                    attempt = 0  # Retry the story from a fresh attempt after the fix
+                    continue
                 update_state_story(
                     state, story["id"], "failed", attempt, learnings, impl_output[:500],
                     spec_key=spec_key, failure_type=f_type
@@ -351,8 +422,6 @@ def execute_spec_stories(
                     f"{story['id']}: {impl_output[:200]}",
                     severity="critical",
                 )
-                delete_attempt_branch(project_dir, feature_branch, attempt_branch)
-                clean_result_files(project_dir)
                 sys.exit(1)
 
             if impl_output.startswith("SESSION_ERROR:"):
@@ -378,6 +447,27 @@ def execute_spec_stories(
             # --- Read implementation result from file ---
             impl_result, impl_error = read_implementation_result(project_dir)
             if impl_error:
+                # No result file means the agent never delivered its contract —
+                # either it no-op'd/hallucinated a completion, or it ended its
+                # turn with a long test run still in flight. Neither says
+                # anything about the story, so retry WITHOUT charging an attempt
+                # (issue #18). Gate on the missing file, not token counts: a
+                # session that does nothing still reports nonzero output tokens.
+                if noop_retries < MAX_NOOP_RETRIES:
+                    noop_retries += 1
+                    log(f"  Implementation session produced no result file "
+                        f"(no-op {noop_retries}/{MAX_NOOP_RETRIES}, "
+                        f"output_tokens={real_out}) — retrying without consuming "
+                        f"attempt {attempt}.")
+                    log_event(
+                        config, "story.implement.noop", severity="warning",
+                        spec=spec_key, story=story["id"], attempt=attempt,
+                        failure_type="SESSION_NOOP", reason=str(impl_error)[:200],
+                    )
+                    delete_attempt_branch(project_dir, feature_branch, attempt_branch)
+                    clean_result_files(project_dir)
+                    attempt -= 1  # the loop head will re-increment
+                    continue
                 log(f"  Implementation result: {impl_error}")
             log_event(
                 config, "story.implement.completed", spec=spec_key, story=story["id"],
@@ -482,6 +572,26 @@ def execute_spec_stories(
                 update_test_metrics(project_dir, verdict, story["id"])
 
             if verify_error:
+                # No verification result file means the verifier produced no
+                # verdict (e.g. it correctly refused to fabricate one for an
+                # empty attempt, or the session no-op'd). That is not a story
+                # failure — retry WITHOUT charging an attempt, bounded (issue
+                # #18).
+                if noop_retries < MAX_NOOP_RETRIES:
+                    noop_retries += 1
+                    log(f"  Verification session produced no result file "
+                        f"(no-op {noop_retries}/{MAX_NOOP_RETRIES}, "
+                        f"output_tokens={v_real_out}) — retrying without "
+                        f"consuming attempt {attempt}.")
+                    log_event(
+                        config, "story.verify.noop", severity="warning",
+                        spec=spec_key, story=story["id"], attempt=attempt,
+                        failure_type="SESSION_NOOP", reason=str(verify_error)[:200],
+                    )
+                    delete_attempt_branch(project_dir, feature_branch, attempt_branch)
+                    clean_result_files(project_dir)
+                    attempt -= 1  # the loop head will re-increment
+                    continue
                 # Result file missing or invalid — treat as retryable failure
                 log(f"  Verification result error: {verify_error}")
                 log_event(
@@ -502,6 +612,26 @@ def execute_spec_stories(
                 save_state(state, config)
                 clean_result_files(project_dir)
                 continue
+
+            # --- Cross-check the verdict against the verifier's own evidence ---
+            # A pass verdict that contradicts the instrumented test results the
+            # verifier itself reported is not trustworthy: override it to a fail
+            # so it is retried rather than merged (issue #13).
+            evidence_conflict = verdict_contradicts_test_evidence(verdict)
+            if evidence_conflict:
+                log(f"  Verifier returned '{verdict['verdict']}' but {evidence_conflict} "
+                    f"— overriding to fail.")
+                log_event(
+                    config, "story.verify.evidence_conflict", severity="warning",
+                    spec=spec_key, story=story["id"], attempt=attempt,
+                    original_verdict=verdict["verdict"], reason=evidence_conflict[:200],
+                )
+                verdict["verdict"] = "fail"
+                _rec = verdict.get("recommendations") or ""
+                verdict["recommendations"] = (
+                    f"Verdict overridden to fail: {evidence_conflict}. "
+                    f"Re-run and ensure the required tests actually pass. {_rec}"
+                ).strip()
 
             if verdict["verdict"] in ("pass", "pass_with_warnings"):
                 learnings = extract_learnings_from_results(impl_result, verdict)

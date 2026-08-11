@@ -161,6 +161,10 @@ def _write_health_snapshot_locked(
             "stories_total": _count_total_stories(state),
             "last_control_action": existing.get("last_control_action"),
             "last_control_at": existing.get("last_control_at"),
+            # Per-story control history so a split/skip on one story does not
+            # permanently suppress healing of later stories (issue #21). Keyed by
+            # story_id → {action, at, count}.
+            "control_history": existing.get("control_history", {}),
         }
 
         _atomic_json_write(path, snapshot)
@@ -270,6 +274,16 @@ def read_control_file(config: dict) -> dict | None:
                         health = json.load(f)
                     health["last_control_action"] = control.get("action")
                     health["last_control_at"] = now_iso()
+                    # Also record per-story so the supervisor's "already
+                    # intervened?" check is scoped to the story it acted on,
+                    # not the whole epic (issue #21).
+                    _sid = control.get("story_id")
+                    if _sid:
+                        _hist = health.setdefault("control_history", {})
+                        _entry = _hist.setdefault(_sid, {"count": 0})
+                        _entry["action"] = control.get("action")
+                        _entry["at"] = now_iso()
+                        _entry["count"] = _entry.get("count", 0) + 1
                     _atomic_json_write(health_path, health)
                 except (json.JSONDecodeError, OSError):
                     pass
@@ -527,12 +541,45 @@ def pause_file_exists(project_dir: str) -> bool:
     return os.path.exists(os.path.join(project_dir, "kit_tools", ".pause_execution"))
 
 
+def _healing_control_action(project_dir: str) -> str | None:
+    """Return a queued supervisor action that should self-clear a pause, if one
+    exists.
+
+    ``split_story`` and ``skip_story`` are the supervisor's *autonomous healing*
+    actions — a guarded retry-pause is kept alive specifically so the supervisor
+    can issue them. But control actions are otherwise only consumed *between
+    attempts*, and a guarded pause has no more attempts, so a queued heal would
+    sit forever (issue #19). A queued ``pause`` is the opposite — a deliberate
+    escalation to a human — and must never self-clear.
+    """
+    path = os.path.join(project_dir, CONTROL_FILE)
+    try:
+        with open(path, encoding="utf-8") as f:
+            action = (json.load(f) or {}).get("action")
+    except (OSError, ValueError):
+        return None
+    return action if action in ("split_story", "skip_story") else None
+
+
 def wait_for_pause_removal(project_dir: str, config: dict | None = None) -> None:
     """Poll until the pause file is removed, with timeout."""
     log("Paused. Remove kit_tools/.pause_execution to resume.")
     elapsed = 0
     last_reminder = 0
     while pause_file_exists(project_dir):
+        # A guarded retry-pause is kept alive so the supervisor can heal it. If
+        # it has queued a split/skip, clear the pause ourselves so the executor
+        # consumes the action on resume — otherwise the heal is never applied
+        # and the run stalls until the 24h timeout (issue #19).
+        healing = _healing_control_action(project_dir)
+        if healing:
+            log(f"  Supervisor queued '{healing}' — clearing the guarded pause and "
+                f"resuming so the action is consumed.")
+            try:
+                os.remove(os.path.join(project_dir, "kit_tools", ".pause_execution"))
+            except OSError:
+                pass
+            break
         time.sleep(PAUSE_POLL_INTERVAL)
         elapsed += PAUSE_POLL_INTERVAL
         if elapsed - last_reminder >= PAUSE_LOG_INTERVAL:

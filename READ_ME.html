@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KitTools v2.10.1 — AI-Assisted Development Framework</title>
+  <title>KitTools v2.11.0 — AI-Assisted Development Framework</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap" rel="stylesheet">
@@ -911,10 +911,11 @@
       <div class="phase-body">
         <div class="step">
           <div class="step-cmd"><span class="step-cmd-text">/kit-tools:init-project</span></div>
-          <div class="step-desc">Select project type (API, Web App, Full Stack, CLI, Library, Mobile) — scaffolds the <code>kit_tools/</code> directory with tailored templates. Sets up git (offers to <code>git init</code> on <code>main</code> if needed) and writes <code>.gitignore</code> rules for transient execution state. Finishes with a <strong>doctor</strong> integrity pass — plugin self-checks plus environment readiness (tmux, PyYAML, git).</div>
+          <div class="step-desc">Select project type (API, Web App, Full Stack, CLI, Library, Mobile) — scaffolds the <code>kit_tools/</code> directory with tailored templates. Sets up git (offers to <code>git init</code> on <code>main</code> if needed) and writes <code>.gitignore</code> rules for transient execution state. Optionally configures <strong>linting</strong> — picks up your project's languages, records the lint/typecheck command, and (with confirmation) installs a linter and scaffolds a starter config — or skips it entirely. Finishes with a <strong>doctor</strong> integrity pass — plugin self-checks plus environment readiness (tmux, PyYAML, git).</div>
           <div class="badges">
             <span class="badge-out">kit_tools/ scaffold</span>
             <span class="badge-out">git + .gitignore</span>
+            <span class="badge-out">lint setup (optional)</span>
             <span class="badge-out">CLAUDE.md</span>
             <span class="badge-out">doctor health check</span>
           </div>
@@ -1196,7 +1197,7 @@
 
     <div class="skill-card">
       <span class="skill-cmd"><span class="skill-phase-dot" style="background:var(--phase-setup)"></span>/kit-tools:init-project</span>
-      <span class="skill-desc">Initialize kit_tools with project-type presets. Scaffolds the documentation structure tailored to your stack.</span>
+      <span class="skill-desc">Initialize kit_tools with project-type presets. Scaffolds the documentation structure tailored to your stack, and optionally sets up linting.</span>
     </div>
 
     <div class="skill-card">

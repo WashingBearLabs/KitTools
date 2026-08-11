@@ -41,11 +41,12 @@ This skill requires the following project files:
 ## Important Instructions
 
 1. **REPLACE all placeholder text** — Don't leave `[brackets]` or `YYYY-MM-DD` in the final docs
-2. **DELETE sections that don't apply** — If there's no database, delete database sections entirely
-3. **Use today's date** for "Last updated" fields
-4. **Be specific** — Use actual file paths, actual tech names, actual patterns found
-5. **Cross-reference** — Link between related docs (e.g., SECURITY.md to ENV_REFERENCE.md)
-6. **Validate after each template** — Catch unfilled placeholders immediately
+2. **PRESERVE concrete values init-project already recorded** — If a slot already holds a real value rather than a `[bracket]` placeholder (notably the static-analysis/lint command in `TESTING_GUIDE.md`, which `init-project` may have set and `plan-epic` consumes), keep it as-is; don't overwrite it with a guess or a placeholder.
+3. **DELETE sections that don't apply** — If there's no database, delete database sections entirely
+4. **Use today's date** for "Last updated" fields
+5. **Be specific** — Use actual file paths, actual tech names, actual patterns found
+6. **Cross-reference** — Link between related docs (e.g., SECURITY.md to ENV_REFERENCE.md)
+7. **Validate after each template** — Catch unfilled placeholders immediately
 
 ---
 

@@ -84,6 +84,15 @@ Store as `keep_awake: true/false` in `.execution-config.json`. Default: `false`.
 
 Skip this step for Supervised mode (the user is already present).
 
+Then ask (Autonomous/Guarded only):
+
+> **Verify the test baseline across your checkout and the worktree?** The execution worktree is built from *committed* state, so a test that passes in your checkout but fails in the worktree means something the build depends on isn't committed (a gitignored or untracked file the tests read). Enabling this re-runs the detected test suite once in your main checkout too and diffs it against the worktree, reporting any discrepancy up front as a clear "uncommitted dependency" signal instead of confusing downstream failures.
+>
+> - **A. Yes** — catch uncommitted/gitignored dependencies early
+> - **B. No** (default) — skip the extra run
+
+Store as `verify_baseline: true/false` in `.execution-config.json`. Default: `false`. This roughly doubles pre-flight test time (it adds one full-suite run in the main checkout), reuses the merge-base baseline run the orchestrator already does for issue #6, and only runs on a fresh launch, never on resume. It is best-effort and never blocks the run — a non-pytest runner or a suite that can't be enumerated simply produces no diff.
+
 ---
 
 ## Step 2b: Completion Strategy
@@ -192,6 +201,14 @@ The deterministic git/registry mechanics (resolve main → `git worktree add` �
 
    **⚠️ Local path-dependency check.** If a manifest declares a **local sibling dependency** (e.g. `pyproject.toml` `path = "../Roots"`, a pnpm/yarn workspace pointing at `../shared`, a Cargo `path = "../crate"`), a fresh worktree has no sibling to resolve it against and the install fails. Add those sibling paths to `path_links` in `kit_tools/worktree.yaml` (e.g. `path_links: ["../Roots"]`) — provisioning symlinks them at the worktree's matching relative path, portably.
 
+   **⚠️ Gitignored-config check (`env_link`).** A fresh worktree does **not** inherit gitignored files, and `env_link` is the *only* mechanism that reconciles "isolated worktree" with "app reads a gitignored config/secret file at runtime". The contract scaffolds `env_link: []`, and nothing else checks whether it should be non-empty — a missing local database config or credentials file provisions **silently**, then surfaces much later as a wall of unrelated-looking verification failures (and, in guarded mode, burns retries on stories that were never broken). Inspect `.gitignore` for **file** entries (not directory/glob ignores) that resolve to a file that **actually exists** in the repo root, excluding obvious build/cache output (`__pycache__`, `node_modules`, `.venv`, `venv`, `dist`, `build`, `*.pyc`, `.pytest_cache`, `.mypy_cache`, coverage/log artifacts). For each such file **not** listed in `env_link`, warn:
+
+   > `<path>` is gitignored and present in your checkout but not listed in `env_link`. The execution worktree will not have it. Add it to `kit_tools/worktree.yaml` `env_link`, or confirm the app doesn't need it at runtime.
+
+   Ask whether to proceed. (`env_link` entries are symlinked into the worktree, so no secret is duplicated; teardown scrubbing covers the rare copy-fallback case.)
+
+   **⚠️ Generic-criterion reality check.** Grep the epic's feature specs for the auto-injected static-analysis criterion (a `Typecheck/lint passes` line, or a `` `<cmd>` passes `` line naming a linter/typechecker). If any spec contains one, confirm the referenced command is actually discoverable in this project (recorded in `CONVENTIONS.md` / `TESTING_GUIDE.md`, or a matching linter config exists). If specs demand a typecheck/lint gate that this project has **no command for**, stop and report: *"N stories require a typecheck/lint command; none is configured in this project — every one will fail verification on an unsatisfiable criterion. Remove the line from the specs or add the command."* Catching it here turns a whole-epic slow bleed into a five-second error.
+
 2. **Derive the tmux session name** now: `kit-exec-<key>`. Check for a collision — `tmux has-session -t kit-exec-<key> 2>/dev/null`; if it exists, **do NOT kill it** (another execution may own it) — append a suffix (`-2`) or ask the user. You'll pass the final name to provisioning so the registry record carries it.
 
 3. **Echo & confirm `env_bootstrap` — SECURITY GATE.** If `env_bootstrap` is non-empty, those commands run shell in the new worktree. Because the contract is committed (PR-mutable), surface them before anything runs:
@@ -211,6 +228,8 @@ The deterministic git/registry mechanics (resolve main → `git worktree add` �
    Pass one `--link` per `env_link` entry and one `--link-path` per `path_links` entry from the contract. It prints JSON: `{worktree, branch, created, linked, copied, skipped, path_linked, path_skipped, registered, messages}`. **Read the `worktree` value from that JSON and use it as a literal absolute path in every later command** (do not rely on a shell variable surviving between commands — it won't). If `created` is `false` (e.g. the branch is already checked out in another worktree → a live execution), **stop and report** the `messages`; don't force. If any `path_skipped` entries appear, warn that those sibling deps weren't found and the install may fail.
 
 5. **Bootstrap env:** run each confirmed `env_bootstrap` command with cwd = the worktree path from step 4, in order, stopping at the first failure. On failure, warn that the worktree may not be runnable (verification could fail) and ask whether to continue. (Provisioning records `env_link` in the registry so teardown/close-session can scrub copied secrets later — a no-op for symlinks.)
+
+> **Merge-base test baseline (issue #6).** On a fresh launch (not a resume) the orchestrator runs the project's detected test command once *before the first story commits*, while the worktree HEAD still equals the merge base, and records which tests already fail on `state["baseline"]`. A **red baseline** is surfaced to you at launch (log + `baseline_red` notification) and its failing test node ids are injected into the final validation prompt so pre-existing failures are reported as informational instead of sinking the gate. This is best-effort and never blocks: a missing runner or timeout records a `skipped` baseline and validation behaves exactly as before. If you see a red-baseline warning at launch, consider fixing those tests separately — they are not caused by this epic.
 
 > From here on the orchestrator's working directory is the provisioned worktree. The user keeps working in the main checkout, undisturbed, and finds the execution via the `.kit/` registry.
 

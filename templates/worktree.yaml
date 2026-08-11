@@ -1,4 +1,4 @@
-# Template Version: 1.2.0
+# Template Version: 1.3.0
 #
 # KitTools worktree & environment contract.
 #
@@ -45,14 +45,17 @@ env_bootstrap: []
 # run_prefix: poetry run
 run_prefix:
 
-# Gitignored config/secret files to make available inside the worktree.
-# Each path is relative to the repo root. KitTools SYMLINKS these (no secret is
-# ever duplicated outside the repo); it only copies where symlinks are
-# unavailable, and scrubs any copy on teardown.
+# Any gitignored file the application reads at runtime — settings, local
+# database config, service credentials, secrets. NOT just dotenv files: list
+# every gitignored file the app (or its tests) needs, since a fresh worktree
+# inherits none of them. Each path is relative to the repo root. KitTools
+# SYMLINKS these (no secret is ever duplicated outside the repo); it only copies
+# where symlinks are unavailable, and scrubs any copy on teardown.
 # Example:
 # env_link:
 #   - .env
-#   - .env.vault
+#   - config/database.local.yaml
+#   - secrets/service-account.json
 env_link: []
 
 # Paths to make available *relative to the worktree* — typically sibling repos

@@ -1,4 +1,4 @@
-<!-- Template Version: 2.0.0 -->
+<!-- Template Version: 2.1.0 -->
 <!-- Seeding:
   explorer_focus: testing, tech-stack
   required_sections:
@@ -23,6 +23,11 @@
 
 # Run specific test suite (if applicable)
 [command]
+
+# Static analysis (typecheck/lint) — leave blank / delete if this project has none.
+# Whatever is recorded here is what plan-epic injects as a story acceptance
+# criterion; if there is no command, no such criterion is emitted.
+[typecheck/lint command, e.g. ruff check . / eslint src/ / tsc --noEmit]
 ```
 
 ---

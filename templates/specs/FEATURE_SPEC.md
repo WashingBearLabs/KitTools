@@ -1,4 +1,4 @@
-<!-- Template Version: 2.4.0 -->
+<!-- Template Version: 2.5.0 -->
 ---
 feature: {{FEATURE_NAME}}
 status: active
@@ -95,7 +95,11 @@ If a story needs more criteria, split the story instead.
 - [ ] {{Another criterion}}
 - [ ] Tests written/updated for new functionality
 - [ ] Full test suite passes
-- [ ] Typecheck/lint passes
+- [ ] `{{typecheck/lint command}}` passes
+<!-- Emit the static-analysis line ONLY if the project has a real typecheck/lint
+     command (e.g. `ruff check .`, `eslint src/`, `tsc --noEmit`). If it has
+     none, DELETE the line — a generic unverifiable "Typecheck/lint passes"
+     blocks every story on a gate nobody can satisfy. -->
 <!-- For UI stories, add: -->
 <!-- - [ ] Verify in browser -->
 <!-- For doc/config-only stories, remove the test criteria above -->
@@ -116,7 +120,8 @@ If a story needs more criteria, split the story instead.
 - [ ] {{Criterion}}
 - [ ] Tests written/updated for new functionality
 - [ ] Full test suite passes
-- [ ] Typecheck/lint passes
+- [ ] `{{typecheck/lint command}}` passes
+<!-- Omit the line above if the project has no typecheck/lint command. -->
 
 <!-- Add more user stories as needed -->
 

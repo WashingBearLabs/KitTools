@@ -51,6 +51,43 @@ def save_test_metrics(project_dir: str, metrics: dict) -> None:
         log(f"  WARNING: Failed to write test metrics: {e}")
 
 
+def verdict_contradicts_test_evidence(verify_result: dict | None) -> str | None:
+    """Return a reason string if a pass verdict contradicts the verifier's own
+    reported test evidence, else None (issue #13).
+
+    The verifier is the sole quality gate, but it has been observed returning
+    ``pass`` while its own machine-readable evidence — the ``tests_passed``
+    boolean and the per-file ``tests_run`` array — records a failure. The
+    orchestrator holds both halves and must not merge a story whose instrumented
+    evidence disagrees with its prose verdict. Instrumented exit-code evidence
+    outranks the self-reported verdict.
+    """
+    if not isinstance(verify_result, dict):
+        return None
+    if verify_result.get("verdict") not in ("pass", "pass_with_warnings"):
+        return None
+
+    # tests_passed is a required field set from actual exit codes. An explicit
+    # False disqualifies a pass outright.
+    if verify_result.get("tests_passed") is False:
+        return "verifier reported tests_passed=false but returned a pass verdict"
+
+    # Any per-file run recorded as failed contradicts a pass verdict.
+    tests_run = verify_result.get("tests_run")
+    if isinstance(tests_run, list):
+        failed = [
+            str(e.get("file", "?"))
+            for e in tests_run
+            if isinstance(e, dict) and e.get("passed") is False
+        ]
+        if failed:
+            shown = ", ".join(failed[:5])
+            more = f" (+{len(failed) - 5} more)" if len(failed) > 5 else ""
+            return f"verifier recorded failing test runs ({shown}{more}) but returned a pass verdict"
+
+    return None
+
+
 def update_test_metrics(project_dir: str, verify_result: dict | None, story_id: str) -> None:
     """Aggregate test data from a verification result into the persistent metrics file.
 

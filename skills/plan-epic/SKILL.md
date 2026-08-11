@@ -184,10 +184,15 @@ Every code story automatically includes:
 ```
 - [ ] Tests written/updated for new functionality
 - [ ] Full test suite passes
-- [ ] Typecheck/lint passes
 ```
 
-Doc/config-only stories are exempt. Test criteria go after user-defined criteria, before typecheck.
+Then add a static-analysis criterion **only if the project actually has a typecheck/lint command** — check `kit_tools/docs/CONVENTIONS.md` / `kit_tools/testing/TESTING_GUIDE.md` for a recorded command, and the repo for a linter config (`ruff.toml`, `.flake8`, `mypy.ini`, `pyrightconfig.json`, `.eslintrc*`, `tsconfig.json`, `biome.json`, etc.). When one exists, emit the **concrete command** so the criterion is verifiable, e.g.:
+```
+- [ ] `ruff check .` passes
+```
+When the project has **no** typecheck/lint command, **omit the criterion entirely** — a generic unverifiable `Typecheck/lint passes` checkbox is strictly worse than none: it blocks every story on a gate nobody can satisfy. Likewise prefer the project's real test command for "Full test suite passes" when `TESTING_GUIDE.md` records one.
+
+Doc/config-only stories are exempt (no test criteria at all).
 
 ---
 

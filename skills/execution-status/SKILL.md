@@ -160,6 +160,7 @@ Assess these conditions in order:
    - Check if tmux session is responsive: `tmux has-session -t {session_name}`
    - If tmux is dead: report crash, suggest resume
    - If tmux is alive but heartbeat stale: the orchestrator process is likely wedged. Log a prominent warning; if `.execution-state.json`'s `updated_at` is also stale past the current story's session timeout (L/XL stories run up to 1500-1800s), escalate to the user rather than waiting indefinitely.
+   - **Host-suspend stalls (laptops):** a child session whose network died with a host sleep/hibernate can leave the heartbeat stale for hours while the process stays alive (the OS suspends rather than kills processes). Since 2.10.1 an independent wall-clock watchdog force-terminates any child that outlives its session timeout plus a 5-minute grace, so the run recovers on its own via the normal retry path — but if you see a multi-hour stale heartbeat with a live process, that recovery is in progress or the host only just resumed.
    - **Runs started by an older orchestrator (pre-2.10.1)** stamp the heartbeat only between attempts, so a healthy 25-35 minute story legitimately exceeds 20 minutes there — for those, compare staleness against the story-size session timeout before alarming.
 
 2. **Memory usage** — If `memory_mb` exceeds 2000 MB (2 GB), warn about high memory usage. This is informational — the process cleanup fixes in 2.2.3 should prevent runaway memory, but flag it for awareness.
@@ -171,7 +172,7 @@ Assess these conditions in order:
      - Read the execution log for failure patterns (timeout → scope too large, test failure → specific issue, verdict fail → criteria unclear)
      - **If the story is too large** (timeout failures, many criteria): Write a `split_story` control action to `kit_tools/specs/.execution-control.json`
      - **If the failures are non-scope-related** (same test keeps failing, API issue, etc.): Write a `pause` control action with a clear reason, so the user can investigate
-   - **Intervention already attempted** (check `last_control_action` in health file): If a prior split or correction didn't help, write a `pause` control action — escalate to the user.
+   - **Intervention already attempted for THIS story** (check `control_history[<current_story_id>]` in the health file; for pre-2.10.1 runs that field is absent, so fall back to the global `last_control_action`): If a prior split or correction **on the same story** didn't help, write a `pause` control action — escalate to the user. A split/skip on an *earlier* story must NOT suppress healing of a later one — always scope this check to the current story.
 
 ### Writing Control Actions
 

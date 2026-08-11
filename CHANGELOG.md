@@ -5,6 +5,47 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0] - 2026-08-11
+
+A large reliability release driven by field reports filed against the Copilot
+port (KitToolsCopilot #1–#23) while running real epics — most of them
+host-agnostic orchestrator bugs that affect this build identically. Fifteen of
+the twenty-two land here; the other seven are Windows-only and ship in the
+Copilot build only (see the delta section). Headline features: a baseline
+concept so a suite's *pre-existing* failures stop being read as regressions, an
+opt-in main-vs-worktree diff that catches uncommitted/gitignored dependencies
+before a run, a watchdog that survives host suspend, and `init-project` can now
+record — and optionally scaffold — a project's linter.
+
+### Added
+
+- **Pre-existing test failures are captured as a baseline instead of blocking the run** (KitToolsCopilot #6). On a suite that is already red before the epic starts, every downstream gate read those failures as the run's own regressions and could revert verified work. A new `scripts/orchestrator/baseline.py` runs the detected test command once at the merge base on a fresh launch, records the pre-existing failures on `state["baseline"]`, and injects them into the final-validation prompt so they're treated as informational, not as new breakage. Resumes reuse the stored baseline rather than re-running it.
+- **Opt-in pre-flight diff of main vs the worktree baseline** (KitToolsCopilot #10). A new `verify_baseline` flag in `worktree.yaml` makes the orchestrator compare the merge-base baseline run against a clean main checkout, surfacing dependencies that were installed but never committed (or are gitignored) — the classic "works in my worktree" failure — before the epic invests hours. Reuses the #6 baseline run plus one extra main-checkout run; off by default.
+- **A wall-clock watchdog so a suspended host can't stall the run forever** (KitToolsCopilot #20). `communicate(timeout=…)` uses a monotonic deadline that *freezes* while the machine is asleep, so a child session could outlive its timeout indefinitely with no crash signal. `sessions.py` now starts a watchdog thread that force-terminates any child outliving `timeout + WATCHDOG_GRACE` in real wall-clock time, converting an invisible hang into a normal timeout the retry logic can handle.
+- **`init-project` can configure linting for the project** (enhancement). A new optional "Configure linting" step lets you pick which detected languages to lint, records the lint/typecheck command into `TESTING_GUIDE.md`'s static-analysis slot, and — with confirmation — installs the linter via the detected package manager and scaffolds a starter config (`ruff.toml`, `eslint.config.js`, etc.). Skipping linting entirely is a first-class choice; existing configs are never overwritten, and re-running offers keep/change. `seed-project` now preserves a concrete lint command init recorded rather than replacing it with a placeholder.
+- **A recorded lint command becomes a verifiable Definition-of-Done criterion** (KitToolsCopilot #5). `plan-epic` now emits a concrete "lint passes" acceptance criterion **only** when the project actually has a static-analysis command recorded (in `TESTING_GUIDE.md` or a detected linter config); projects with none get no such criterion, because an unsatisfiable generic checkbox is strictly worse than none. `execute-epic` also flags pre-existing specs that still carry the old unconditional boilerplate.
+
+### Changed
+
+- **The implementer may append to `## Implementation Notes` again** (KitToolsCopilot #16). Acceptance criteria routinely require writing implementation notes into the spec, but the implementer was flatly forbidden to edit spec files — unsatisfiable by construction. The ban is now narrowed to story definitions and checkboxes, with an explicit carve-out to append to the `## Implementation Notes` section.
+- **Supervisor healing is tracked per story, not globally** (KitToolsCopilot #21). A single `last_control_action` field meant the first `split_story` in an epic permanently suppressed healing for every later story. Control actions are now recorded in a per-story `control_history` map (preserved across health-snapshot writes), and `execution-status` reads the current story's entry, falling back to the legacy field for runs started by older orchestrators.
+- **`env_link` gitignored-config preflight** (KitToolsCopilot #4). `execute-epic` now checks that gitignored files a project links into its worktrees actually exist before launching, so a missing linked config surfaces as an actionable setup message instead of a mid-run failure.
+- **The transient-state gitignore block no longer drifts** (KitToolsCopilot #3, #23). `.supervisor.log`, `test-metrics.json`, the session scratchpad, and other runtime artifacts are added to the managed ignore block (with a `kit_tools/.*` catch-all and a `!kit_tools/.gitkeep` exception), so a run can't commit tens of thousands of lines of its own scratch state into the feature branch.
+
+### Fixed
+
+- **A failed or timed-out validation session no longer archives the spec as complete** (KitToolsCopilot #17). A validation session that errored out was treated as a pass: the spec was tagged and archived, silently skipping the critical-findings gate. It now retries once, then pauses for review (with a critical notification) instead of archiving on an error.
+- **A transient launcher failure is retried instead of ending the run** (KitToolsCopilot #15). A momentary "command not found" (PATH not yet warm, launcher mid-update) was treated as permanent with zero retries and bypassed guarded mode's pause. It now retries up to the network-retry budget, and a genuinely permanent failure pauses for review in guarded mode rather than exiting.
+- **Sessions that produce no output don't burn story attempts** (KitToolsCopilot #18). A session that returned nothing (crash before first token, dropped connection) was scored as a failed attempt, so a few in a row exhausted the retry budget and triggered a bogus supervisor split. A missing result file now re-runs without consuming an attempt, bounded by `MAX_NOOP_RETRIES`.
+- **Guarded retry-pauses can be healed** (KitToolsCopilot #19). A guarded-mode pause ignored a supervisor `split_story`/`skip_story` decision, so a stalled story sat paused for hours. `wait_for_pause_removal` now self-clears the pause when a healing action is queued (never on a plain `pause`).
+- **A verdict can't contradict KitTools' own test evidence** (KitToolsCopilot #13). A verifier could pass a story even though the recorded metrics showed a full-suite failure. A pass/pass-with-warnings verdict is now cross-checked against `test-metrics.json`; if the evidence shows failures, the verdict is overridden to fail and routed into the normal retry path.
+- **Windows: spec archival compares normalized paths** (KitToolsCopilot #14). `archive_spec` compared `os.sep` paths against git's forward-slash output, so completing a spec killed the run on Windows. Both sides are now normalized to `/` before comparison. (Path-separator hygiene; harmless on POSIX, included here for parity.)
+
+### Delta from the Copilot build
+
+- **Seven of the twenty-two reports are Windows-specific and ship only in the Copilot build** (KitToolsCopilot #1, #2, #7, #8, #9, #11, #12): a POSIX-only `resource` import, cp1252 subprocess/log decoding, unsafe `python3` resolution, POSIX-only skill-doc commands, registry status on relaunch, and flashing child-process console windows. This build is POSIX/macOS-only and has no `process_host.py`, so none of them apply here.
+- Everything above is otherwise structurally identical across the two builds; only the standard mechanical deltas differ (`run_claude_session`/`run_copilot_session`, `start_new_session=True`/`**new_group_kwargs()`, `${CLAUDE_PLUGIN_ROOT}`/`${PLUGIN_ROOT}`, `CLAUDE.md`/`AGENTS.md`, `/kit-tools:<skill>`/bare skill names).
+
 ## [2.10.1] - 2026-08-03
 
 Closes GitHub issues #10–#14 — five field reports from a 26-story epic run, all

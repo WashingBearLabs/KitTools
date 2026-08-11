@@ -20,6 +20,7 @@ This skill requires the following plugin components:
 **Creates in project:**
 - `kit_tools/` directory with selected templates
 - `kit_tools/worktree.yaml` — worktree & environment contract (committed)
+- Optionally: a recorded lint/typecheck command in `kit_tools/testing/TESTING_GUIDE.md` and, if requested, a scaffolded linter (installed dev dependency + starter config)
 - `hooks/` directory with Python automation scripts
 - `.claude/settings.local.json` with hook configuration
 - `CLAUDE.md` with scratchpad instructions
@@ -72,6 +73,9 @@ Settings to create/update:
 
 Contract:
   - kit_tools/worktree.yaml (worktree & environment contract)
+
+Linting:
+  - Will offer to record a lint/typecheck command (and optionally install a linter + starter config), or skip linting entirely — nothing installed without confirmation.
 
 .gitignore:
   - Will add a KitTools block (.kit/ registry + transient execution state)
@@ -345,6 +349,64 @@ Only create directories that will have files.
 
 Copy only the templates selected based on project type and pattern choices.
 
+## Step 5b: Configure linting (optional)
+
+Capture the project's **static-analysis (typecheck/lint) command** — and, if the user wants, scaffold the linter itself. This is the one place at setup time that records the lint command into `kit_tools/testing/TESTING_GUIDE.md`'s static-analysis slot, which `plan-epic` reads to emit a **concrete, verifiable "lint passes" acceptance criterion** (a project with no lint command gets no such criterion — an unsatisfiable generic checkbox is strictly worse than none). Do this after Step 5 so `TESTING_GUIDE.md` exists on disk to write into.
+
+**Skipping is a first-class choice.** If the user doesn't want linting, say so is fine — leave the slot blank and move on. Nothing downstream will demand a lint gate.
+
+### 5b.1: Confirm the languages to lint
+
+Reuse the language/framework signals auto-detected in Step 0a. Present them and ask which should have linting configured (multiple allowed):
+
+> "I detected **[Python / TypeScript / Go / …]**. Which of these would you like to set up linting for? (Or skip linting entirely.)"
+>
+> Options: **All detected** / **Pick specific** / **Skip linting entirely**
+
+If the project is polyglot, handle each chosen language in turn.
+
+### 5b.2: Detect any existing linter setup first
+
+For each chosen language, check the repo for an **existing** linter/typechecker config before proposing anything new:
+
+| Language | Config signals to check |
+|----------|-------------------------|
+| Python | `ruff.toml`, `.ruff.toml`, `[tool.ruff]`/`[tool.mypy]` in `pyproject.toml`, `.flake8`, `setup.cfg [flake8]`, `mypy.ini` |
+| JS/TS | `.eslintrc*`, `eslint.config.*`, `biome.json`, `tsconfig.json` (for `tsc --noEmit`) |
+| Go | `.golangci.yml`/`.golangci.yaml` (else `go vet` needs nothing) |
+| Rust | `Cargo.toml` (clippy ships with the toolchain; optional `clippy.toml`) |
+| Ruby | `.rubocop.yml` |
+
+**If a config already exists:** don't scaffold — just derive the command from it and offer to **record** it (jump to 5b.5). Re-running init on a linted project must not clobber existing config.
+
+### 5b.3: Offer a linter (per language, when none exists)
+
+Suggest a sensible default and let the user **use it / enter a custom command / skip this language**:
+
+| Language | Suggested command(s) | Install (adapt to detected package manager) | Starter config |
+|----------|----------------------|---------------------------------------------|----------------|
+| Python | `ruff check .` (+ optional `mypy .` for typecheck) | `uv add --dev ruff` · `poetry add --group dev ruff` · `pip install ruff` | `ruff.toml` |
+| JS/TS | `eslint .` (+ `tsc --noEmit` for TypeScript) | `npm i -D eslint` · `pnpm add -D eslint` · `yarn add -D eslint` | `eslint.config.js` (flat config) |
+| Go | `golangci-lint run` (or plain `go vet ./...`, no install) | `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest` | `.golangci.yml` |
+| Rust | `cargo clippy --all-targets --all-features -- -D warnings` | `rustup component add clippy` (usually already present) | — (Cargo-native) |
+| Ruby | `rubocop` | `bundle add rubocop --group development` · `gem install rubocop` | `.rubocop.yml` |
+| Other | user-specified command | user-specified | user-specified |
+
+Respect any `run_prefix` recorded in `kit_tools/worktree.yaml` (e.g. `uv run`, `poetry run`) when composing the command the orchestrator will eventually run in an isolated environment — prepend it so the recorded command is runnable from a detached process, exactly as the test command is.
+
+### 5b.4: Scaffold (only with explicit confirmation)
+
+For each language where the user wants scaffolding:
+
+1. **Install the linter** — detect the package manager from lockfiles/manifests (`uv.lock`→uv, `poetry.lock`→poetry, `package-lock.json`→npm, `pnpm-lock.yaml`→pnpm, `yarn.lock`→yarn, else the language default), show the **exact** command, and confirm before running. This is **best-effort**: on failure (no network, missing package manager, sandbox), warn clearly and continue — still record the command so the DoD criterion is captured. Never let an install failure abort init.
+2. **Create a starter config** — only if none exists (never overwrite). Keep it minimal (e.g. a `ruff.toml` with a line-length and a small default rule set) and confirm before writing.
+
+### 5b.5: Record the command
+
+Write the chosen command(s) into the `# Static analysis (typecheck/lint)` slot in `kit_tools/testing/TESTING_GUIDE.md`, replacing the `[typecheck/lint command, e.g. …]` placeholder line. For multiple commands (e.g. lint **and** typecheck, or multiple languages), list them one per line. If the user skipped linting entirely, **delete the placeholder line** so the slot is genuinely empty (which is the signal `plan-epic` reads as "no lint criterion"). If `TESTING_GUIDE.md` wasn't among the copied templates (e.g. a narrow Custom selection), note that and record the command in `kit_tools/docs/CONVENTIONS.md` instead — `plan-epic` checks both.
+
+**On re-run:** if the slot already holds a real command, show it and offer **keep / change** rather than silently overwriting.
+
 ## Step 6: Install automation hooks
 
 Copy the hooks from this plugin to the target project and configure them.
@@ -529,6 +591,7 @@ Run a quick validation to ensure everything is in place:
 - [ ] `kit_tools/hooks/` directory exists with all 7 Python scripts
 - [ ] `.claude/settings.local.json` exists with hooks configured using `$CLAUDE_PROJECT_DIR/kit_tools/hooks/` paths
 - [ ] `kit_tools/worktree.yaml` exists (worktree & environment contract)
+- [ ] Lint/typecheck command recorded in `kit_tools/testing/TESTING_GUIDE.md` (or the user explicitly skipped linting)
 - [ ] `.gitignore` contains the KitTools block (`.kit/` + transient execution state)
 - [ ] This is a git repository (`git rev-parse --git-dir` succeeds) with at least one commit — or the user explicitly declined and was warned that execution needs git
 
@@ -553,6 +616,7 @@ Report to the user:
 - Hooks installed (list the 4 automation hooks)
 - Whether CLAUDE.md was created/updated
 - That `kit_tools/worktree.yaml` was created (note it's committed; mention they can set `env_bootstrap`/`env_link` if execute-epic worktrees need deps or secrets, and `run_prefix` — e.g. `uv run`, `poetry run` — if the project's test runner lives in an isolated environment)
+- Linting: the recorded lint/typecheck command (and whether a linter was installed/config scaffolded), or that linting was skipped
 - Git status: whether a repo was initialized (and on `main`) or already existed, and the detected integration branch if not `main`
 - That `.gitignore` was updated with the KitTools transient-state block
 - Validation status (pass/issues found), including the doctor result (healthy / warnings / errors)

@@ -346,8 +346,12 @@ def archive_spec(project_dir: str, spec_path: str, feature_name: str) -> None:
     os.remove(spec_path)
 
     # Stage changes
-    rel_dest = os.path.relpath(dest, project_dir)
-    rel_src = os.path.relpath(spec_path, project_dir)
+    # git always reports paths with forward slashes, while os.path.relpath uses
+    # os.sep ("\\" on Windows). Normalise here so the verification below can
+    # actually match — otherwise the check never succeeds on Windows and every
+    # spec archive raises GitRecoveryFailed despite staging correctly.
+    rel_dest = os.path.relpath(dest, project_dir).replace(os.sep, "/")
+    rel_src = os.path.relpath(spec_path, project_dir).replace(os.sep, "/")
     # warn-only: the staging that actually matters is verified explicitly
     # below (raising GitRecoveryFailed); `rm --cached` on a never-committed
     # spec is a benign "did not match any files".
@@ -361,14 +365,16 @@ def archive_spec(project_dir: str, spec_path: str, feature_name: str) -> None:
     # git would not carry the move.) A `git add` of a just-written file only
     # fails on a genuinely broken repo, so treat it as fatal rather than silent.
     staged = run_git(["diff", "--cached", "--name-only"], project_dir)
-    if rel_dest not in staged.stdout.split("\n"):
+    staged_paths = {line.strip().replace("\\", "/") for line in staged.stdout.split("\n")}
+    if rel_dest not in staged_paths:
         # Deferred import avoids a specs <-> git_ops import cycle (git_ops
         # imports archive_spec from this module).
         from .git_ops import GitRecoveryFailed
         raise GitRecoveryFailed(
             f"Archived spec {rel_dest} could not be staged — the completed "
             f"feature spec would not reach the branch. Inspect: "
-            f"cd {project_dir} && git status."
+            f"cd {project_dir} && git status. "
+            f"Staged paths were: {sorted(staged_paths)}"
         )
 
     log(f"  Archived: {os.path.basename(spec_path)} -> archive/")

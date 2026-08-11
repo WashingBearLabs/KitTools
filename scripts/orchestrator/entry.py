@@ -35,6 +35,13 @@ from .git_ops import (
     verify_clean_worktree,
 )
 from .prompts import persist_learnings
+from .baseline import (
+    baseline_diff_note,
+    baseline_launch_note,
+    capture_baseline,
+    diff_main_vs_worktree,
+    format_baseline_for_prompt,
+)
 from . import registry
 from .sessions import (
     clean_result_files,
@@ -65,6 +72,55 @@ from .supervisor import (
 )
 from .trace_reduce import finalize_run_trace
 from .utils import GitCommandError, kill_tmux_session, log, now_iso, run_git
+
+
+def _capture_baseline_preflight(config: dict, state: dict, is_rerun: bool) -> None:
+    """Capture the merge-base test baseline once, on a fresh launch (issue #6).
+
+    Called after the tracking-files commit but before the first story runs, when
+    the worktree HEAD still equals the merge base. Skipped on a resume (stories
+    already committed, so HEAD is no longer the merge base) and if a baseline was
+    already captured. A red baseline is surfaced to the user at launch and
+    persisted on ``state["baseline"]`` for the final-validation prompt to consume.
+    Never raises — a baseline is a diagnostic aid, not a gate.
+    """
+    if is_rerun or state.get("baseline"):
+        return
+    try:
+        baseline = capture_baseline(config["project_dir"], config)
+    except Exception as e:  # pragma: no cover - defensive
+        log(f"  Baseline: capture failed ({e}) — continuing without a baseline")
+        return
+    state["baseline"] = baseline
+    save_state(state, config)
+    note = baseline_launch_note(baseline)
+    if note:
+        log(f"  {note}")
+        write_notification(
+            config, "baseline_red", "Starting from a red test baseline", note,
+            severity="warning",
+        )
+
+    # Opt-in main-vs-worktree diff (issue #10) — surfaces uncommitted/gitignored
+    # dependencies by re-running the same suite in the main checkout and diffing.
+    if config.get("verify_baseline") and config.get("main_repo"):
+        try:
+            diff = diff_main_vs_worktree(
+                config["main_repo"], config["project_dir"], baseline)
+        except Exception as e:  # pragma: no cover - defensive
+            log(f"  Baseline diff: failed ({e}) — continuing")
+            diff = None
+        if diff:
+            state["baseline_diff"] = diff
+            save_state(state, config)
+            diff_note = baseline_diff_note(diff)
+            if diff_note:
+                log(f"  {diff_note}")
+                write_notification(
+                    config, "baseline_diff",
+                    "Committed-vs-working-tree test discrepancy", diff_note,
+                    severity="warning",
+                )
 
 
 def _update_registry_status(config: dict, status: str) -> None:
@@ -360,6 +416,9 @@ def run_single_spec(config: dict) -> None:
     init_execution_log(config)
     commit_tracking_files(project_dir, config.get("feature_name", "feature"))
 
+    # Capture the merge-base test baseline before any story commits (issue #6).
+    _capture_baseline_preflight(config, state, is_rerun)
+
     # Execute all stories
     execute_spec_stories(spec_path, config.get("feature_name", "feature"), config, state)
 
@@ -395,6 +454,7 @@ def run_single_spec(config: dict) -> None:
     validate_prompt = (
         f"Run /kit-tools:validate-implementation for feature spec {spec_basename}. "
         f"Mode: autonomous. Branch: {branch}."
+        f"{format_baseline_for_prompt(state.get('baseline', {}))}"
     )
     validate_session = run_claude_session(validate_prompt, project_dir, model=validator_model)
     validate_output = validate_session.output
@@ -493,6 +553,9 @@ def run_epic(config: dict) -> None:
     init_execution_log(config, epic_mode=True)
     commit_tracking_files(project_dir, epic_name)
 
+    # Capture the merge-base test baseline before any story commits (issue #6).
+    _capture_baseline_preflight(config, state, is_rerun)
+
     for i, spec_info in enumerate(epic_specs):
         spec_path = spec_info["spec_path"]
         feature_name = spec_info["feature_name"]
@@ -564,13 +627,53 @@ def run_epic(config: dict) -> None:
             token_estimate_output=len(validate_output) // 4,
         )
 
+        # A validation session that ERRORED (crashed / timed out) produced no
+        # verdict at all — critically, it could not write the critical-findings
+        # pause file. Silently continuing would archive the spec as "complete"
+        # while skipping the entire validation gate (issue #17). Retry once for
+        # transient failures, then escalate to a human-review pause instead of
+        # falling through to archive.
         if is_session_error(validate_output):
             log(f"  Validation error: {validate_output[:200]}")
-            # Continue anyway — validation is informational
+            log("  Retrying validation once...")
+            validate_session = run_claude_session(validate_prompt, project_dir, model=validator_model)
+            validate_output = validate_session.output
+            state["sessions"]["total"] += 1
+            state["sessions"]["validation"] += 1
+            _rv_in, _rv_out = usage_tokens(validate_session.usage)
+            accumulate_token_usage(state, _rv_in, _rv_out, validate_session.cost_usd)
+            log_event(
+                config, "session.metrics", spec=spec_basename, phase="validate",
+                model=validator_model, tokens_input=_rv_in, tokens_output=_rv_out,
+                cost_usd=validate_session.cost_usd,
+            )
+            if is_session_error(validate_output):
+                log(f"  Validation still failing for {spec_basename} — cannot confirm the "
+                    f"critical-findings gate ran. Pausing for human review before archiving.")
+                _pause_path = os.path.join(project_dir, "kit_tools", ".pause_execution")
+                try:
+                    os.makedirs(os.path.dirname(_pause_path), exist_ok=True)
+                    with open(_pause_path, "w") as _pf:
+                        _pf.write(
+                            f"Validation session errored twice for {spec_basename}; the spec "
+                            f"was NOT validated. Review the branch, then remove this file to "
+                            f"archive the spec as complete.\n"
+                        )
+                except OSError:
+                    pass
+                write_notification(
+                    config, "execution_paused",
+                    "Validation could not run",
+                    f"{spec_basename}: validation session errored twice — paused before "
+                    f"archiving so the critical-findings gate isn't skipped.",
+                    severity="critical",
+                )
 
-        # Check for pause file (created by validate-implementation if critical findings exist)
+        # Check for pause file (created by validate-implementation if critical
+        # findings exist, or by the block above if the validation session itself
+        # errored and could not run the gate).
         if pause_file_exists(project_dir):
-            log(f"  Critical validation findings for {spec_basename}. Pausing.")
+            log(f"  Validation gate for {spec_basename}: pausing for review.")
             wait_for_pause_removal(project_dir, config=config)
             log("  Resuming after pause.")
 
@@ -663,6 +766,7 @@ def run_epic(config: dict) -> None:
         f"Pay particular attention to cross-spec integration — acceptance criteria "
         f"from one spec whose production call sites were introduced by another. "
         f"Do NOT invoke complete-implementation."
+        f"{format_baseline_for_prompt(state.get('baseline', {}))}"
     )
     epic_validate_session = run_claude_session(
         epic_validate_prompt, project_dir, model=validator_model
