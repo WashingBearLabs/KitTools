@@ -1,4 +1,4 @@
-<!-- Template Version: 2.5.0 -->
+<!-- Template Version: 2.6.0 -->
 ---
 feature: {{FEATURE_NAME}}
 status: active
@@ -75,6 +75,13 @@ Story count is not a target — what matters is that each story:
 
 Never compress scope by dropping criteria to fit a story size target.
 If a story needs more criteria, split the story instead.
+
+OPERATOR-ONLY STEPS: if a story can only be done by a person (a live deploy,
+a paid or irreversible action, a sign-off), start its title with [HUMAN]:
+  ### US-00N: [HUMAN] Run the production smoke test
+Autonomous execution never runs a [HUMAN] story. It records it as
+awaiting_human, and the spec isn't archived until the operator does it and
+ticks its checkboxes. Keep [HUMAN] stories small and put them last.
 -->
 
 ### US-001: {{Story Title}}

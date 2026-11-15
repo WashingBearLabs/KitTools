@@ -66,17 +66,31 @@ def _read_state_file(state_path: str):
         ) from e
 
 
+# A relaunch over a run that ended in one of these is a re-run: the log gets a
+# separator and the merge-base baseline is not captured again.
+_RERUN_STATUSES = frozenset({"completed", "failed", "incomplete", "blocked"})
+
+
+def _resume_status(state: dict) -> bool:
+    """Set a loaded state back to ``running`` for this launch; return is_rerun.
+
+    Any leftover status is reset, not just completed/failed. A relaunch over a
+    ``paused``, ``crashed``, ``blocked`` or ``incomplete`` run used to keep that
+    status for the whole new run, so execution-status reported a live run as
+    Paused (issue #23).
+    """
+    prior = state.get("status")
+    state["status"] = "running"
+    return prior in _RERUN_STATUSES
+
+
 def load_or_create_state(config: dict) -> tuple[dict, bool]:
     """Read or create .execution-state.json for single mode. Returns (state, is_rerun)."""
     state_path = get_state_path(config)
     if os.path.exists(state_path):
         state = _read_state_file(state_path)
         _validate_state(state, "single", state_path)
-        # If resuming a completed/failed run, reset status
-        if state.get("status") in ("completed", "failed"):
-            state["status"] = "running"
-            return state, True
-        return state, False
+        return state, _resume_status(state)
 
     return {
         "schema_version": STATE_SCHEMA_VERSION,
@@ -98,10 +112,7 @@ def load_or_create_epic_state(config: dict) -> tuple[dict, bool]:
     if os.path.exists(state_path):
         state = _read_state_file(state_path)
         _validate_state(state, "epic", state_path)
-        if state.get("status") in ("completed", "failed"):
-            state["status"] = "running"
-            return state, True
-        return state, False
+        return state, _resume_status(state)
 
     return {
         "schema_version": STATE_SCHEMA_VERSION,
@@ -233,6 +244,15 @@ def update_state_story(
         entry["files_changed"] = files_changed
 
     stories_dict[story_id] = entry
+
+
+def get_story_attempts(state: dict, story_id: str, spec_key: str | None = None) -> int:
+    """Return the attempts recorded for a story so far (0 when it has no entry)."""
+    if spec_key is not None:
+        stories = state.get("specs", {}).get(spec_key, {}).get("stories", {})
+    else:
+        stories = state.get("stories", {})
+    return stories.get(story_id, {}).get("attempts", 0)
 
 
 def accumulate_token_usage(

@@ -13,7 +13,7 @@ import time
 from datetime import datetime, timezone
 
 from .events import log_event, write_notification
-from .state import save_state, update_state_story
+from .state import get_story_attempts, save_state, update_state_story
 from .utils import _atomic_json_write, log, now_iso, run_git
 
 PAUSE_POLL_INTERVAL = 10  # seconds between pause file checks
@@ -349,9 +349,15 @@ def handle_control_action(
     elif action == "skip_story":
         story_id = control.get("story_id", "")
         reason = control.get("reason", "Supervisor skipped")
+        if not story_id:
+            log("  WARNING: skip_story missing story_id — ignoring")
+            return "continue"
         log(f"  Supervisor skip: {story_id} — {reason}")
+        # A distinct "skipped" status, not "failed": the story walk passes over
+        # settled statuses, and "failed" was handed straight back to the
+        # implementer (issue #23). Keep the attempts already spent.
         update_state_story(
-            state, story_id, "failed", 0,
+            state, story_id, "skipped", get_story_attempts(state, story_id, spec_key),
             learnings=[f"Skipped by supervisor: {reason}"],
             failure=f"Skipped: {reason}",
             spec_key=spec_key, failure_type="SUPERVISOR_SKIP"
@@ -481,9 +487,11 @@ def _handle_split_story(
         return "continue"
 
     # --- Update execution state ---
-    # Mark original story as split (not failed, not completed)
+    # Mark the original story as split (not failed, not completed) so the walk
+    # passes over its placeholder instead of running it as an empty story
+    # (issue #19).
     update_state_story(
-        state, story_id, "failed", 0,
+        state, story_id, "split", get_story_attempts(state, story_id, spec_key),
         learnings=[f"Split into {[s['id'] for s in new_stories]}: {reason}"],
         failure=f"Split by supervisor",
         spec_key=spec_key, failure_type="SUPERVISOR_SPLIT"

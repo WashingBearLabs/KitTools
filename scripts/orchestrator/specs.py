@@ -260,8 +260,45 @@ def update_spec_checkboxes(spec_path: str, story_id: str) -> bool:
     return True
 
 
+# Story statuses the walk passes over. Before 2.11.1 only "completed" was
+# skipped, so a supervisor skip or split (recorded as "failed") was handed
+# straight back to the implementer (issues #19, #23).
+SETTLED_STORY_STATUSES = frozenset({"completed", "skipped", "split", "awaiting_human"})
+# Settled without passing: a spec holding any of these is not done, so it must
+# not be validated and archived as complete.
+OUTSTANDING_STORY_STATUSES = frozenset({"skipped", "awaiting_human"})
+# State written by a pre-2.11.1 orchestrator marks skips/splits as "failed"
+# with one of these failure types; read them as the real status on resume.
+_LEGACY_FAILURE_STATUS = {"SUPERVISOR_SKIP": "skipped", "SUPERVISOR_SPLIT": "split"}
+
+HUMAN_STORY_MARKER = "[HUMAN]"
+
+
+def effective_story_status(story_state: dict) -> str:
+    """Return a story's status, mapping legacy skip/split records to their real status."""
+    status = story_state.get("status", "")
+    if status == "failed":
+        return _LEGACY_FAILURE_STATUS.get(story_state.get("failure_type", ""), status)
+    return status
+
+
+def is_human_story(story: dict) -> bool:
+    """True when the story title starts with ``[HUMAN]``: a step only the operator can do."""
+    return story.get("title", "").lstrip().upper().startswith(HUMAN_STORY_MARKER)
+
+
+def _is_split_placeholder(story: dict) -> bool:
+    """True for the ``[SPLIT — see …]`` header a supervisor split leaves behind."""
+    return story.get("title", "").lstrip().upper().startswith("[SPLIT")
+
+
 def find_next_uncompleted_story(spec_path: str, stories_state: dict) -> dict | None:
-    """Find the first story with uncompleted acceptance criteria.
+    """Find the first story still waiting to run.
+
+    Passes over stories whose checkboxes are all ticked, stories whose state
+    status is settled (completed, skipped, split, awaiting_human), and split
+    placeholders. A ``[HUMAN]`` story is still returned the first time; the
+    executor records it as ``awaiting_human`` without running it.
 
     Args:
         spec_path: Path to the feature spec file.
@@ -272,14 +309,32 @@ def find_next_uncompleted_story(spec_path: str, stories_state: dict) -> dict | N
     stories = parse_stories_from_spec(spec_path)
     for story in stories:
         # Check feature spec checkboxes first (source of truth)
-        if story["completed"]:
+        if story["completed"] or _is_split_placeholder(story):
             continue
         # Cross-reference with state JSON
         story_state = stories_state.get("stories", {}).get(story["id"], {})
-        if story_state.get("status") == "completed":
+        if effective_story_status(story_state) in SETTLED_STORY_STATUSES:
             continue
         return story
     return None
+
+
+def find_outstanding_stories(spec_path: str, stories_state: dict) -> list[tuple[str, str]]:
+    """Return ``(story_id, status)`` for stories that ended without passing.
+
+    These are stories that were skipped or are awaiting a human and whose
+    checkboxes are still unticked. Once the operator ticks a story's
+    checkboxes it no longer counts, so a relaunch can finish the spec.
+    """
+    outstanding = []
+    for story in parse_stories_from_spec(spec_path):
+        if story["completed"] or _is_split_placeholder(story):
+            continue
+        story_state = stories_state.get("stories", {}).get(story["id"], {})
+        status = effective_story_status(story_state)
+        if status in OUTSTANDING_STORY_STATUSES:
+            outstanding.append((story["id"], status))
+    return outstanding
 
 
 def check_dependencies_archived(project_dir: str, spec_path: str) -> tuple[bool, list[str]]:

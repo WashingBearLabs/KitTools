@@ -115,6 +115,7 @@ config = {
     # --- fill remaining fields from skill context ---
     "project_dir": project_dir,     # the orchestrator runs here (the worktree)
     "main_repo": main_repo,         # where the .kit/ registry lives (Phase 1+)
+    "branch_name": "epic/<name>",   # the branch provision-worktree created
     "mode": "autonomous",           # or "guarded"
     "max_retries": None,
     "tmux_session": "kit-exec-<name>",
@@ -148,10 +149,17 @@ config = {
     # own interactive flow. Free-form; null/absent for a normal run.
     # "experiment_id": "ablation-2026-07",
     # "arm": "treatment:escalation-threshold",
-    # epic fields (omit for standalone):
-    # "epic_name": "...",
-    # "epic_pause_between_specs": False,  # True only for supervised mode
-    # "epic_specs": [...]
+    # Epic fields (omit for a standalone spec, which sets "spec_path" and
+    # "feature_name" instead). Each epic_specs entry is an object; see the Epic
+    # schema above. A plain path string is also accepted and normalised.
+    "epic_name": "<name>",
+    "epic_pause_between_specs": False,  # True only for supervised mode
+    "epic_specs": [
+        {"spec_path": f"{project_dir}/kit_tools/specs/feature-<a>.md",
+         "feature_name": "<a>", "epic_seq": 1, "epic_final": False},
+        {"spec_path": f"{project_dir}/kit_tools/specs/feature-<b>.md",
+         "feature_name": "<b>", "epic_seq": 2, "epic_final": True},
+    ],
 }
 
 # Config lives inside the worktree (project_dir), so the orchestrator finds it
@@ -182,6 +190,8 @@ rm /tmp/kit_write_config.py
 ```
 
 The critical constraint is that `implementer_template` and `verifier_template` are populated by Python `open()` calls inside the script, not by shell substitution before the script runs.
+
+**The orchestrator checks the config at launch.** It requires `project_dir`, a `mode` of `autonomous`/`guarded`/`supervised`, and either `epic_specs` + `epic_name` or `spec_path`. Every problem is reported at once and the run doesn't start. If `branch_name` is missing, the branch the worktree is on is used, unless that's the default branch or a detached HEAD.
 
 ---
 
@@ -240,6 +250,32 @@ Key differences from single-spec: `epic` instead of `spec`, `specs` dict instead
 
 Note: The orchestrator also tracks `token_estimates` at the top level (rough char/4 approximation), added via `setdefault` during execution. This field is not pre-created.
 
+### Run and story statuses
+
+Run `status`: `running`, `paused`, `completed`, `failed`, `crashed`, `blocked` (a dependency isn't archived), or `incomplete` (the run ended with stories that need the operator; see below). Any leftover status is reset to `running` when the orchestrator is relaunched.
+
+Story `status`:
+
+| Status | Meaning | Run again? |
+|---|---|---|
+| `completed` | Verified and merged | No |
+| `retrying` / `failed` | Attempt failed | Yes, until retries run out |
+| `skipped` | Supervisor `skip_story` | No. Counts as outstanding |
+| `split` | Supervisor `split_story`; replaced by new stories | No |
+| `awaiting_human` | A `[HUMAN]` story, never run autonomously | No. Counts as outstanding |
+
+State from orchestrators before 2.11.1 recorded skips and splits as `failed` with `failure_type` `SUPERVISOR_SKIP` / `SUPERVISOR_SPLIT`; those are read as `skipped` / `split`.
+
+### `[HUMAN]` stories
+
+A story whose title starts with `[HUMAN]` (`### US-007: [HUMAN] Run the live deploy`) is a step only the operator can do: a live deploy, a paid action, a sign-off. The orchestrator never hands it to the implementer. It records the story as `awaiting_human` and moves on.
+
+### Specs with outstanding stories
+
+A spec that ends with `skipped` or `awaiting_human` stories (checkboxes still unticked) is **not** validated, tagged or archived. Its work is committed, its state entry gets `status: "incomplete"` and an `outstanding` list, and the epic carries on with the next spec. A later spec that `depends_on` it stops at the dependency gate.
+
+When the loop finishes with any incomplete spec, the run ends as `incomplete`: no epic-wide validation, PR or merge, and a warning notification lists the stories. To finish, do those stories, tick their acceptance-criteria checkboxes, and relaunch `/kit-tools:execute-epic`. The relaunch passes over the ticked stories, then validates, archives and completes as normal. To have the orchestrator retry a skipped story instead, delete that story's entry from `.execution-state.json` before relaunching.
+
 ---
 
 ## Placeholder Token Reference
@@ -291,7 +327,7 @@ Present the list with completion status so the user can choose an epic to execut
 ### Epic orchestrator behavior
 
 The orchestrator chains feature spec execution:
-1. Execute all stories in feature spec N
+1. Execute all stories in feature spec N (if any end `skipped` or `awaiting_human`, stop here for this spec and mark it `incomplete`; see "Specs with outstanding stories")
 2. Validate feature spec N
 3. Tag checkpoint: `[epic-name]/[feature-name]-complete`
 4. Archive feature spec N (update frontmatter, move to archive/)

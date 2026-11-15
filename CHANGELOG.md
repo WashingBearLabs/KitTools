@@ -5,6 +5,40 @@ All notable changes to kit-tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.1] - 2026-11-15
+
+A fix release for supervisor skips that didn't skip, operator-only stories that
+burned every retry, and three launch-time crashes from config and model values
+(#15, #16, #18, #19, #23).
+
+### Added
+
+- **`[HUMAN]` stories** (#23). A story whose title starts with `[HUMAN]` (`### US-007: [HUMAN] Run the live deploy`) is a step only the operator can do. The orchestrator never hands it to the implementer: it records the story as `awaiting_human` and moves on. Before this, such a story went through implement → verify → escalate to Opus on every retry, and each verifier said "hand this to a human". The convention is documented in `FEATURE_SPEC.md` and the execute-epic `REFERENCE.md`.
+- **Specs with outstanding stories end `incomplete`, not archived** (#23). A spec that finishes with `skipped` or `awaiting_human` stories (checkboxes still unticked) has its work committed but is not validated, tagged or archived. The epic carries on with the next spec, and a spec that `depends_on` it stops at the dependency gate. If any spec ends incomplete, the run ends with status `incomplete`: no epic-wide validation, PR or merge, and a warning notification lists the stories. The operator does them, ticks their checkboxes and relaunches; the relaunch validates, archives and completes as normal.
+- **Launch-time config validation** (#15, #16). `config.validate_config` checks `project_dir`, `mode` and either `epic_specs` + `epic_name` or `spec_path` before anything reads them, and reports every problem in one message plus a critical notification. A missing `branch_name` is derived from the worktree's current branch, but never from the default branch or a detached HEAD. Plain-string `epic_specs` entries are normalised to the documented dict shape.
+- **`doctor` flags model values `claude --model` will likely reject** (#18), such as `"auto"` carried over from a Copilot setup. Advisory only.
+
+### Changed
+
+- **Supervisor skips and splits get their own story statuses** (#19, #23). `skip_story` records `skipped` and `split_story` records `split`, where both used to record `failed`. A skip now keeps the attempts already spent instead of resetting them to 0. State from earlier orchestrators (`failed` with `SUPERVISOR_SKIP`/`SUPERVISOR_SPLIT`) is read as the new statuses on resume.
+- **`"auto"` and `"default"` model values fall through to the layer below** (#18), like an empty string, so `"auto"` left in `kit_tools/model_preferences.json` uses the built-in default instead of being passed to `claude --model`.
+- **Guarded pause files say how to skip without retrying** (#23). The text now says to queue the skip/split and leave the pause file in place. The orchestrator clears the pause itself, and removing the file before the action is queued starts a new round of retries. `execution-status` says the same.
+- **Trace metrics count `stories_skipped` and `stories_awaiting_human`** (additive). Skips and splits no longer count toward `stories_failed`.
+
+### Fixed
+
+- **`skip_story` actually skips** (#23). `find_next_uncompleted_story` passed over only `completed` stories, so a skipped story was picked again and burned another full round of retries. A skip on the last story of a spec could never take effect. The walk now passes over every settled status (`completed`, `skipped`, `split`, `awaiting_human`).
+- **A split placeholder is no longer run as an empty story** (#19). The same walk fix covers it, and the `[SPLIT — see …]` header is also recognised directly.
+- **A relaunched run no longer keeps a stale status** (#23). Any leftover status (`paused`, `crashed`, `blocked`, `incomplete`) is reset to `running` on relaunch, so `execution-status` stops showing a live run as Paused. A skip or split applied during a guarded pause also now sets the status back to `running`; before, the run carried on while still reporting `paused`.
+- **A model the CLI rejects stops the run instead of burning retries** (#18). `claude --model auto` exits within seconds with `unrecognized_model`, and each failure used to count as a story attempt. A rejected implementer, verifier or validator model now raises `ModelRejected`: the attempt branch is removed, the attempt is not counted, and the run stops with a critical notification naming the role and model. A relaunch resumes it.
+- **Config errors no longer crash with a bare `KeyError`/`TypeError`** (#15, #16). The execute-epic `REFERENCE.md` config-creation snippet, which the skill tells the agent to copy, also left out `branch_name`, `epic_name` and `epic_specs`. It now includes them.
+- **The config-load-failure notification is written where it's read.** It went to `kit_tools/kit_tools/.execution-notifications` (two `dirname`s instead of three), so it never showed up.
+
+### Delta from the Copilot build
+
+- All of the above is host-agnostic orchestrator logic and is shared with the Copilot build, except the model handling for #18, which is adapted there. In the Copilot build `"auto"` is a real model choice and the default for every role, so nothing falls through. Model rejection is detected from Copilot's own error (`Model "X" from --model flag is not available`), and the `doctor` model-value check is left out because Copilot model ids vary by account.
+- Still open, not in this release: issues 17 (validation timeout), 20 (per-attempt size), 21 (ignored-file cleanup) and 22 (operator-blocked stories).
+
 ## [2.11.0] - 2026-08-11
 
 A large reliability release driven by field reports filed against the Copilot

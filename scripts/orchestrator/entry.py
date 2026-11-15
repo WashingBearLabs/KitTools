@@ -10,7 +10,7 @@ import os
 import signal
 import sys
 
-from .config import get_model_config, load_config
+from .config import ConfigError, get_model_config, load_config, validate_config
 from .events import (
     NOTIFICATION_FILE,
     log_event,
@@ -29,6 +29,7 @@ from .git_ops import (
     commit_feature_work,
     commit_tracking_files,
     complete_feature,
+    get_current_branch,
     is_git_repo,
     is_validation_clean,
     verify_branch_base,
@@ -44,13 +45,20 @@ from .baseline import (
 )
 from . import registry
 from .sessions import (
+    ModelRejected,
     clean_result_files,
+    is_model_rejected,
     is_session_error,
     kill_active_child_sessions,
     run_claude_session,
     usage_tokens,
 )
-from .specs import archive_spec, check_dependencies_archived, tag_checkpoint
+from .specs import (
+    archive_spec,
+    check_dependencies_archived,
+    find_outstanding_stories,
+    tag_checkpoint,
+)
 from .state import (
     StateCorrupt,
     OrchestratorAlreadyRunning,
@@ -369,6 +377,65 @@ def _ensure_run_id(config: dict, state: dict) -> str:
     return run_id
 
 
+def _raise_if_model_rejected(output: str, model: str, state: dict, config: dict) -> None:
+    """Stop the run when the CLI rejected the validator model (issue #18)."""
+    if is_model_rejected(output):
+        state["status"] = "failed"
+        save_state(state, config)
+        raise ModelRejected("validator", model, output[:500])
+
+
+def _describe_outstanding(outstanding: list[tuple[str, str]]) -> str:
+    """'US-004 awaiting a human, US-007 skipped'"""
+    labels = {"awaiting_human": "awaiting a human", "skipped": "skipped"}
+    return ", ".join(f"{sid} {labels.get(st, st)}" for sid, st in outstanding)
+
+
+def _finish_incomplete_run(
+    config: dict, state: dict, incomplete: dict[str, list[tuple[str, str]]],
+) -> None:
+    """End a run whose remaining stories need the operator (issue #23).
+
+    The work done so far is committed, but nothing is validated as complete,
+    archived, merged or opened as a PR. The operator does the listed stories
+    (ticking their checkboxes) and relaunches; the relaunch picks up from here.
+    """
+    project_dir = config["project_dir"]
+    label = config.get("epic_name") or config.get("feature_name", "feature")
+    count = sum(len(v) for v in incomplete.values())
+    lines = [f"{spec}: {_describe_outstanding(items)}" for spec, items in incomplete.items()]
+
+    log(f"Run stopped short: {count} story(ies) need you.")
+    for line in lines:
+        log(f"  {line}")
+    log("  Do these stories yourself and tick their acceptance-criteria checkboxes, "
+        "then relaunch /kit-tools:execute-epic. The relaunch validates, archives and "
+        "completes as normal. (To let the orchestrator retry a skipped story, delete "
+        "its entry from .execution-state.json first.)")
+
+    state["status"] = "incomplete"
+    save_state(state, config)
+    persist_learnings(project_dir, state)
+    commit_tracking_files(project_dir, label)
+    write_notification(
+        config, "execution_incomplete",
+        f"{count} story(ies) need you — {label}",
+        "; ".join(lines) + ". Finish them, tick their checkboxes, then relaunch "
+        "/kit-tools:execute-epic.",
+        severity="warning",
+    )
+    log_event(
+        config, "run.completed",
+        outcome="incomplete",
+        duration_seconds=_elapsed_seconds(state.get("run_started_at")),
+        sessions=state.get("sessions", {}),
+        outstanding={spec: [sid for sid, _ in items] for spec, items in incomplete.items()},
+    )
+    state["completed_at"] = now_iso()
+    finalize_run_trace(config, state)
+    _update_registry_status(config, "blocked")
+
+
 def run_single_spec(config: dict) -> None:
     """Execute a single feature spec (original behavior, backwards compatible)."""
     state, is_rerun = load_or_create_state(config)
@@ -422,6 +489,14 @@ def run_single_spec(config: dict) -> None:
     # Execute all stories
     execute_spec_stories(spec_path, config.get("feature_name", "feature"), config, state)
 
+    # Skipped and [HUMAN] stories leave the spec unfinished: don't validate it
+    # or complete it as if every story passed (issue #23).
+    outstanding = find_outstanding_stories(spec_path, state)
+    if outstanding:
+        commit_feature_work(project_dir, config.get("feature_name", "feature"), config)
+        _finish_incomplete_run(config, state, {os.path.basename(spec_path): outstanding})
+        return
+
     # All stories complete
     log("All stories complete!")
 
@@ -458,6 +533,7 @@ def run_single_spec(config: dict) -> None:
     )
     validate_session = run_claude_session(validate_prompt, project_dir, model=validator_model)
     validate_output = validate_session.output
+    _raise_if_model_rejected(validate_output, validator_model, state, config)
     _v_in, _v_out = usage_tokens(validate_session.usage)
     accumulate_token_usage(state, _v_in, _v_out, validate_session.cost_usd)
     _v_est = state.setdefault("token_estimates", {"input": 0, "output": 0})
@@ -572,6 +648,11 @@ def run_epic(config: dict) -> None:
         deps_ok, missing = check_dependencies_archived(project_dir, spec_path)
         if not deps_ok:
             log(f"ERROR: Dependencies not met for {spec_basename}: {missing}")
+            _incomplete = [k for k, v in state["specs"].items() if v.get("status") == "incomplete"]
+            if _incomplete:
+                log(f"  Left incomplete earlier in this run (not archived): "
+                    f"{', '.join(_incomplete)}. Finish their skipped/[HUMAN] stories, "
+                    f"then relaunch.")
             log("Cannot continue epic execution.")
             state["status"] = "blocked"
             save_state(state, config)
@@ -596,11 +677,35 @@ def run_epic(config: dict) -> None:
                 "started_at": now_iso(),
                 "stories": {},
             }
+        else:
+            # Re-entering a spec a previous run left incomplete.
+            state["specs"][spec_basename]["status"] = "in_progress"
+            state["specs"][spec_basename].pop("outstanding", None)
         state["current_spec"] = spec_basename
         save_state(state, config)
 
         # Execute all stories in this feature spec
         execute_spec_stories(spec_path, feature_name, config, state, spec_key=spec_basename)
+
+        # A spec with skipped or [HUMAN] stories is not done: commit its work but
+        # don't validate, tag or archive it as complete (issue #23). The epic
+        # carries on with the next spec; one that depends on this spec stops
+        # at its dependency gate because this spec isn't archived.
+        outstanding = find_outstanding_stories(spec_path, state["specs"][spec_basename])
+        if outstanding:
+            commit_feature_work(project_dir, feature_name, config)
+            state["specs"][spec_basename]["status"] = "incomplete"
+            state["specs"][spec_basename]["outstanding"] = [
+                {"story": sid, "status": st} for sid, st in outstanding
+            ]
+            save_state(state, config)
+            log(f"  {spec_basename} left incomplete — {_describe_outstanding(outstanding)}. "
+                f"Not validated or archived.")
+            log_event(
+                config, "spec.incomplete", spec=spec_basename,
+                outstanding=[sid for sid, _ in outstanding],
+            )
+            continue
 
         # Feature spec stories complete — validate
         validator_model = get_model_config(config)["validator"]
@@ -612,6 +717,7 @@ def run_epic(config: dict) -> None:
         )
         validate_session = run_claude_session(validate_prompt, project_dir, model=validator_model)
         validate_output = validate_session.output
+        _raise_if_model_rejected(validate_output, validator_model, state, config)
         state["sessions"]["total"] += 1
         state["sessions"]["validation"] += 1
         _ev_in, _ev_out = usage_tokens(validate_session.usage)
@@ -724,6 +830,16 @@ def run_epic(config: dict) -> None:
             )
             wait_for_pause_removal(project_dir, config=config)
 
+    incomplete = {}
+    for s in epic_specs:
+        key = os.path.basename(s["spec_path"])
+        spec_state = state["specs"].get(key, {})
+        if spec_state.get("status") == "incomplete":
+            incomplete[key] = [(o["story"], o["status"]) for o in spec_state.get("outstanding", [])]
+    if incomplete:
+        _finish_incomplete_run(config, state, incomplete)
+        return
+
     # All feature specs complete
     log("All epic feature specs complete!")
     state["status"] = "completed"
@@ -772,6 +888,7 @@ def run_epic(config: dict) -> None:
         epic_validate_prompt, project_dir, model=validator_model
     )
     epic_validate_output = epic_validate_session.output
+    _raise_if_model_rejected(epic_validate_output, validator_model, state, config)
     state["sessions"]["total"] += 1
     state["sessions"]["validation"] += 1
     _fv_in, _fv_out = usage_tokens(epic_validate_session.usage)
@@ -831,6 +948,40 @@ def run_epic(config: dict) -> None:
     _update_registry_status(config, "completed")
 
 
+def _write_fallback_notification(project_dir: str, title: str, details: str) -> None:
+    """Append a critical notification when there is no usable config to route it."""
+    try:
+        notif_path = os.path.join(project_dir, NOTIFICATION_FILE)
+        os.makedirs(os.path.dirname(notif_path), exist_ok=True)
+        entry = {
+            "type": "execution_crashed",
+            "title": title,
+            "details": details,
+            "severity": "critical",
+            "feature": "",
+            "timestamp": now_iso(),
+        }
+        with open(notif_path, "a") as f:
+            f.write(json.dumps(entry) + "\n")
+    except OSError:
+        pass
+
+
+def _branch_context(config) -> tuple[str, str]:
+    """Return (current_branch, default_branch) for deriving a missing branch_name.
+
+    Only touches git when branch_name is actually missing.
+    """
+    if not isinstance(config, dict) or config.get("branch_name"):
+        return "", ""
+    project_dir = config.get("project_dir")
+    if not isinstance(project_dir, str) or not os.path.isdir(project_dir):
+        return "", ""
+    if not is_git_repo(project_dir):
+        return "", ""
+    return get_current_branch(project_dir), registry.default_branch(project_dir)
+
+
 def main():
     parser = argparse.ArgumentParser(description="KitTools Execute Orchestrator")
     parser.add_argument(
@@ -839,32 +990,35 @@ def main():
     )
     args = parser.parse_args()
 
-    # Register a minimal crash handler before loading config, so that
-    # config parse failures still produce a notification.
-    _minimal_config = {"project_dir": os.path.dirname(os.path.dirname(args.config))}
-    atexit.register(lambda: None)  # placeholder until real handler is set
+    # The config lives at <project>/kit_tools/specs/.execution-config.json, so
+    # the project is three levels up. (Two levels pointed at kit_tools/ and the
+    # notification landed in kit_tools/kit_tools/, where nothing reads it.)
+    fallback_project_dir = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(args.config)
+    )))
 
     try:
         config = load_config(args.config)
     except (json.JSONDecodeError, FileNotFoundError, OSError) as e:
         log(f"FATAL: Could not load config: {e}")
-        # Try to write a notification even without full config
-        try:
-            notif_path = os.path.join(_minimal_config["project_dir"], NOTIFICATION_FILE)
-            os.makedirs(os.path.dirname(notif_path), exist_ok=True)
-            entry = {
-                "type": "execution_crashed",
-                "title": "Config load failed",
-                "details": str(e),
-                "severity": "critical",
-                "feature": "",
-                "timestamp": now_iso(),
-            }
-            with open(notif_path, "a") as f:
-                f.write(json.dumps(entry) + "\n")
-        except OSError:
-            pass
+        _write_fallback_notification(fallback_project_dir, "Config load failed", str(e))
         sys.exit(1)
+
+    # Check required fields before anything indexes them, so a bad config
+    # stops with one clear message instead of a KeyError/TypeError mid-launch
+    # (issues #15, #16).
+    had_branch = isinstance(config, dict) and bool(config.get("branch_name"))
+    try:
+        config = validate_config(config, *_branch_context(config))
+    except ConfigError as e:
+        log(f"FATAL: {e}")
+        _write_fallback_notification(
+            fallback_project_dir, "Execution config is invalid", str(e)
+        )
+        sys.exit(1)
+    if not had_branch:
+        log(f"  branch_name not set in config — using the current branch "
+            f"{config['branch_name']!r}.")
 
     # Acquire the mutual-exclusion lock before any other check — a second
     # process launched against the same project_dir (the no-tmux manual
@@ -960,6 +1114,22 @@ def main():
             severity="critical",
         )
         log_event(config, "abort_git_recovery_failed", severity="critical", message=str(e))
+        sys.exit(1)
+    except ModelRejected as e:
+        log(f"FATAL: {e}")
+        if e.detail:
+            log(f"  CLI said: {e.detail[:300]}")
+        write_notification(
+            config, "execution_blocked",
+            f"Model rejected — {e.role} model {e.model!r}",
+            str(e),
+            severity="critical",
+        )
+        _update_registry_status(config, "blocked")
+        log_event(
+            config, "abort_model_rejected", severity="critical",
+            role=e.role, model=e.model,
+        )
         sys.exit(1)
     except GitCommandError as e:
         # A git mutation the orchestrator declared fatal (run_git(check=True))

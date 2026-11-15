@@ -167,6 +167,14 @@ def _duration_hours_from_state(state: dict) -> float | None:
         return None
 
 
+def _count_settled(stories: list) -> tuple[int, int]:
+    """Count (skipped, awaiting_human) stories. Additive since 2.11.1: before it,
+    a supervisor skip was recorded as "failed" and counted in stories_failed."""
+    skipped = sum(1 for s in stories if s.get("status") == "skipped")
+    human = sum(1 for s in stories if s.get("status") == "awaiting_human")
+    return skipped, human
+
+
 def extract_execute_metrics(state: dict) -> dict:
     """Roll up per-spec / per-story state into completion + retry counts, plus a
     per-spec breakdown (spec name → status/counts) so spec quality can be joined
@@ -179,9 +187,11 @@ def extract_execute_metrics(state: dict) -> dict:
         specs_failed = sum(1 for s in specs.values() if s.get("status") == "failed")
         specs_total = len(specs)
         stories_completed = stories_failed = total_retries = 0
+        stories_skipped = stories_awaiting_human = 0
         for spec_name, spec_data in specs.items():
             sc = sf = rt = 0
-            for story_data in spec_data.get("stories", {}).values():
+            story_list = list(spec_data.get("stories", {}).values())
+            for story_data in story_list:
                 attempts = story_data.get("attempts", 0)
                 status = story_data.get("status", "unknown")
                 if status in ("passed", "completed"):
@@ -190,12 +200,16 @@ def extract_execute_metrics(state: dict) -> dict:
                     sf += 1
                 if attempts > 1:
                     rt += attempts - 1
+            sk, ah = _count_settled(story_list)
             per_spec[spec_name] = {"status": spec_data.get("status", "unknown"),
                                    "stories_completed": sc, "stories_failed": sf,
+                                   "stories_skipped": sk, "stories_awaiting_human": ah,
                                    "retries": rt,
                                    "result_commit": spec_data.get("result_commit")}
             stories_completed += sc
             stories_failed += sf
+            stories_skipped += sk
+            stories_awaiting_human += ah
             total_retries += rt
     else:
         specs_total = 1
@@ -205,10 +219,14 @@ def extract_execute_metrics(state: dict) -> dict:
         stories_completed = sum(1 for s in stories.values() if s.get("status") in ("passed", "completed"))
         stories_failed = sum(1 for s in stories.values() if s.get("status") == "failed")
         total_retries = sum(max(0, s.get("attempts", 1) - 1) for s in stories.values())
+        stories_skipped, stories_awaiting_human = _count_settled(list(stories.values()))
         spec_name = state.get("spec", "spec")
         per_spec[spec_name] = {"status": state.get("status", "unknown"),
                                "stories_completed": stories_completed,
-                               "stories_failed": stories_failed, "retries": total_retries,
+                               "stories_failed": stories_failed,
+                               "stories_skipped": stories_skipped,
+                               "stories_awaiting_human": stories_awaiting_human,
+                               "retries": total_retries,
                                "result_commit": state.get("result_commit")}
 
     return {
@@ -218,6 +236,8 @@ def extract_execute_metrics(state: dict) -> dict:
         "specs_failed": specs_failed,
         "stories_completed": stories_completed,
         "stories_failed": stories_failed,
+        "stories_skipped": stories_skipped,
+        "stories_awaiting_human": stories_awaiting_human,
         "total_retries": total_retries,
         "sessions": state.get("sessions", {}),
         "duration_hours": _duration_hours_from_state(state),

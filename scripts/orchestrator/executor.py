@@ -30,6 +30,8 @@ from .sessions import (
     clean_result_files,
     extract_learnings_from_results,
     get_size_timeouts,
+    ModelRejected,
+    is_model_rejected,
     is_session_error,
     read_implementation_result,
     read_verification_result,
@@ -39,6 +41,7 @@ from .sessions import (
 from .specs import (
     execution_order_note,
     find_next_uncompleted_story,
+    is_human_story,
     parse_spec_frontmatter,
     update_spec_checkboxes,
 )
@@ -72,6 +75,44 @@ from .utils import log, run_git
 # it must not consume a real retry (issue #18). Bounded so a genuinely broken
 # environment still terminates.
 MAX_NOOP_RETRIES = 3
+
+# Shown in every guarded pause file. The orchestrator clears a pause by itself
+# when a skip/split is queued, so removing the file as well is never needed,
+# and removing it before the action is queued starts a fresh round of retries
+# (issue #23).
+PAUSE_RESUME_HELP = (
+    "To retry the story: remove this file.\n"
+    "To skip or split it instead: queue the action with /kit-tools:execution-status "
+    "and do NOT remove this file. The orchestrator clears the pause itself and "
+    "applies the action without retrying.\n"
+)
+
+
+def _stop_for_rejected_model(
+    config: dict, state: dict, role: str, model: str | None, output: str,
+    feature_branch: str, attempt_branch: str,
+    story_id: str, attempt: int, spec_key: str | None,
+) -> None:
+    """Undo the attempt and raise ModelRejected (issue #18).
+
+    A model the CLI doesn't accept fails every session in seconds, so retrying
+    only burns the story's attempts. The attempt is not counted and the run
+    stops with a message naming the role and model; a relaunch resumes it.
+    """
+    project_dir = config["project_dir"]
+    log(f"  FATAL: the claude CLI rejected the {role} model {model!r}.")
+    delete_attempt_branch(project_dir, feature_branch, attempt_branch)
+    clean_result_files(project_dir)
+    # Un-count the attempt recorded as in_progress before the session started.
+    stories = state["specs"][spec_key]["stories"] if spec_key is not None else state["stories"]
+    if attempt > 1:
+        stories[story_id].update(status="retrying", attempts=attempt - 1)
+    else:
+        stories.pop(story_id, None)
+    state["status"] = "failed"
+    save_state(state, config)
+    raise ModelRejected(role, model, output[:500])
+
 
 def execute_spec_stories(
     spec_path: str, feature_name: str, config: dict, state: dict,
@@ -163,6 +204,24 @@ def execute_spec_stories(
         if not story:
             return state  # All stories done
 
+        # A [HUMAN] story is a step only the operator can do (a live deploy, a
+        # paid action, a sign-off). Handing it to the implementer just burned
+        # every retry on a refusal (issue #23). Record it and move on; the
+        # spec-end step reports it instead of archiving the spec as complete.
+        if is_human_story(story):
+            log(f"  {story['id']} is a [HUMAN] story — not running it; recorded as awaiting_human.")
+            update_state_story(
+                state, story["id"], "awaiting_human", 0,
+                learnings=["[HUMAN] story: left for the operator, not run autonomously"],
+                spec_key=spec_key,
+            )
+            save_state(state, config)
+            log_event(
+                config, "story.awaiting_human", spec=spec_key, story=story["id"],
+                title=story.get("title", ""),
+            )
+            continue
+
         story_state_entry = stories_state.get("stories", {}).get(story["id"], {})
         attempt = story_state_entry.get("attempts", 0)
         feature_branch = config["branch_name"]
@@ -197,9 +256,7 @@ def execute_spec_stories(
                         with open(pause_path, "w") as f:
                             f.write(
                                 f"Guarded mode: story {story['id']} exhausted "
-                                f"{max_retries} retries.\nRemove this file to retry "
-                                f"the story, or send a skip/split via "
-                                f"/kit-tools:execution-status.\n"
+                                f"{max_retries} retries.\n{PAUSE_RESUME_HELP}"
                             )
                     except OSError:
                         pass
@@ -210,8 +267,8 @@ def execute_spec_stories(
                         config, "execution_paused",
                         f"Guarded pause: {story['id']} retries exhausted",
                         f"Story {story['id']} failed {max_retries} attempts. "
-                        f"Remove .pause_execution to retry, or send a skip/split "
-                        f"control action.",
+                        f"Remove .pause_execution to retry it, OR queue a skip/split "
+                        f"and leave the pause file in place (not both).",
                         severity="warning",
                     )
                     wait_for_pause_removal(project_dir, config=config)
@@ -229,10 +286,14 @@ def execute_spec_stories(
                         if result == "stories_updated":
                             # Story was skipped/split — leave the attempt loop so
                             # the per-story loop re-derives and picks the next.
+                            # The pause is over either way: don't leave the run
+                            # reporting "paused" while it carries on (issue #23).
                             if spec_key is not None:
                                 stories_state = state["specs"][spec_key]
                             else:
                                 stories_state = state
+                            state["status"] = "running"
+                            save_state(state, config)
                             break
                     state["status"] = "running"
                     save_state(state, config)
@@ -315,6 +376,11 @@ def execute_spec_stories(
             )
             impl_output = impl_session.output
             output_chars = len(impl_output)
+            if is_model_rejected(impl_output):
+                _stop_for_rejected_model(
+                    config, state, "implementer", impl_model, impl_output,
+                    feature_branch, attempt_branch, story["id"], attempt, spec_key,
+                )
 
             state["sessions"]["total"] += 1
             state["sessions"]["implementation"] += 1
@@ -344,8 +410,8 @@ def execute_spec_stories(
                 log_story_failure(story, attempt, config, impl_output[:500], learnings)
                 delete_attempt_branch(project_dir, feature_branch, attempt_branch)
                 clean_result_files(project_dir)
-                # In guarded mode a "permanent" error (e.g. `claude` not found,
-                # a bad model id) is usually operator-fixable — install the CLI,
+                # In guarded mode a "permanent" error (e.g. `claude` not found)
+                # is usually operator-fixable — install the CLI,
                 # correct config, then resume. Hard-exiting bypassed guarded
                 # mode's whole point (issue #15). Pause for review via the
                 # standard monitorable mechanism instead; autonomous mode still
@@ -367,9 +433,7 @@ def execute_spec_stories(
                             f.write(
                                 f"Guarded mode: story {story['id']} hit a permanent "
                                 f"session error:\n{impl_output[:500]}\n\nFix the cause "
-                                f"(e.g. install/PATH the CLI, correct the model), then "
-                                f"remove this file to retry, or send a skip/split via "
-                                f"execution-status.\n"
+                                f"(e.g. install/PATH the CLI) first.\n{PAUSE_RESUME_HELP}"
                             )
                     except OSError:
                         pass
@@ -400,6 +464,8 @@ def execute_spec_stories(
                                 stories_state = state["specs"][spec_key]
                             else:
                                 stories_state = state
+                            state["status"] = "running"
+                            save_state(state, config)
                             break
                     state["status"] = "running"
                     save_state(state, config)
@@ -522,6 +588,11 @@ def execute_spec_stories(
             )
             verify_output = verify_session.output
             verify_output_chars = len(verify_output)
+            if is_model_rejected(verify_output):
+                _stop_for_rejected_model(
+                    config, state, "verifier", verify_model, verify_output,
+                    feature_branch, attempt_branch, story["id"], attempt, spec_key,
+                )
 
             state["sessions"]["total"] += 1
             state["sessions"]["verification"] += 1

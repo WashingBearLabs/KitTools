@@ -101,6 +101,43 @@ def _is_permanent_error(stderr_text: str) -> bool:
     return any(re.search(kw, lower) for kw in PERMANENT_ERROR_KEYWORDS)
 
 
+# The claude CLI rejects a model it doesn't know with exit 1, stderr
+# `[claude-code:unrecognized_model] {"model": ...}` and a JSON result saying
+# "There's an issue with the selected model". Seen with `"auto"` left in
+# model_preferences.json by a Copilot setup (issue #18).
+_MODEL_REJECTED_MARKERS = ("unrecognized_model", "issue with the selected model")
+MODEL_REJECTED_PREFIX = "SESSION_ERROR_PERMANENT: MODEL_REJECTED"
+
+
+class ModelRejected(Exception):
+    """The claude CLI refused the configured model. No retry can fix this.
+
+    Raised by the orchestrator (not by run_claude_session) so the caller can
+    clean up its attempt branch first. main() turns it into a clear stop.
+    """
+
+    def __init__(self, role: str, model: str | None, detail: str = ""):
+        self.role = role
+        self.model = model
+        self.detail = detail
+        super().__init__(
+            f"The claude CLI rejected the {role} model {model!r}. Set a valid model "
+            f"(an alias such as sonnet/opus/haiku, or a full claude-* id) in "
+            f"kit_tools/model_preferences.json or the run's model_config, then "
+            f"relaunch /kit-tools:execute-epic to resume. No story attempt was counted."
+        )
+
+
+def _is_model_rejected_text(text: str) -> bool:
+    lower = text.lower()
+    return any(marker in lower for marker in _MODEL_REJECTED_MARKERS)
+
+
+def is_model_rejected(output: str) -> bool:
+    """True when a session failed because the CLI rejected the model."""
+    return output.startswith(MODEL_REJECTED_PREFIX)
+
+
 def is_session_error(output: str) -> bool:
     """Check if output represents any kind of session error."""
     return output.startswith("SESSION_ERROR:") or output.startswith("SESSION_ERROR_PERMANENT:")
@@ -301,6 +338,11 @@ def run_claude_session(
                 # Final network attempt or non-network error — return error
                 if is_network:
                     return SessionResult(f"SESSION_ERROR: Network error after {NETWORK_MAX_RETRIES} attempts\n{stderr}")
+                if _is_model_rejected_text(f"{stderr}\n{stdout}"):
+                    return SessionResult(
+                        f"{MODEL_REJECTED_PREFIX} (model={model!r}): Exit code "
+                        f"{proc.returncode}\n{stderr}"
+                    )
                 prefix = "SESSION_ERROR_PERMANENT" if _is_permanent_error(stderr) else "SESSION_ERROR"
                 return SessionResult(f"{prefix}: Exit code {proc.returncode}\n{stderr}\n{stdout}")
             finally:

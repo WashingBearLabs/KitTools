@@ -72,6 +72,8 @@ Determine the effective status:
 | `completed` | — | **Completed** |
 | `failed` | — | **Failed** |
 | `paused` | — | **Paused** |
+| `blocked` | — | **Blocked** (a dependency spec isn't archived) |
+| `incomplete` | — | **Incomplete** (stories need the operator) |
 
 Check for pause file: `"$EXEC_DIR/kit_tools/.pause_execution"` — if present, status is **Paused** regardless of state JSON.
 
@@ -85,6 +87,9 @@ Count from `state.stories` (or `state.specs[current_spec].stories` in epic mode)
 - **Completed:** stories with `status: "completed"`
 - **Failed/Retrying:** stories with `status: "retrying"` or `status: "failed"`
 - **In Progress:** stories with `status: "in_progress"`
+- **Skipped:** stories with `status: "skipped"` (supervisor skip; older runs: `failed` with `failure_type: "SUPERVISOR_SKIP"`)
+- **Awaiting human:** stories with `status: "awaiting_human"` (`[HUMAN]` stories, never run autonomously)
+- **Split:** stories with `status: "split"` (replaced by new stories; leave them out of the total)
 - **Pending:** stories not yet in the state dict
 
 Calculate and display: `completed / total * 100`%
@@ -106,7 +111,7 @@ For each story from the feature spec (in order):
 - Look up the story in the state dict
 - **Status:** from state, or `pending` if not present
 - **Attempts:** from `entry.attempts`, or `0` if not present
-- **Last Result:** `PASS` if completed, `FAIL: <entry.last_failure>` if failed/retrying, `—` if pending/in_progress
+- **Last Result:** `PASS` if completed, `FAIL: <entry.last_failure>` if failed/retrying, `SKIPPED` / `NEEDS HUMAN` / `SPLIT` for those statuses, `—` if pending/in_progress
 
 ### Session Stats
 
@@ -222,6 +227,10 @@ When the supervisor decides to intervene, write the action to `"$EXEC_DIR/kit_to
 }
 ```
 
+A skipped story is never run again. Its spec ends `incomplete`: not validated or archived until the operator finishes the story and relaunches. Skip only when the remaining stories can still make progress without it.
+
+**Guarded retry-pause:** write the control file and leave `.pause_execution` in place. The orchestrator clears the pause itself and applies the action without retrying. Never remove the pause file as well: if it's removed before the action is queued, the orchestrator starts a new round of retries first.
+
 ### Supervisor Report
 
 After assessment, always report:
@@ -265,7 +274,8 @@ Warn: "The orchestrator is not running but state shows `running`. The process ma
 
 ### If Paused
 
-- **Resume** — `rm "$EXEC_DIR/kit_tools/.pause_execution"`
+- **Resume (retry the story)** — `rm "$EXEC_DIR/kit_tools/.pause_execution"`
+- **Skip or split the story instead** — write the control action (formats in Step 3b) and **do not** remove the pause file. The orchestrator clears the pause itself and applies the action without retrying. Doing both risks a new round of retries before the action is read.
 - **Attach to tmux** — Print `tmux attach -t {tmux_session}` for user to run
 - **View findings** — If `.pause_execution` references `AUDIT_FINDINGS.md`, suggest reading it
 
@@ -275,6 +285,15 @@ Warn: "The orchestrator is not running but state shows `running`. The process ma
 - **Validate** — Suggest `/kit-tools:validate-implementation`
 - **Complete** — Suggest `/kit-tools:complete-implementation`
 - **View log** — Show full execution log
+
+### If Incomplete (status is `incomplete`)
+
+The run finished every story it could. The rest are `skipped` or `awaiting_human`, listed under each spec's `outstanding` in the state file. Those specs were committed but not validated or archived, and no PR or merge happened.
+
+- Clean up any leftover supervisor cron jobs (see Supervisor Cron Cleanup below)
+- List the outstanding stories per spec
+- **Finish and resume** — the user does each story and ticks its acceptance-criteria checkboxes in the spec, then runs `/kit-tools:execute-epic`. The relaunch passes over ticked stories, then validates, archives and completes as normal.
+- **Retry a skipped story autonomously** — delete that story's entry from `.execution-state.json`, then relaunch.
 
 ### If Failed
 

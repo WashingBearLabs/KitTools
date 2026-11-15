@@ -526,15 +526,36 @@ _KNOWN_MODEL_ROLES = {
 }
 
 
+# Aliases the `claude --model` flag accepts, optionally with a `[1m]` suffix.
+# Anything else passes if it names a Claude model ("claude" anywhere covers
+# claude-* ids and provider ids such as us.anthropic.claude-...). Advisory only:
+# an unusual but valid value gets a warning, never a block.
+_MODEL_ALIAS_RE = re.compile(r"^(sonnet|opus|haiku|fable|opusplan)(\[1m\])?$", re.IGNORECASE)
+_FALLTHROUGH_MODEL_VALUES = {"auto", "default"}
+
+
+def _model_value_problem(value: str) -> str | None:
+    """Return a warning for a role value claude --model likely rejects, else None."""
+    v = value.strip()
+    if not v:
+        return None  # empty = use the built-in default
+    if v.lower() in _FALLTHROUGH_MODEL_VALUES:
+        return (f"'{v}' is not a claude model; it is ignored and the role uses the "
+                f"built-in default (it is the Copilot build's default)")
+    if _MODEL_ALIAS_RE.match(v) or "claude" in v.lower():
+        return None
+    return (f"'{v}' doesn't look like a claude model alias (sonnet/opus/haiku) or "
+            f"claude-* id; the claude CLI may reject it and stop the run")
+
+
 def _check_model_preferences(kit: str) -> None:
     """Advisory validation of kit_tools/model_preferences.json (optional file).
 
     Absence is fine — every role falls back to the built-in default. When
     present, catch the ways it silently misbehaves: unparseable JSON, a
     non-object `models` block, unrecognized role names, and non-string values.
-    Model aliases like `sonnet`/`opus`/`haiku` (and full `claude-*` ids) are
-    all valid values the `claude --model` CLI accepts, so values are not
-    otherwise constrained here.
+    Values that `claude --model` would likely reject (e.g. `"auto"` carried
+    over from the Copilot build) get an advisory warning (issue #18).
     """
     path = os.path.join(kit, "model_preferences.json")
     raw = _read(path)
@@ -567,12 +588,25 @@ def _check_model_preferences(kit: str) -> None:
                 add("warning", "project",
                     "model_preferences.json: `escalation` must be a policy object "
                     "or a model-id string")
+                continue
+            target = value if isinstance(value, str) else value.get("to")
+            issue = _model_value_problem(target) if isinstance(target, str) else None
+            if issue:
+                problems += 1
+                add("warning", "project", f"model_preferences.json: escalation: {issue}",
+                    remediation="Run the configure-models skill to pick a valid model")
             continue
         if not isinstance(value, str):
             problems += 1
             add("warning", "project",
                 f"model_preferences.json: role '{role}' must be a model alias/id "
                 f"string (got {type(value).__name__})")
+            continue
+        issue = _model_value_problem(value)
+        if issue:
+            problems += 1
+            add("warning", "project", f"model_preferences.json: role '{role}': {issue}",
+                remediation="Run the configure-models skill to pick a valid model")
     if not problems:
         add("info", "project", "model_preferences.json parses and roles look valid")
 
